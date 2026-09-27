@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#16213e">
+  <meta name="description" content="StudyFlow PWA - Planificación de estudio, cursos, hábitos y agenda">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StudyFlow">
+  
+  <title>StudyFlow PWA</title>
+  
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png">
+  
+  <!-- Preload critical assets -->
+  <link rel="preload" href="/styles.css" as="style">
+  <link rel="preload" href="/app.js" as="script">
+  <link rel="preload" href="/shared/ui-common.js" as="script">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/styles.css">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="msapplication-TileColor" content="#16213e">
+  <meta name="msapplication-TileImage" content="/icons/icon-512.png">
+  
+  <!-- Splash screen for iOS (generated via meta tags) -->
+  <link rel="apple-touch-startup-image" href="/icons/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/icons/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
+</head>
+<body>
+  <!-- Loading indicator (shown before app loads) -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Cargando StudyFlow...</p>
+  </div>
+
+  <!-- App container (hidden until initialized) -->
+  <div id="app" class="app hidden">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="hamburger" id="hamburger-btn" aria-label="Menú">☰</button>
+        <div class="header-logo">
+          <span class="logo-icon">📚</span>
+          <span class="logo-text">StudyFlow</span>
+        </div>
+      </div>
+      <div class="header-center" id="header-week">
+        <span class="week-nav" id="week-prev" aria-label="Semana anterior">◀</span>
+        <span id="week-label"><strong>Cargando...</strong></span>
+        <span class="week-nav" id="week-next" aria-label="Semana siguiente">▶</span>
+      </div>
+      <div class="header-right">
+        <div id="user-nav" class="user-nav" style="display:none;">
+          <div id="user-nav-trigger" class="user-nav-trigger">
+            <span id="user-avatar" class="user-avatar"></span>
+            <span id="user-name"></span>
+            <span class="user-nav-chevron">▾</span>
+          </div>
+          <div id="user-dropdown" class="user-dropdown">
+            <div class="dropdown-header">
+              <div id="dropdown-user-name"></div>
+              <div id="dropdown-user-email"></div>
+            </div>
+            <button id="dropdown-dashboard" class="dropdown-item">🏠 Dashboard</button>
+            <button id="btn-settings" class="dropdown-item">⚙️ Ajustes</button>
+            <div class="dropdown-divider"></div>
+            <button id="btn-logout" class="dropdown-item dropdown-danger">🚪 Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="agenda" aria-selected="true">
+        📅 Agenda <span class="tab-subtitle">planificar + hábitos</span>
+      </button>
+      <button class="tab-btn" data-tab="studyflow" aria-selected="false">
+        📖 Studyflow <span class="tab-subtitle">cursos + tests</span>
+      </button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main" role="main">
+      <!-- Dashboard View (welcome) -->
+      <div class="view-panel" id="view-dashboard">
+        <div class="dashboard-container">
+          <div class="dashboard-profile">
+            <div class="dashboard-avatar" id="dashboard-avatar">👤</div>
+            <div class="dashboard-greeting">
+              <h1 id="dashboard-title">Bienvenido a StudyFlow</h1>
+              <p id="dashboard-subtitle" class="dashboard-subtitle">Tu centro de planificación de estudio</p>
+            </div>
+          </div>
+          <div class="dashboard-badges">
+            <span class="badge badge-base">🏛️ Cuenta BASE</span>
+          </div>
+          <div class="dashboard-nav-grid">
+            <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
+              <div class="dnc-icon">📅</div>
+              <div class="dnc-text">
+                <div class="dnc-label">Agenda</div>
+                <div class="dnc-desc">Planificar sesiones, hábitos, calendario semanal</div>
+              </div>
+            </div>
+            <div class="dashboard-nav-card" data-tab="studyflow" data-accent="green">
+              <div class="dnc-icon">📖</div>
+              <div class="dnc-text">
+                <div class="dnc-label">Studyflow</div>
+                <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agenda View -->
+      <div class="view-panel hidden" id="view-agenda">
+        <div class="col col-left" id="agenda-left" role="complementary" aria-label="Navegación agenda"></div>
+        <div class="col col-center" id="agenda-center" role="main"></div>
+      </div>
+
+      <!-- Studyflow View -->
+      <div class="view-panel hidden" id="view-studyflow">
+        <div class="col col-left" id="studyflow-left" role="complementary" aria-label="Navegación cursos"></div>
+        <div class="col col-center" id="studyflow-center" role="main"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Offline indicator -->
+  <div id="offline-indicator" class="offline-indicator hidden" role="alert" aria-live="polite">
+    📴 Sin conexión — Modo offline activo
+  </div>
+
+  <!-- Scripts -->
+  <script src="/shared/ui-common.js"></script>
+  <script src="/shared/load-partial.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
