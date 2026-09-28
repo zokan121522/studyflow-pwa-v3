@@ -121,6 +121,8 @@ window.App.Courses = (function () {
   // ── handleCourseClick(courseId) — select + expand ────────────
   async function handleCourseClick(courseId) {
     const s = STATE();
+    // SA.2 — leaving the marketplace view re-enters the normal sidebar.
+    s._view = null;
     if (s.expandedCourseId === courseId) {
       // Toggle collapse
       s.expandedCourseId = null;
@@ -144,6 +146,8 @@ window.App.Courses = (function () {
   // ── handleTopicClick(courseId, topicId) — select topic ───────
   async function handleTopicClick(courseId, topicId) {
     const s = STATE();
+    // SA.2 — leaving the marketplace view re-enters the topic detail.
+    s._view = null;
     s.currentCourseId = courseId;
     s.selectedTopicId = topicId;
     s.selectedBlockId = null;
@@ -163,6 +167,15 @@ window.App.Courses = (function () {
     const courses = await fetchCourses();
     attachSidebarEvents(leftEl, { renderStudyflow, STATE: STATE() });
     leftEl.innerHTML = renderCourseTree(courses, STATE());
+    // SA.2 — the marketplace nav lives in the #studyflow-left-stats
+    // slot we just emitted. Append it after every full rebuild so it
+    // survives repaints (matches v2 addons-marketplace.js pattern).
+    try {
+      if (window.App.AddonsManager
+          && typeof window.App.AddonsManager.renderMarketplaceNav === "function") {
+        window.App.AddonsManager.renderMarketplaceNav();
+      }
+    } catch (_) { /* nav is optional cosmetic */ }
     await updateCenter();
   }
 
@@ -196,7 +209,14 @@ window.App.Courses = (function () {
     if (!centerEl) return;
     const s = STATE();
 
-    if (s.selectedTopicId && s.currentCourseId) {
+    // SA.2 — Marketplace view (AddonsManager). Routes BEFORE the
+    // topic/course branches so the catalog takes over the center
+    // panel when STATE._view === "addons". Sidebar nav (qs-nav-item
+    // [data-am-nav]) sets STATE._view and calls updateCenter().
+    if (s._view === "addons" && window.App.AddonsManager
+        && typeof window.App.AddonsManager.renderView === "function") {
+      await window.App.AddonsManager.renderView(centerEl);
+    } else if (s.selectedTopicId && s.currentCourseId) {
       await _renderTopicDetail(centerEl, s.currentCourseId, s.selectedTopicId);
     } else if (s.currentCourseId) {
       await _renderCourseLanding(centerEl, s.currentCourseId);

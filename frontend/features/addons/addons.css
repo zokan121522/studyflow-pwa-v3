@@ -96,19 +96,61 @@
 .am-btn-danger { border-color: var(--red); color: var(--red); }
 .am-btn-danger:hover:not(:disabled) { background: var(--red-bg); }
 
-/* ─── Header ⚙️ button (matches hamburger styling) ────────────── */
-.header-addons-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg); cursor: pointer; font-size: 18px;
-  color: var(--text); transition: background 0.15s, border-color 0.15s;
-  margin-left: 4px;
-}
-.header-addons-btn:hover {
-  background: var(--surface-hover); border-color: var(--primary);
-}
-.header-addons-btn:active { background: var(--border); }
-
 /* ─── Modal sizing for the addons overlay (wider than default 480) */
 #addons-overlay .omodal { max-width: 760px; }
+
+/* ─── SA.2 — sidebar nav (qs-nav-item + sf-stats-section) ─────────
+   Ports v2 studyflow-hub/tierra/frontend/features/studyflow/quiz.css
+   styles (lines 117, 200–230) into v3 dark-theme tokens. The stats
+   container #studyflow-left-stats is emitted by courses-sidebar.js
+   renderCourseTree() as the FIRST child, before the «📖 Cursos»
+   title (v2 pattern). The addons marketplace nav (qs-nav-item
+   [data-am-nav]) is appended inside this slot via
+   AddonsManager.renderMarketplaceNav(). */
+.sf-stats-section {
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.sf-stats-section .col-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin: 6px 4px 8px;
+}
+.qs-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+  font-size: 12px;
+  margin-bottom: 1px;
+  color: var(--text);
+  border: 1px solid transparent;
+}
+.qs-nav-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.qs-nav-item.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 500;
+}
+.qs-nav-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.qs-nav-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

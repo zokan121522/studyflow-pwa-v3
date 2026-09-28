@@ -1,14 +1,23 @@
-// ─── Addons Manager — overlay UI for the catalog ─────────────
+// ─── Addons Manager — sidebar nav + center-view marketplace ─────
 // Namespace: window.App.AddonsManager
-// Dependencies: window.App.Addons, window.App.UI (escHtml)
+// Dependencies: window.App.Addons, window.App.UI (escHtml),
+//               window.STATE, window.App.Courses (updateCenter).
 //
-// Sub-phase SA — opens a modal overlay listing every addon in the
-// catalog with its current state and install / enable / disable /
-// uninstall buttons. Reuses the .overlay / .omodal shell from
-// styles.css (same one the agenda overlays sit on). No router / no
-// sidebar — it's a standalone modal reachable from the ⚙️ header
-// button (see index.html #btn-addons).
-
+// Sub-phase SA.2 — move the addons entry out of the header gear (⚙️
+// was wrong per user) and into the Studyflow column as a left-nav
+// item ABOVE the course tree (v2 pattern). The marketplace catalog
+// is rendered as a CENTER VIEW (one tab replaces the topic detail
+// without leaving Studyflow), reusing the existing card markup
+// from the overlay build. The overlay itself is retained for
+// programmatic calls / fallback but the primary entry is the nav.
+//
+// Routing contract (mirrors v2 addons-marketplace.js):
+//   • STATE._view === "addons" → App.Courses.updateCenter routes
+//     to AddonsManager.renderView(centerEl).
+//   • selecting a course/topic clears STATE._view so the topic
+//     detail / landing re-render normally.
+//   • renderMarketplaceNav() is called from courses.js on every
+//     renderStudyflow() so the nav survives repaints.
 window.App = window.App || {};
 
 window.App.AddonsManager = (function () {
@@ -21,7 +30,65 @@ window.App.AddonsManager = (function () {
 
   let _open = false;
 
-  // ── public: open / close / status ────────────────────────────
+  // ── public: nav + view + legacy overlay ───────────────────────
+  // renderMarketplaceNav() — idempotent. Appends a .sf-stats-section
+  // with «🧩 Addons» col-title + «🛍️ Marketplace» qs-nav-item into
+  // the #studyflow-left-stats container emitted by courses-sidebar.js.
+  // The click handler sets STATE._view='addons' and calls
+  // App.Courses.updateCenter(). Survives sidebar repaints.
+  function renderMarketplaceNav() {
+    const statsEl = document.getElementById("studyflow-left-stats");
+    if (!statsEl) return;
+    let navEl = statsEl.querySelector("[data-am-nav]");
+    if (!navEl) {
+      const html = `<div class="sf-stats-section">
+        <div class="col-title">🧩 Addons</div>
+        <div class="qs-nav-item" data-am-nav data-am-view="addons">
+          <span class="qs-nav-icon">🛍️</span>
+          <span class="qs-nav-title">Marketplace</span>
+        </div>
+      </div>`;
+      statsEl.insertAdjacentHTML("beforeend", html);
+      navEl = statsEl.querySelector("[data-am-nav]");
+      navEl.addEventListener("click", async () => {
+        try {
+          window.STATE = window.STATE || {};
+          window.STATE._view = "addons";
+        } catch (_) { /* STATE may be frozen in tests */ }
+        if (window.App && window.App.Courses
+            && typeof window.App.Courses.updateCenter === "function") {
+          await window.App.Courses.updateCenter();
+        }
+      });
+    }
+    // Refresh active state (idempotent on re-renders).
+    try {
+      const active = window.STATE && window.STATE._view === "addons";
+      navEl.classList.toggle("active", !!active);
+    } catch (_) { /* ignore */ }
+  }
+
+  // renderView(centerEl) — render the catalog as a CENTER VIEW
+  // (replaces the topic detail / landing). Reuses the same card
+  // markup the overlay uses so the visuals stay consistent.
+  async function renderView(centerEl) {
+    if (!centerEl) return;
+    centerEl.innerHTML =
+      '<div class="am-loading">🧩 Cargando catálogo…</div>';
+    let addons = [];
+    try {
+      addons = await window.App.Addons.refresh();
+    } catch (_) {
+      centerEl.innerHTML =
+        '<div class="am-empty">No se pudo cargar el catálogo.</div>';
+      return;
+    }
+    const visible = (addons || []).filter((a) => !a.hidden);
+    centerEl.innerHTML = _renderGrid(visible);
+    _attachHandlers(centerEl);
+  }
+
+  // ── Overlay API (kept for programmatic / fallback use) ─────────
   async function open() {
     ensureOverlay();
     const overlay = document.getElementById(OVERLAY_ID);
@@ -75,7 +142,7 @@ window.App.AddonsManager = (function () {
     });
   }
 
-  // ── Catalog render ────────────────────────────────────────────
+  // ── Catalog render (overlay + center view share this markup) ──
   async function render() {
     const grid = document.getElementById(GRID_ID);
     if (!grid) return;
@@ -214,7 +281,14 @@ window.App.AddonsManager = (function () {
     btn.textContent = "…";
     try {
       await Addons.mutate(fn, slug);
-      await render();
+      // If the click came from the center view, re-render it so the
+      // new state is reflected without leaving the page.
+      const center = document.getElementById("studyflow-center");
+      if (center && center.contains(btn)) {
+        await renderView(center);
+      } else {
+        await render();
+      }
     } catch (err) {
       btn.textContent = "⚠ " + ((err && err.message) || "error");
       setTimeout(() => {
@@ -224,24 +298,24 @@ window.App.AddonsManager = (function () {
     }
   }
 
-  // ── Header ⚙️ button wire-up (DOMContentLoaded-safe) ──────────────────
-  function attachHeaderButton() {
-    const btn = document.getElementById("btn-addons");
-    if (!btn || btn.dataset.amWired) return;
-    btn.dataset.amWired = "1";
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      open();
-    });
+  // Re-render center view when addons change (so the marketplace
+  // mirrors install/uninstall/enable/disable toggles from S5/S6/S9
+  // without leaving the view).
+  function _onAddonsChanged() {
+    const center = document.getElementById("studyflow-center");
+    if (!center) return;
+    try {
+      if (window.STATE && window.STATE._view === "addons") {
+        renderView(center).catch(() => {});
+      }
+    } catch (_) { /* ignore */ }
   }
+  window.addEventListener("addons:changed", _onAddonsChanged);
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachHeaderButton);
-  } else {
-    attachHeaderButton();
-  }
-
-  return { open, close, isOpen, render, attachHeaderButton };
+  return {
+    open, close, isOpen, render,
+    renderMarketplaceNav, renderView,
+  };
 })();
 
 console.log("[Addons] manager loaded");

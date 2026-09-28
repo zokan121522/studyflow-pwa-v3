@@ -81,10 +81,12 @@
         <span class="week-nav" id="week-next" aria-label="Semana siguiente">▶</span>
       </div>
       <div class="header-right">
-        <!-- SA: ⚙️ addons manager entry (visible without login — single-user mode).
-             Opens App.AddonsManager.open() which lazy-injects #addons-overlay. -->
-        <button id="btn-addons" class="header-addons-btn"
-                title="Gestionar complementos" aria-label="Complementos">⚙️</button>
+        <!-- SA.2 — addons entry moved OUT of the header (user correction).
+             The marketplace nav now lives in the Studyflow left column
+             ABOVE the course tree as a qs-nav-item (see courses-sidebar.js
+             + addons-manager.js renderMarketplaceNav). The catalog is
+             rendered as a CENTER VIEW (App.AddonsManager.renderView)
+             routed by App.Courses.updateCenter when STATE._view === "addons". -->
         <div id="user-nav" class="user-nav" style="display:none;">
           <div id="user-nav-trigger" class="user-nav-trigger">
             <span id="user-avatar" class="user-avatar"></span>

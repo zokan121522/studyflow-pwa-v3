@@ -18,6 +18,11 @@ window.App.CoursesSidebar = (function () {
     STATE = STATE || window.STATE || {};
     const list = courses || [];
     let html = "";
+    // SA.2 (v2 pattern) — stats container FIRST, before the «📖 Cursos»
+    // title. Addons Marketplace / quiz stats / flashcards navs append
+    // their own .sf-stats-section into this slot via renderMarketplaceNav
+    // and friends (see addons-marketplace.js / quiz.js).
+    html += '<div id="studyflow-left-stats"></div>';
     html += '<div class="col-title">📖 Cursos</div>';
 
     if (!list.length) {

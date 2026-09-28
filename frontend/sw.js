@@ -1,18 +1,20 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v4 (SA): bumped ASSET_CACHE so the activate handler evicts the
-// S7 cache and the new install pre-caches addons-core.js +
-// addons-manager.js + addons.css. API_CACHE keeps its name
-// (no API contract changes here).
-const ASSET_CACHE = 'studyflow-assets-v4';
+// v5 (SA.2 + S4.7): bumped ASSET_CACHE so the activate handler evicts
+// the v4 cache. The pre-cached list adds studyflow-float.js (Phase 59
+// sticky floating toolbar from v2) so it survives offline. The addons
+// overlay still works offline via the cached catalog; the marketplace
+// is now reached from the Studyflow left column nav (qs-nav-item
+// [data-am-nav]) instead of the header gear. API_CACHE keeps its
+// name (no API contract changes here).
+const ASSET_CACHE = 'studyflow-assets-v5';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v4 (SA): added addons-core.js + addons-manager.js + addons.css so
-// the ⚙️ button + management overlay work offline (the management
-// page reads from the cached catalog, which the SW already fetches
-// network-first and falls back to cache).
+// v5 (SA.2 + S4.7): added studyflow-float.js for the sticky floating
+// block toolbar (Phase 59 v2 port). Removed no files — addons foundation
+// still pre-cached so the marketplace nav + catalog work offline.
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -37,10 +39,12 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-viewer.css',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
-  // SA: addons foundation (registry + management overlay)
+  // SA.2 + S4.7: addons foundation (registry + marketplace) and the
+  // sticky floating toolbar (Phase 59 port).
   '/features/addons/addons-core.js',
   '/features/addons/addons-manager.js',
   '/features/addons/addons.css',
+  '/features/studyflow/studyflow-float.js',
 ];
 
 // Maximum age for cached API responses (5 minutes)
