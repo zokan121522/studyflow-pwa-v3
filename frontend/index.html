@@ -53,6 +53,7 @@
   <link rel="stylesheet" href="/features/studyflow/pdf-viewer.css">
   <link rel="stylesheet" href="/features/studyflow/study-scheduler.css">
   <link rel="stylesheet" href="/features/studyflow/ai.css">
+  <link rel="stylesheet" href="/features/studyflow/knowledge-pipeline.css">
   <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
   <link rel="stylesheet" href="/features/addons/addons.css">
   
@@ -449,6 +450,12 @@
        ai.js because its click wiring opens these overlays. -->
   <script src="/features/studyflow/ai-config-modal.js"></script>
   <script src="/features/studyflow/ai-modals.js"></script>
+  <!-- Phase 38/61 addons — knowledge-pipeline.js (Gen. Contenido modal +
+       polling, NotebookLM provider) and english-grammar.js (English
+       Exercises config overlay + interactive block insert). MUST load
+       before ai.js because its click wiring opens these addons. -->
+  <script src="/features/studyflow/knowledge-pipeline.js"></script>
+  <script src="/features/studyflow/english-grammar.js"></script>
   <script src="/features/studyflow/ai.js"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,

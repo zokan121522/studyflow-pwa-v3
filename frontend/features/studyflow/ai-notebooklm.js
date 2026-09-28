@@ -193,6 +193,7 @@ window.App.AI.Generation = (function () {
         topic_id: topicId || "",
         language,
         duration,
+        provider: "opencode-acp",
       });
       const tasks = Tasks();
       if (tasks) {
@@ -201,6 +202,53 @@ window.App.AI.Generation = (function () {
       }
     } catch (err) {
       Status(firstId, `❌ Error: ${err.message}`, true);
+    }
+  }
+
+  // ─── Audio (NotebookLM/Gemini script + edge-tts) ───────────────
+  async function generateNbAudio(blockIds, topicId, language = "es", duration = "complete") {
+    const ids = Array.isArray(blockIds) ? blockIds : [blockIds];
+    const firstId = ids[0] || "";
+    const langLabel = language === "en" ? "English" : "Español";
+    const durLabel = duration === "complete" ? "Completo" : `${duration} min`;
+    Status(firstId, `⏳ Generando audio (${durLabel}, ${langLabel})…`);
+    try {
+      const resp = await window.API.post("/ai/notebooklm/generate-audio", {
+        block_ids: ids,
+        topic_id: topicId || "",
+        language,
+        duration,
+        provider: "notebooklm",
+      });
+      const tasks = Tasks();
+      if (tasks) {
+        tasks.showStreamModal("🎵 Generando Audio", "NotebookLM + TTS");
+        tasks.startStreamPoll(resp.task_id, firstId, "audio", topicId || "");
+      }
+    } catch (err) {
+      Status(firstId, `❌ Error: ${err.message}`, true);
+    }
+  }
+
+  // ─── English Grammar Exercises (NotebookLM) ────────────────────
+  // v3 port of the v2 ai-generation.js launcher. Provider is NOT sent:
+  // the v3 backend only registers 'notebooklm' for grammar tasks.
+  async function generateGrammarExercises(blockId, topicId, sourceType = "markdown", perType = 10, provider = "") {
+    Status(blockId, "⏳ Generando English Exercises…");
+    try {
+      const resp = await window.API.post("/ai/generate-grammar-exercises", {
+        source_id: blockId,
+        source_type: sourceType === "pdf" ? "content" : "markdown",
+        topic_id: topicId || "",
+        per_type: perType,
+      });
+      const tasks = Tasks();
+      if (tasks) {
+        tasks.showStreamModal("✏️ Generando English Exercises", "NotebookLM");
+        tasks.startStreamPoll(resp.task_id, blockId, "grammar", topicId || "");
+      }
+    } catch (err) {
+      Status(blockId, `❌ Error: ${err.message}`, true);
     }
   }
 
@@ -215,6 +263,8 @@ window.App.AI.Generation = (function () {
     generateNbTest,
     generateInfographic,
     generateAudio,
+    generateNbAudio,
+    generateGrammarExercises,
   };
 })();
 

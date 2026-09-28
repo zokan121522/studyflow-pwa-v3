@@ -277,6 +277,9 @@ DAILY_LIMITS: dict[str, int] = {
     "notebooklm_md_to_html": 50,  # ✨ Nb HTML
     "opencode_pdf": 50,           # 🤖 OpenZEN (local PDF + AI structuring)
     "opencode_audio": 10,         # 🎵 Audio (OpenZEN + edge-tts)
+    "notebooklm_audio": 10,       # 🎵 Audio (NotebookLM/Gemini + edge-tts)
     "notebooklm_infographic": 10, # 📊 Infographic (Gemini, expensive)
+    "knowledge_pipeline": 50,     # 🧠 Gen. Contenido (NotebookLM)
+    "generate_grammar": 50,       # ✏️ English Exercises (NotebookLM)
     "youtube": 50,                # YouTube transcription
 }

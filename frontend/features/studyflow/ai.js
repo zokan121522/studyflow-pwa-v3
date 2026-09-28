@@ -31,6 +31,21 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     notebooklm_total: ["notebooklm", "notebooklm_enhance_md", "notebooklm_md_to_html"],
   };
 
+  // ➕ Añadir — block-creation types rendered as the last toolbar group
+  // (v2 parity). Mirrors CoursesBlocks.TYPE_META labels/icons; the
+  // click handler is the same `.sf-td-add-chip` delegate from
+  // CoursesBlocks._attachBlockHandlers so creation defaults live there.
+  const ADD_TYPE_META = {
+    markdown:  { icon: "📝", label: "Markdown" },
+    content:   { icon: "📄", label: "Texto" },
+    separator: { icon: "➖", label: "Separador" },
+    "pdf-ref": { icon: "📕", label: "PDF" },
+    youtube:   { icon: "▶️", label: "YouTube" },
+    image:     { icon: "🖼", label: "Imagen" },
+    exercise:  { icon: "❓", label: "Ejercicio" },
+    interactive: { icon: "🌐", label: "Página web" },
+  };
+
   async function _fetchUsageData() {
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -111,6 +126,15 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         { id: "infographic", label: "Infographic", icon: "📊", cat: "generate", order: 40,
           md: "infographic", pdf: "infographic",
           task: { md: "notebooklm_infographic", pdf: "notebooklm_infographic" } },
+        { id: "gen-content", label: "Gen. Contenido", icon: "🧠", cat: "generate", order: 42,
+          md: "notebooklm-gen-content", pdf: "notebooklm-gen-content",
+          task: { md: "knowledge_pipeline", pdf: "knowledge_pipeline" } },
+        { id: "english", label: "English", icon: "✏️", cat: "generate", order: 44,
+          md: "notebooklm-english", pdf: "",
+          task: { md: "generate_grammar" } },
+        { id: "audio", label: "Audio", icon: "🎵", cat: "generate", order: 50,
+          md: "nb-audio", pdf: "nb-audio",
+          task: { md: "notebooklm_audio", pdf: "notebooklm_audio" } },
       ],
     });
 
@@ -166,6 +190,18 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       }
       html += `</div>`;
     }
+    // ➕ Añadir — block-creation group, rendered BELOW the addon groups
+    // (v2 parity: the 📎 Add section lived inside the per-block unified
+    // toolbar, after the generate groups. The global topic add-bar now
+    // renders only for empty topics — see courses.js _renderTopicDetail).
+    html += `<div class="toolbar-group" data-addon="add">` +
+      `<span class="toolbar-chip toolbar-chip-add" title="Añadir bloque">➕ Añadir</span>`;
+    for (const [type, m] of Object.entries(ADD_TYPE_META)) {
+      html += `<button type="button" class="sf-td-add-chip" data-type="${escHtml(type)}"` +
+        `${bidAttr}${topicAttr} title="${escHtml(m.label)}">` +
+        `<span class="sf-td-add-chip-icon">${m.icon}</span>${escHtml(m.label)}</button>`;
+    }
+    html += `</div>`;
     html += `<div class="ai-status" data-ai-status="${escHtml(blockId)}" style="display:none;flex-basis:100%;"></div>`;
     return html;
   }
@@ -259,13 +295,36 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       } else {
         _showStatus(bid, "⚠️ Modal de infografía no disponible", true);
       }
-    } else if (action === "audio") {
+    } else if (action === "notebooklm-gen-content") {
+      // Phase 38 (#26) — Knowledge Pipeline modal (NotebookLM provider).
+      const kp = window.App.KnowledgePipeline;
+      if (kp && kp.open) {
+        await kp.open(cid, tid);
+      } else {
+        _showStatus(bid, "⚠️ Módulo Gen. Contenido no disponible", true);
+      }
+    } else if (action === "notebooklm-english") {
+      // Phase 61 (#257) — English Exercises config modal (markdown only).
+      const eng = window.App.EnglishGrammar;
+      if (eng && eng.showGrammarConfig) {
+        const sourceType = btn.closest("[data-scope]")?.dataset.scope === "pdf" ? "pdf" : "markdown";
+        await eng.showGrammarConfig(bid, tid, sourceType, { provider: "notebooklm" });
+      } else {
+        _showStatus(bid, "⚠️ Módulo English no disponible", true);
+      }
+    } else if (action === "audio" || action === "nb-audio") {
       // Phase 7.7 — audio config modal (duration + language)
       const modals = window.App.AiModals;
       if (gen && modals) {
         await modals.openAudioConfig({
           language: "es",
-          onSubmit: (params) => gen.generateAudio([bid], tid, params.language, params.duration),
+          onSubmit: (params) => {
+            if (action === "nb-audio") {
+              gen.generateNbAudio([bid], tid, params.language, params.duration);
+            } else {
+              gen.generateAudio([bid], tid, params.language, params.duration);
+            }
+          },
         });
       } else {
         _showStatus(bid, "⚠️ Modal de audio no disponible", true);
@@ -299,7 +358,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
   // ─── Insert helpers (v3: addBlock + moveBlock) ─────────────────
   function _cleanBlockTitle(title) {
     return String(title || "")
-      .replace(/^[📄📝📕🎵❓🤖✨📊]\s*/u, "")
+      .replace(/^[📄📝📕🎵❓🤖✨📊🧠✏️]\s*/u, "")
       .replace(/\s*·\s*\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}$/, "")
       .trim();
   }
@@ -359,6 +418,8 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       blockType = "content"; label = "Audio"; emoji = "🎵";
     } else if (format === "infographic") {
       blockType = "content"; label = "Infografía"; emoji = "📊";
+    } else if (format === "knowledge_pipeline") {
+      blockType = "markdown"; label = "Gen. Contenido"; emoji = "🧠";
     } else {
       blockType = "markdown"; label = "Markdown"; emoji = "🤖";
     }

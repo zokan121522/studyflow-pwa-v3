@@ -27,9 +27,11 @@ window.App.AI.Tasks = (function () {
     html:        { title: "✨ NotebookLM generando HTML",     model: "NotebookLM" },
     md:          { title: "✨ Mejorando Markdown",            model: "NotebookLM" },
     test:        { title: "❓ Generando test",                model: "NotebookLM" },
-    audio:       { title: "🎵 Generando Audio",               model: "OpenZEN + TTS" },
+    audio:       { title: "🎵 Generando Audio",               model: "NotebookLM + TTS" },
     infographic: { title: "📊 Generando Infografía",          model: "NotebookLM" },
     flashcards:  { title: "💳 Generando Flashcards",          model: "NotebookLM" },
+    knowledge_pipeline: { title: "🧠 Generador Contenido",    model: "NotebookLM" },
+    grammar:     { title: "✏️ Generando English Exercises",   model: "NotebookLM" },
   };
 
   // ─── Stream panel state ──────────────────────────────────────────
@@ -278,6 +280,10 @@ window.App.AI.Tasks = (function () {
     const defaultInsert = async (task) => {
       if (format === "test" && ai && ai._onTestSuccess) {
         await ai._onTestSuccess(task, blockId, topicId);
+      } else if (format === "grammar" && window.App.EnglishGrammar &&
+                 window.App.EnglishGrammar.onGrammarSuccess) {
+        // English Grammar → interactive block (english-practice.html CONFIG)
+        await window.App.EnglishGrammar.onGrammarSuccess(task, blockId, topicId);
       } else if (ai && ai._onContentSuccess) {
         await ai._onContentSuccess(task, blockId, topicId, format, capturedCourseId);
       } else {

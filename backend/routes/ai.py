@@ -19,9 +19,12 @@ NotebookLM-pure endpoints (ported 1:1 from studyflow-hub v2):
   POST    /api/ai/generate-flashcards          → flashcards task (OpenZEN acp)
 
 Endpoints depending on OpenZEN / Ollama (generate-content, pdf-to-opencode,
-markdown-to-opencode, knowledge-pipeline, study-session-plan, extract-pdf,
-generate-html-from-md/dark, local-to-md, generate-test, grammar, vocabulary)
+markdown-to-opencode, study-session-plan, extract-pdf,
+generate-html-from-md/dark, local-to-md, generate-test, vocabulary)
 are intentionally NOT registered until their deferred sub-phases.
+knowledge-pipeline (Gen. Contenido) and generate-grammar-exercises
+(English) ARE registered — ported from v2 and pinned to the v3 NotebookLM
+provider (the only one registered in v3).
 """
 
 import os
@@ -41,6 +44,8 @@ from ai.notebooklm.tasks_pdf import (
 )
 from ai.notebooklm.tasks_flashcards import create_notebooklm_flashcards_task
 from ai.notebooklm.md_templates_catalog import list_md_templates
+from ai.generation.knowledge_pipeline import create_knowledge_pipeline_task
+from ai.generation.grammar import create_grammar_task
 
 bp = Blueprint("ai", __name__)
 
@@ -342,6 +347,82 @@ def generate_flashcards(current_user_id: int):
             topic_id=body.get("topic_id"),
             user_id=current_user_id,
             level=body.get("level", "standard"),
+        )
+        return jsonify(result), 201
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Knowledge Pipeline — Phase 38 (Gen. Contenido)
+# ═══════════════════════════════════════════════════════════════════
+
+@bp.route("/ai/knowledge-pipeline", methods=["POST"])
+@token_required
+def knowledge_pipeline_endpoint(current_user_id: int):
+    """POST /api/ai/knowledge-pipeline — generate notes from topic text.
+
+    Accepts free-text topic description + depth level and dispatches to the
+    v3 NotebookLM provider (the only provider registered in v3) for
+    structured markdown generation. Poll ``GET /api/ai/tasks/<id>``.
+
+    Request body:
+        topic_text (str): Topic description to generate notes about.
+        depth (str, optional): 'concise', 'standard' or 'detailed'. Default: 'standard'.
+        topic_id (str, optional): Topic to associate the result with.
+        course_id (str, optional): Course for block insertion on completion.
+        mode (str, optional): 'unitema' or 'por_tema'. Default: 'unitema'.
+        language (str, optional): 'es' or 'en'. Default: 'es'.
+        template_id (str, optional): MD_TEMPLATES key; empty → generic prompt.
+
+    Returns:
+        {"task_id": str} — 201 on success; 400 ``{error}`` on bad input.
+    """
+    body = request.json or {}
+    try:
+        result = create_knowledge_pipeline_task(
+            topic_text=body.get("topic_text", ""),
+            depth=body.get("depth", "standard"),
+            topic_id=body.get("topic_id"),
+            user_id=current_user_id,
+            course_id=body.get("course_id"),
+            language=body.get("language", "es"),
+            mode=body.get("mode", "unitema"),
+            template_id=body.get("template_id"),
+        )
+        return jsonify(result), 201
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# English Grammar Exercises — Phase 61 (English addon)
+# ═══════════════════════════════════════════════════════════════════
+
+@bp.route("/ai/generate-grammar-exercises", methods=["POST"])
+@token_required
+def generate_grammar_exercises(current_user_id: int):
+    """POST /api/ai/generate-grammar-exercises — english addon.
+
+    Body: {source_id, source_type, topic_id, per_type}
+    source_type: 'markdown' | 'content' (PDF out of scope in v1).
+    per_type: exercises per type (1, 5, 10, 20, 40; default 10).
+    Always uses the v3 NotebookLM provider (the only one registered).
+
+    Returns {"task_id": str} — poll GET /api/ai/tasks/<id> for status.
+    """
+    body = request.json or {}
+    try:
+        result = create_grammar_task(
+            topic_id=body.get("topic_id"),
+            source_id=body.get("source_id"),
+            source_type=body.get("source_type"),
+            user_id=current_user_id,
+            per_type=body.get("per_type", 10),
         )
         return jsonify(result), 201
     except ValueError as e:
