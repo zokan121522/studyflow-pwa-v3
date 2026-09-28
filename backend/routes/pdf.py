@@ -1,9 +1,15 @@
 # backend/routes/pdf.py
-"""PDF upload/serve/annotate routes for StudyFlow PWA v3 (S7)."""
+"""PDF upload/serve/annotate routes for StudyFlow PWA v3 (S7 + S7b).
+
+S7b — unified PDF + SCORM import endpoint:
+  POST /pdf/import     → multipart file OR JSON {mode:'scorm',…}
+  GET  /pdf/import/status → {pdf, scorm_zip, moodle_scraping} capability flags
+"""
 
 import os
 import uuid
 import json
+import logging
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
@@ -13,6 +19,7 @@ from backend.models import PDF
 
 
 bp = Blueprint('pdf', __name__)
+logger = logging.getLogger(__name__)
 
 # Configuration
 UPLOAD_FOLDER = os.environ.get('PDF_UPLOAD_FOLDER', '/app/uploads/pdfs')
@@ -34,38 +41,38 @@ def _own_pdf(pdf_id: int, user_id: int):
     )
 
 
-@bp.post('/pdf/upload')
-@token_required
-def upload_pdf(current_user_id: int):
-    """Upload a PDF file."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+def _store_uploaded_pdf(
+    current_user_id: int,
+    file_storage,
+    *,
+    course_id=None,
+    topic_id=None,
+) -> dict:
+    """Reusable helper: validate + save a PDF FileStorage and return its dict.
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+    Raises ValueError for user-visible validation failures (caller turns
+    into 400/413 JSON). Anything else propagates as 500 by the global
+    error handler.
+    """
+    if not file_storage or not file_storage.filename:
+        raise ValueError('No file provided')
+    if not allowed_file(file_storage.filename):
+        raise ValueError('Only PDF files are allowed')
 
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Only PDF files are allowed'}), 400
-
-    # Check file size
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-
+    file_storage.seek(0, os.SEEK_END)
+    file_size = file_storage.tell()
+    file_storage.seek(0)
     if file_size > MAX_FILE_SIZE:
-        return jsonify({'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'}), 413
+        raise ValueError(f'File too large. Max size: {MAX_FILE_SIZE} bytes')
+    if file_size == 0:
+        raise ValueError('Empty file')
 
-    # Generate unique filename
-    original_name = secure_filename(file.filename)
-    ext = original_name.rsplit('.', 1)[1].lower()
-    filename = f'{uuid.uuid4().hex}.{ext}'
-    storage_path = os.path.join(UPLOAD_FOLDER, filename)
+    original_name = secure_filename(file_storage.filename) or 'upload.pdf'
+    ext = original_name.rsplit('.', 1)[-1].lower() if '.' in original_name else 'pdf'
+    storage_filename = f"{uuid.uuid4().hex}.{ext}"
+    storage_path = os.path.join(UPLOAD_FOLDER, storage_filename)
+    file_storage.save(storage_path)
 
-    # Save file
-    file.save(storage_path)
-
-    # Get page count (optional - would need PyMuPDF)
     page_count = None
     try:
         import fitz
@@ -75,21 +82,42 @@ def upload_pdf(current_user_id: int):
     except Exception:
         pass
 
-    # Get metadata
-    course_id = request.form.get('course_id', type=int)
-    topic_id = request.form.get('topic_id', type=int)
-
     execute(
         '''INSERT INTO pdfs (user_id, course_id, topic_id, filename, original_name, file_size, page_count, storage_path)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
-        (current_user_id, course_id, topic_id, filename, original_name, file_size, page_count, storage_path)
+        (current_user_id, course_id, topic_id, storage_filename,
+         original_name, file_size, page_count, storage_path),
     )
-
     row = fetchone(
         'SELECT * FROM pdfs WHERE user_id = %s ORDER BY created_at DESC LIMIT 1',
-        (current_user_id,)
+        (current_user_id,),
     )
-    return jsonify({'pdf': PDF.from_row(row).to_dict()}), 201
+    if not row:
+        raise RuntimeError('PDF row not found after insert')
+    return PDF.from_row(row).to_dict()
+
+
+@bp.post('/pdf/upload')
+@token_required
+def upload_pdf(current_user_id: int):
+    """Upload a PDF file (legacy endpoint, kept for backwards compat).
+
+    New code should call POST /pdf/import instead — same response shape
+    plus a uniform {ok, mode, ...} envelope via the JSON branch.
+    """
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    file = request.files['file']
+    course_id = request.form.get('course_id', type=int)
+    topic_id = request.form.get('topic_id', type=int)
+    try:
+        pdf_dict = _store_uploaded_pdf(
+            current_user_id, file,
+            course_id=course_id, topic_id=topic_id,
+        )
+    except ValueError as err:
+        return jsonify({'error': str(err)}), 400
+    return jsonify({'pdf': pdf_dict}), 201
 
 
 @bp.get('/pdf/<int:pdf_id>')
@@ -235,3 +263,91 @@ def _annotation_to_dict(row) -> dict:
         'created_at': row['created_at'].isoformat() if row['created_at'] else None,
         'updated_at': row['updated_at'].isoformat() if row['updated_at'] else None,
     }
+
+
+# ─── S7b: Unified PDF + SCORM import ───────────────────────────────
+# Frontend posts ONE form to /pdf/import:
+#   • multipart with 'file' field          → upload a local PDF
+#   • JSON   {mode:'scorm', url|path, …}   → import a SCORM ZIP OR scrape
+# Single button (App.PdfImport.open) dispatches based on the chosen tab.
+# All branches return the SAME envelope so the popover can render uniformly.
+# Capability flags live at GET /pdf/import/status so the UI hides tabs
+# whose backend branches are unavailable.
+
+
+def _import_status() -> dict:
+    """Capability snapshot for the unified import popover."""
+    # Local import is always available (just the upload helper + stdlib zip)
+    from backend.scorm_import import (
+        is_scorm_zip_available, is_moodle_scraping_available,
+    )
+    return {
+        'pdf': True,
+        'scorm_zip': is_scorm_zip_available(),
+        'moodle_scraping': is_moodle_scraping_available(),
+    }
+
+
+@bp.get('/pdf/import/status')
+@token_required
+def import_status(current_user_id: int):
+    """Return capability flags for the unified import popover."""
+    return jsonify(_import_status()), 200
+
+
+@bp.post('/pdf/import')
+@token_required
+def import_pdf_or_scorm(current_user_id: int):
+    """Single unified import endpoint — see routes/pdf.py module docstring.
+
+    • multipart with `file` field     → upload a local PDF
+    • JSON {mode:'scorm', path|url,…} → SCORM zip or Moodle scrape
+    • otherwise                       → 400 {error}
+    """
+    if request.files:
+        return _import_via_upload(current_user_id)
+    payload = request.get_json(silent=True) or {}
+    if (payload.get('mode') or '').strip().lower() != 'scorm':
+        return jsonify({
+            'ok': False,
+            'reason': "Body must be multipart 'file' or JSON {mode:'scorm',…}",
+        }), 400
+    return _import_via_scorm(current_user_id, payload)
+
+
+def _import_via_upload(current_user_id: int):
+    """Handle multipart 'file' branch → upload + register PDF."""
+    file = request.files.get('file')
+    course_id = request.form.get('course_id', type=int)
+    topic_id = request.form.get('topic_id', type=int)
+    try:
+        pdf_dict = _store_uploaded_pdf(
+            current_user_id, file,
+            course_id=course_id, topic_id=topic_id,
+        )
+    except ValueError as err:
+        return jsonify({'ok': False, 'reason': str(err)}), 400
+    return jsonify({
+        'ok': True,
+        'mode': 'pdf-file',
+        'pdf': pdf_dict,
+        'url': f"/api/pdf/{pdf_dict['id']}",
+        'title': pdf_dict['original_name'],
+    }), 201
+
+
+def _import_via_scorm(current_user_id: int, payload: dict):
+    """Handle JSON SCORM branch → zip import or Moodle scrape."""
+    from backend.scorm_import import import_scorm
+    result = import_scorm(
+        current_user_id,
+        url=(payload.get('url') or '').strip(),
+        path=(payload.get('path') or '').strip(),
+        course_id=payload.get('course_id'),
+        topic_id=payload.get('topic_id'),
+        title=(payload.get('title') or '').strip(),
+    )
+    # Per S7b spec: SCORM soft-errors stay 200 (envelope has {ok:false}).
+    # Only success-with-blocks bumps to 201 so the popover can distinguish.
+    status = 201 if (result.get('ok') and result.get('count', 0) > 0) else 200
+    return jsonify(result), status
