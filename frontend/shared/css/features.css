@@ -291,6 +291,120 @@
 
 .auth-form .btn { width: 100%; margin-top: 8px; }
 
+/* ============================== GENERIC MODAL FORM ============================== */
+.modal-form .form-group { margin-bottom: 14px; }
+
+.modal-form label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modal-form textarea { resize: vertical; min-height: 72px; }
+
+.modal-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.modal-form .form-error {
+  color: var(--red);
+  font-size: 12px;
+  margin-top: 8px;
+  display: none;
+}
+
+.modal-form .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* ============================== AGENDA SESSION CARD ============================== */
+.agenda-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.agenda-header h2 { font-size: 18px; font-weight: 600; }
+
+.sessions-list { display: flex; flex-direction: column; gap: 10px; }
+
+.session-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  transition: border-color 0.15s;
+}
+
+.session-card:hover { border-color: var(--primary); }
+
+.session-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.session-card-title { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
+
+.session-card-actions { display: flex; gap: 4px; }
+
+.session-card-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.session-card-actions button:hover { border-color: var(--primary); color: var(--primary); }
+
+.session-card-actions button.delete:hover { border-color: var(--red); color: var(--red); }
+
+.session-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.session-card-meta .cat {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.session-card-desc {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
 .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
 .auth-switch a { color: var(--primary); text-decoration: none; font-weight: 500; }
 .auth-switch a:hover { text-decoration: underline; }
