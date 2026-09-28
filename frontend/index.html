@@ -29,6 +29,10 @@
   
   <!-- Styles -->
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/features/agenda/agenda.css">
+  <link rel="stylesheet" href="/features/agenda/agenda-overlays.css">
+  <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
+  <link rel="stylesheet" href="/features/habits/habits.css">
   
   <!-- PWA Meta Tags -->
   <meta name="msapplication-TileColor" content="#16213e">
@@ -151,9 +155,238 @@
     📴 Sin conexión — Modo offline activo
   </div>
 
+  <!-- ============================== AGENDA OVERLAYS ============================== -->
+  <!-- Session overlay — full markup copied from v2 (lines 197-293) and adapted:
+       md toolbar button onclicks resolve via the agenda-glue App.Courses shim. -->
+  <div class="overlay" id="session-overlay">
+    <div class="omodal">
+      <div class="omodal-head">
+        <h3>➕ Nueva sesión — <span id="so-day">Día</span></h3>
+        <button id="so-close-btn">✕</button>
+      </div>
+      <div class="omodal-body">
+        <div class="so-field">
+          <label>Título</label>
+          <input type="text" id="so-titulo" placeholder="Ej: Tema 5 - Base de datos">
+        </div>
+        <div class="so-field">
+          <label>Categoría <span style="font-weight:400;font-size:10px;color:var(--text-muted);">— gestionar</span></label>
+          <div style="display:flex;gap:6px;">
+            <select id="so-categoria" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:13px;color:var(--text);outline:none;"></select>
+            <button id="so-cat-add" style="padding:6px 10px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;font-size:12px;" title="Añadir categoría">➕</button>
+          </div>
+        </div>
+        <div id="so-cat-list" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;"></div>
+        <div class="so-row">
+          <div class="so-field">
+            <label>Inicio</label>
+            <input type="time" id="so-start">
+          </div>
+          <div class="so-field">
+            <label>Fin</label>
+            <input type="time" id="so-end">
+          </div>
+        </div>
+
+        <div class="so-field" style="margin-top:8px;">
+          <label style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">⏱ Cronómetro</label>
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+            <div style="display:flex;gap:5px;align-items:center;background:var(--bg);padding:8px 12px;border-radius:6px;border:1px solid var(--border);">
+              <span style="font-size:18px;">⏱</span>
+              <input type="number" id="so-te-h" min="0" value="0" style="width:50px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">h</span>
+              <input type="number" id="so-te-m" min="0" max="59" value="0" style="width:44px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">m</span>
+              <input type="number" id="so-te-s" min="0" max="59" value="0" style="width:44px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">s</span>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;background:var(--bg);padding:8px 12px;border-radius:6px;border:1px solid var(--border);">
+              <span style="font-size:18px;">⏸</span>
+              <input type="number" id="so-tp-h" min="0" value="0" style="width:50px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">h</span>
+              <input type="number" id="so-tp-m" min="0" max="59" value="0" style="width:44px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">m</span>
+              <input type="number" id="so-tp-s" min="0" max="59" value="0" style="width:44px;padding:6px 4px;border:1px solid var(--border);border-radius:4px;font-size:15px;text-align:center;background:var(--surface);outline:none;">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:500;">s</span>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;background:var(--green-bg);padding:8px 12px;border-radius:6px;border:1px solid var(--green);">
+              <span style="font-size:18px;">✓</span>
+              <span id="so-tef" style="font-size:16px;font-weight:700;color:var(--green);min-width:50px;">00:00</span>
+            </div>
+          </div>
+        </div>
+        <div class="so-field">
+          <label>Notas</label>
+          <div class="so-notes-tabs">
+            <button type="button" class="so-ntab active" data-tab="view">👁 Vista</button>
+            <button type="button" class="so-ntab" data-tab="edit">✏️ Editar</button>
+          </div>
+          <div class="so-notes-panel so-notes-view active">
+            <div id="so-notes-preview" class="so-notes-rendered"></div>
+          </div>
+          <div class="so-notes-panel so-notes-edit">
+            <div class="md-toolbar">
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'bold')" title="Negrita"><strong>B</strong></button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'italic')" title="Cursiva"><em>I</em></button>
+              <span class="md-tb-sep"></span>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'h1')" title="Título 1">H1</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'h2')" title="Título 2">H2</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'h3')" title="Título 3">H3</button>
+              <span class="md-tb-sep"></span>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'ul')" title="Lista">≡</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'ol')" title="Lista numerada">#.</button>
+              <span class="md-tb-sep"></span>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'link')" title="Enlace">🔗</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'code')" title="Código">&lt;/&gt;</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'table')" title="Tabla">⊞</button>
+              <span class="md-tb-sep"></span>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'blockquote')" title="Cita">❝</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'codeblock')" title="Bloque de código">&lt;/&gt;⁺</button>
+              <button type="button" class="md-tb-btn" onclick="window.App.Courses.applyMarkdown(this,'hr')" title="Línea horizontal">—</button>
+            </div>
+            <textarea id="so-notes" placeholder="Descripción o notas..."></textarea>
+          </div>
+        </div>
+        <div class="so-acts">
+          <button class="ht-btn" id="so-cancel">Cancelar</button>
+          <button class="ht-btn p" id="so-save">➕ Guardar sesión</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Habit notes overlay (opened by #agh-notes-btn) -->
+  <div class="overlay" id="notes-habit-overlay">
+    <div class="omodal">
+      <div class="omodal-head">
+        <h3>📝 Notas por hábito</h3>
+        <button id="nho-close-btn">✕</button>
+      </div>
+      <div class="omodal-body" style="padding:0;">
+        <div id="agenda-habit-notes"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category overlay (opened by #so-cat-add) -->
+  <div class="overlay" id="category-overlay">
+    <div class="omodal">
+      <div class="omodal-head">
+        <h3>📂 Gestionar categorías</h3>
+        <button id="co-close-btn">✕</button>
+      </div>
+      <div class="omodal-body">
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <input type="text" id="co-name" placeholder="Nueva categoría (ej: DWEC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:13px;color:var(--text);outline:none;">
+          <button class="ht-btn p" id="co-add">➕ Añadir</button>
+        </div>
+        <div id="co-list" style="font-size:13px;"></div>
+        <div style="margin-top:12px;font-size:10px;color:var(--text-muted);">Las categorías integradas (🎓 Formal, 📚 Self-study...) no se pueden borrar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columns overlay (opened by #agh-columns-btn) — habits sub-phase D -->
+  <div class="overlay" id="columns-overlay">
+    <div class="omodal">
+      <div class="omodal-head">
+        <h3>📋 Editar columnas de hábitos</h3>
+        <button id="clo-close-btn">✕</button>
+      </div>
+      <div class="omodal-body">
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+          <input type="text" id="clo-name" placeholder="Nombre (ej: Lectura)" style="flex:2;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:13px;color:var(--text);outline:none;min-width:120px;">
+          <select id="clo-type" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:13px;color:var(--text);outline:none;">
+            <option value="checkbox">☑ Checkbox</option>
+            <option value="text">📝 Texto</option>
+            <option value="number">🔢 Número</option>
+            <option value="media">📊 Media</option>
+            <option value="progress">📈 %</option>
+          </select>
+          <button class="ht-btn p" id="clo-add">➕ Añadir</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">Arrastra las columnas para reordenarlas. Edita o borra desde los botones.</div>
+        <div id="clo-list" style="font-size:13px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar ICS import overlay (opened by 📅 Calendarios button) -->
+  <div class="overlay" id="calendar-overlay">
+    <div class="omodal">
+      <div class="omodal-head">
+        <h3>📅 Calendarios externos (Moodle, Google…)</h3>
+        <button id="cal-close-btn">✕</button>
+      </div>
+      <div class="omodal-body">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+          Guarda feeds ICS (HTTPS) e importa sus eventos como sesiones de la agenda.
+          Las URLs nunca se muestran completas en pantalla.
+        </div>
+        <div id="cal-list" style="margin-bottom:10px;"></div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <input type="text" id="cal-new-name" placeholder="Nombre (ej: Moodle DAW)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:12px;color:var(--text);outline:none;min-width:0;">
+          <input type="url" id="cal-new-url" placeholder="https://…/calendar.ics" style="flex:2;padding:8px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:12px;color:var(--text);outline:none;min-width:0;">
+          <button class="ht-btn p" id="cal-add-btn" style="font-size:11px;">➕ Añadir</button>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">📥 Importar</div>
+          <label for="cal-template-notes" style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">Plantilla de notas para las sesiones importadas</label>
+          <textarea id="cal-template-notes" rows="4" spellcheck="false" style="display:block;width:100%;min-height:84px;padding:7px 9px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:12px;color:var(--text);outline:none;resize:vertical;margin-bottom:8px;box-sizing:border-box;">- [ ] Grabar clase.
+- [ ] Resumen en markdown, audios, infografias, ejercicios ...
+- [ ] Ver clase
+- [ ] Ver Resumen
+</textarea>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+            <select id="cal-import-target" style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:var(--font);font-size:12px;color:var(--text);outline:none;min-width:140px;">
+              <option value="" disabled selected>— añade un calendario primero —</option>
+            </select>
+            <div style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-muted);">
+              <label style="cursor:pointer;"><input type="radio" name="cal-days" value="7" checked style="vertical-align:middle;margin-right:2px;">7d</label>
+              <label style="cursor:pointer;"><input type="radio" name="cal-days" value="15" style="vertical-align:middle;margin-right:2px;">15d</label>
+              <label style="cursor:pointer;"><input type="radio" name="cal-days" value="30" style="vertical-align:middle;margin-right:2px;">30d</label>
+            </div>
+            <button class="ht-btn p" id="cal-import-btn" style="font-size:11px;">📥 Importar</button>
+          </div>
+          <div id="cal-import-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></div>
+        </div>
+        <div id="cal-status" style="margin-top:8px;font-size:10px;color:var(--text-muted);"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
   <script src="/shared/load-partial.js"></script>
+  <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
+       agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
+       App.ContentBlocks._renderMd, App.Courses.applyMarkdown, plus stubs for
+       deferred sub-phases (Habits, AgendaTimeline, AgendaMind). -->
+  <script src="/features/agenda/agenda-glue.js"></script>
+  <script src="/features/agenda/agenda-timer.js"></script>
+  <script src="/features/agenda/agenda-quicknote.js"></script>
+  <script src="/features/habits/habits.js"></script>
+  <script src="/features/agenda/agenda-habits.js"></script>
+  <script src="/features/agenda/agenda-dnd.js"></script>
+  <script src="/features/agenda/agenda-session.js"></script>
+  <script src="/features/agenda/agenda-calendar.js"></script>
+  <!-- Agenda Timeline (sub-phase C port). The 3 split files load BEFORE
+       agenda-month-view.js (which captures `var AgendaTimeline =
+       window.App.AgendaTimeline` at parse time) and BEFORE agenda-core.js
+       (which destructures App.AgendaTimeline.renderDay / renderWeek /
+       bindDrag / bindWeekDrag at parse time). Load order between the
+       three split files matters too: agenda-timeline.js creates the
+       namespace, week + month attach their render/bind functions onto
+       it, so core must come last. -->
+  <script src="/features/agenda/agenda-timeline.js"></script>
+  <script src="/features/agenda/agenda-timeline-week.js"></script>
+  <script src="/features/agenda/agenda-timeline-month.js"></script>
+  <script src="/features/agenda/agenda-month-view.js"></script>
+  <script src="/features/agenda/agenda-core.js"></script>
+  <script src="/features/agenda/agenda-calendars.js"></script>
+  <script src="/features/agenda/agenda.js"></script>
+  <script src="/features/agenda/agenda-handlers.js"></script>
+  <script src="/features/courses/courses.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

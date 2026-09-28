@@ -1,0 +1,136 @@
+/* ============================== HABITS MODULE STYLES ==============================
+   Companion to features/habits/habits.js. The habits table toolbar/wrap/.pbar/
+   .note-trigger/.ht-btn shell and habit-notes (.hn-*) grid already live in
+   agenda-overlays.css (ported verbatim in sub-phase B); this file adds the
+   bits specific to the columns-overlay drag-list + per-cell theming tweaks
+   for the dark surface used by v3. */
+
+/* ─── Habits table per-row classes (was inline-style in v2; promoted here
+   so JSX stays clean and themeable) ────────────────────────────── */
+.ht-wrap td .hab-day-label {
+  width: 80px;
+  border: none;
+  background: transparent;
+  font-weight: 500;
+  color: var(--text);
+}
+.ht-wrap td .hab-num,
+.ht-wrap td .hab-text {
+  width: 60px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  background: var(--bg);
+  color: var(--text);
+}
+.ht-wrap td.hab-media {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.ht-wrap td.hab-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ht-wrap td.hab-idx {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+.ht-wrap td.hab-day-cell {
+  text-align: left;
+}
+
+/* ─── Column list (columns-overlay) ──────────────────────────────── */
+.co-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  font-size: 13px;
+  transition: border-color .12s, background .12s;
+}
+.co-item:hover {
+  border-color: var(--primary);
+}
+.co-item.builtin {
+  opacity: .85;
+}
+.clo-drag-handle {
+  cursor: grab;
+  opacity: .3;
+  font-size: 14px;
+  margin-right: 2px;
+  user-select: none;
+}
+.clo-type-badge {
+  font-size: 8px;
+  text-transform: uppercase;
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.clo-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+.clo-edit {
+  margin-left: auto;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  opacity: .4;
+  transition: opacity .12s;
+}
+.clo-edit:hover { opacity: 1; }
+.clo-del {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  opacity: .4;
+  transition: opacity .12s;
+}
+.clo-del:hover { opacity: 1; }
+
+/* ─── Edit-in-place inputs (label + type select) ────────────────── */
+.clo-edit-input {
+  width: 100px;
+  padding: 4px 6px;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+.clo-edit-type {
+  padding: 3px 4px;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+/* ─── Legacy single-note overlay (#note-overlay) — ported from v2 for
+   the noteOpen()/noteClose() hooks. The new per-habit notes grid uses
+   .hn-* (in agenda-overlays.css). ──────────────────────────────── */
+#note-overlay .omodal {
+  max-width: 520px;
+}
+#note-overlay .omodal-body textarea {
+  min-height: 200px;
+}

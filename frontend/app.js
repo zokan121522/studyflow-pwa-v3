@@ -5,7 +5,7 @@ const API_URL = (() => {
   // In production, API is on same origin
   // In development, frontend on :3000, backend on :8080
   const isLocalDev = location.port === '3000' || location.hostname === 'localhost';
-  return isLocalDev ? 'http://localhost:8080/api' : '/api';
+  return isLocalDev ? 'http://localhost:8082/api' : '/api';
 })();
 
 
@@ -202,7 +202,17 @@ const Router = {
 
 
 // ─── App State ──────────────────────────────────────────────────────
-const App = {
+//
+// CRITICAL: App must be ANCHORED to the shared `window.App` namespace
+// created earlier by agenda-glue.js (UI, ContentBlocks, Courses,
+// Auth, STATE…). Reassigning `window.App = App` would clobber every
+// sub-namespace and break agenda-core.js:147 `App.UI.displayTitle(...)`,
+// leaving the Agenda CENTER column empty.
+//
+// Fix: define members in a definition object, then MERGE them onto the
+// pre-existing window.App via Object.assign. `App === window.App` so
+// every `App.X` reference below keeps working unchanged.
+const _appDef = {
   state: {
     currentUser: null,
     currentWeek: null,
@@ -213,17 +223,17 @@ const App = {
     selectedTopicId: null,
     habits: { showAll: false, expanded: false, weekData: null, weekDays: null }
   },
-  
+
   modules: {},
-  
+
   registerModule(name, module) {
     this.modules[name] = module;
   },
-  
+
   getModule(name) {
     return this.modules[name];
   },
-  
+
   async initAuth() {
     const token = Auth.getToken();
     if (token) {
@@ -241,12 +251,17 @@ const App = {
 };
 
 
-// Expose globally for feature modules
-window.App = App;
+// Expose globally for feature modules — MERGE into shared window.App,
+// do NOT replace it (agenda-glue.js / agenda modules already populated it).
+const App = Object.assign(window.App = window.App || {}, _appDef);
 window.Router = Router;
 window.API = API;
 window.Auth = Auth;
 window.API_URL = API_URL;
+
+// ─── Register Feature Modules ──────────────────────────────
+App.registerModule('Agenda', window.AgendaModule || null);
+App.registerModule('Courses', window.CoursesModule || null);
 
 
 // ─── Auth Event Listener ────────────────────────────────────────────
@@ -330,6 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     weekStart.setDate(today.getDate() - today.getDay() - 7);
     App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
     App.state.currentDay = null;
+    window.AgendaGlobals?.syncStateFromApp();
     renderActiveTab();
   });
   
@@ -339,6 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     weekStart.setDate(today.getDate() - today.getDay() + 7);
     App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
     App.state.currentDay = null;
+    window.AgendaGlobals?.syncStateFromApp();
     renderActiveTab();
   });
   
@@ -347,20 +364,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   weekStart.setDate(today.getDate() - today.getDay());
   App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
   App.state.currentDay = today.toISOString().slice(0, 10);
+  window.AgendaGlobals?.syncStateFromApp();
   
   // Initialize auth
-  await App.initAuth();
-  
+  // Initialize auth
+  try {
+    await App.initAuth();
+  } catch (e) {
+    console.log('[App] initAuth error, continuing:', e);
+    Auth.clearToken();
+  }
+
   renderActiveTab();
   updateOnlineStatus();
-  
+
   const loading = document.getElementById('loading-screen');
   if (loading) loading.classList.add('hidden');
+  
+  // Show the app container
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('hidden');
 });
 
 
 // ─── Render Active Tab ──────────────────────────────────────────────
 function renderActiveTab() {
+  window.AgendaGlobals?.syncStateFromApp();
   const tab = App.state.activeTab;
   if (tab === 'agenda' && App.modules.Agenda) {
     App.modules.Agenda.render();
@@ -369,6 +398,10 @@ function renderActiveTab() {
   }
   updateWeekLabel();
 }
+
+// ─── Agenda global handlers (Escape, focus-mode, category overlay,
+// columns-overlay stub) live in features/agenda/agenda-handlers.js —
+// loaded before app.js by index.html.
 
 
 // ─── Utility Functions ──────────────────────────────────────────────

@@ -65,7 +65,7 @@ self.addEventListener('fetch', (event) => {
 
   // Static assets: Cache-first strategy
   if (isStaticAsset(url.pathname)) {
-    event.respondWith(cacheFirstAsset(request));
+    event.respondWith(cacheFirstAsset(request, event));
     return;
   }
 
@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Cache-first strategy for static assets (CSS, JS, fonts, images)
-async function cacheFirstAsset(request) {
+async function cacheFirstAsset(request, event) {
   const cache = await caches.open(ASSET_CACHE);
   const cached = await cache.match(request);
 

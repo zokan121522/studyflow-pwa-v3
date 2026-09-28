@@ -8,46 +8,62 @@ function escHtml(str) {
     .replace(/</g, '<')
     .replace(/>/g, '>')
     .replace(/"/g, '"')
-    .replace(/'/g, ''');
+    .replace(/'/g, '&#39;');
 }
 
 // ─── Date / Week Helpers ────────────────────────────────────────────
+// Ported verbatim from v2 studyflow-hub/tierra/frontend/shared/ui-common.js
+// so the side-panel day-item rendering (`{date,name,num}`) and the week-
+// label range ("Semana N · DD/MM–DD/MM") match the v2 reference byte-for-
+// byte. The earlier v3 port used a Jan-1 based week number (not ISO 8601)
+// and returned raw date strings, which broke d.name/d.num and made
+// weekData.days?.[d.date] undefined → "undefined undefined" day items,
+// "Invalid Date–Invalid Date" header, and an empty centre column.
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getWeekId(dateStr) {
-  const date = new Date(dateStr + 'T12:00:00');
-  const year = date.getFullYear();
-  const week = Math.ceil(((date - new Date(year, 0, 1)) / 86400000 + new Date(year, 0, 1).getDay() + 1) / 7);
-  return `${year}-W${String(week).padStart(2, '0')}`;
+function getISOWeek(d) {
+  const tmp = new Date(d.valueOf());
+  const dayNum = (d.getDay() + 6) % 7;
+  tmp.setDate(tmp.getDate() - dayNum + 3);
+  const firstThursday = tmp.valueOf();
+  tmp.setMonth(0, 1);
+  if (tmp.getDay() !== 4) {
+    tmp.setMonth(0, 1 + ((4 - tmp.getDay()) + 7) % 7);
+  }
+  const week = 1 + Math.ceil((firstThursday - tmp) / 604800000);
+  const year = new Date(firstThursday).getFullYear();
+  return { year, week };
 }
 
-function getISOWeek(dateStr) {
-  return getWeekId(dateStr);
+function getWeekId(dateStr) {
+  const d = dateStr ? new Date(dateStr + 'T12:00:00') : new Date();
+  const iso = getISOWeek(d);
+  return `${iso.year}-W${String(iso.week).padStart(2, '0')}`;
 }
 
 function getDaysOfWeek(weekId) {
-  const [year, week] = weekId.split('-W');
-  const weekNum = parseInt(week, 10);
-  const firstDayOfYear = new Date(parseInt(year), 0, 1);
-  const firstMonday = new Date(firstDayOfYear);
-  firstMonday.setDate(firstDayOfYear.getDate() + (firstDayOfYear.getDay() === 0 ? 1 : 8 - firstDayOfYear.getDay()));
-  const monday = new Date(firstMonday);
-  monday.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
-  
+  const [year, wn] = weekId.split('-W').map(Number);
+  const jan4 = new Date(year, 0, 4, 12, 0, 0);
+  const start = new Date(jan4);
+  start.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  start.setDate(start.getDate() + (wn - 1) * 7);
   const days = [];
+  const names = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    days.push(d.toISOString().slice(0, 10));
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const ds = d.toISOString().slice(0, 10);
+    days.push({ date: ds, name: names[i], num: d.getDate() });
   }
   return days;
 }
 
 function formatDateShort(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function formatDateLabel(dateStr) {

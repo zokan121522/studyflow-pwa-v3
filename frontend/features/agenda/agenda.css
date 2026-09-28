@@ -1,0 +1,457 @@
+/* ============================== LEFT — MONTHLY CALENDAR ============================== */
+.mc-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 6px; }
+.mc-head .mc-nav { cursor: pointer; font-size: 11px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; user-select: none; }
+.mc-head .mc-nav:hover { background: var(--bg); }
+.mc-head .mc-title { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.mc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--surface); }
+.mc-grid .mc-dow { text-align: center; font-size: 9px; font-weight: 600; color: var(--text-muted); padding: 2px 0; }
+.mc-grid .mc-day { text-align: center; padding: 4px 0; border-radius: 4px; cursor: pointer; position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; background: var(--surface); }
+.mc-grid .mc-day .mc-day-num { font-size: 10px; line-height: 1.2; }
+.mc-grid .mc-day.mc-empty { cursor: default; }
+.mc-grid .mc-day.mc-selected { outline: 2px solid var(--primary); outline-offset: -2px; font-weight: 700; }
+.mc-grid .mc-day.mc-selected .mc-day-num { font-weight: 700; }
+.mc-grid .mc-day.mc-today .mc-day-num { font-weight: 600; color: var(--primary); }
+.mc-grid .mc-day .mc-circle { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-top: 1px; }
+.mc-grid .mc-day .mc-circle.mc-circle-pending { background: #f97316; }
+.mc-grid .mc-day .mc-circle.mc-circle-done { background: #22c55e; }
+.mc-grid .mc-day.mc-day-pending { background: #fff7ed; }
+.mc-grid .mc-day.mc-day-done { background: #f0fdf4; }
+
+/* ─── Move session modal clickable days ──────────────────────── */
+.ms-clickable { cursor: pointer; transition: all .12s; }
+.ms-clickable:hover { background: var(--primary-light) !important; transform: scale(1.08); z-index: 1; }
+.ms-clickable:hover .mc-day-num { font-weight: 700; color: var(--primary); }
+
+/* Origin day highlight + session list rows in the move modal */
+.mc-grid .mc-day.ms-origin { outline: 2px solid var(--primary); outline-offset: -2px; }
+.mc-grid .mc-day.ms-origin .mc-day-num { font-weight: 700; color: var(--primary); }
+.ms-row { }
+.ms-row:hover { border-color: var(--primary) !important; }
+#ms-session-list { max-height: 180px; overflow-y: auto; margin-bottom: 4px; }
+
+/* ─── Move session button in session card ──────────────────── */
+.s-card .sc-acts .btn-move { opacity: .5; transition: opacity .12s; }
+.s-card .sc-acts .btn-move:hover { opacity: 1; }
+
+/* ============================== LEFT — WEEK (Agenda) ============================== */
+.day-item {
+  display: flex; align-items: center; gap: 6px; padding: 7px 8px;
+  border-radius: var(--radius-sm); cursor: pointer; transition: all .12s;
+  margin-bottom: 1px; border: 1.5px solid transparent;
+}
+.day-item:hover { background: var(--surface-hover); }
+.day-item.active { background: var(--primary-light); border-color: var(--primary); }
+.day-item.drag-over-day { background: var(--primary-light); border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+.day-item .d-name { font-size: 12px; font-weight: 500; min-width: 26px; }
+.day-item .d-num { font-size: 12px; color: var(--text-secondary); min-width: 18px; text-align: right; }
+.day-item.active .d-num { color: var(--primary); }
+.day-item .d-dots { display: flex; gap: 2px; }
+.day-item .d-stats { font-size: 9px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+.day-item .d-eff { font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+.d-dots .dot { width: 5px; height: 5px; border-radius: 50%; }
+.dot-f { background: var(--cat-formal); } .dot-s { background: var(--cat-self); }
+.dot-w { background: var(--cat-work); } .dot-l { background: var(--cat-lang); }
+.dot-h { background: var(--cat-health); } .dot-m { background: var(--cat-mind); }
+.dot-p { background: var(--cat-project); }
+
+.week-summary { margin-top: 10px; padding: 8px; background: var(--bg); border-radius: var(--radius-sm); }
+.week-summary .ws { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); padding: 2px 0; }
+.week-summary .ws strong { color: var(--text); }
+.week-summary .ws-eff { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 4px; }
+.week-summary .ws-eff strong { color: var(--green); }
+
+/* ============================== SESSIONS (Agenda) ============================== */
+.section-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.session-list { display: flex; flex-direction: column; gap: 5px; }
+.s-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  display: flex; align-items: center; gap: 10px; transition: box-shadow .12s;
+}
+.s-card:hover { box-shadow: var(--shadow); }
+.s-card .sc-cat { width: 3px; height: 28px; border-radius: 3px; flex-shrink: 0; }
+.s-card .sc-body { flex: 1; min-width: 0; }
+.s-card .sc-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+.s-card .sc-title .sc-tag { font-size: 9px; padding: 1px 6px; border-radius: 6px; }
+.sc-tag.formal { background: #eef1fe; color: var(--cat-formal); }
+.sc-tag.self { background: #f3eefb; color: var(--cat-self); }
+.sc-tag.work { background: #fff3ed; color: var(--cat-work); }
+.sc-tag.lang { background: #edf9fc; color: var(--cat-lang); }
+.sc-tag.health { background: #edfcf2; color: var(--cat-health); }
+.sc-tag.mind { background: #fce9f3; color: var(--cat-mind); }
+.sc-tag.project { background: #fffbeb; color: var(--cat-project); }
+.s-card .sc-sub { font-size: 11px; color: var(--text-secondary); }
+.s-card .sc-sub.collapsed { max-height: 2.5em; overflow: hidden; }
+.s-card .sc-sub:not(.collapsed) { max-height: 200px; overflow-y: auto; }
+/* Rendered markdown inside sc-sub */
+.s-card .sc-sub p,
+.s-card .sc-sub ul,
+.s-card .sc-sub ol,
+.s-card .sc-sub h1,
+.s-card .sc-sub h2,
+.s-card .sc-sub h3,
+.s-card .sc-sub blockquote,
+.s-card .sc-sub pre { margin: 2px 0; font-size: inherit; line-height: 1.4; }
+.s-card .sc-sub h1,
+.s-card .sc-sub h2,
+.s-card .sc-sub h3 { font-weight: 600; }
+.s-card .sc-sub ul,
+.s-card .sc-sub ol { padding-left: 16px; }
+.s-card .sc-sub code { font-size: 10px; background: var(--bg); padding: 1px 3px; border-radius: 2px; }
+.s-card .sc-sub pre { background: var(--bg); padding: 4px 6px; border-radius: 3px; overflow-x: auto; }
+.s-card .sc-sub blockquote { border-left: 2px solid var(--border); padding-left: 6px; color: var(--text-muted); }
+.s-card .sc-sub table { font-size: 10px; border-collapse: collapse; margin: 2px 0; }
+.s-card .sc-sub th,
+.s-card .sc-sub td { border: 1px solid var(--border); padding: 2px 4px; }
+.s-card .sc-sub a { color: var(--primary); }
+.s-card .sc-time { font-size: 11px; color: var(--text-secondary); white-space: nowrap; cursor: grab; user-select: none; display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 4px; }
+.s-card .sc-time:hover { background: var(--border); }
+.s-card .sc-time::before { content: "⠿"; font-size: 12px; }
+.s-card .sc-time:active { cursor: grabbing; }
+.s-card.drag-over { border-color: var(--primary); background: var(--primary-light); }
+.s-card.done { opacity: .6; border-left: 3px solid var(--green); }
+.s-card.done .sc-title { text-decoration: line-through; }
+.s-card.active { border-left: 3px solid var(--cat-formal); background: var(--primary-light); }
+.s-card.running { border-left: 3px solid var(--green); background: #f0fdf4; }
+.s-card.paused { border-left: 3px solid var(--amber); background: #fffbeb; }
+
+/* Session timer — always visible, full-width row */
+.sc-timer {
+  display: flex; gap: 8px; margin-top: 4px; font-size: 10px; font-weight: 500;
+  align-items: center; flex-wrap: nowrap;
+}
+.sc-timer button {
+  width: 26px; height: 26px; border: none; background: var(--bg);
+  border-radius: 5px; cursor: pointer; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.sc-timer button:hover { background: var(--border); }
+.sc-timer button:disabled { opacity: .25; cursor: default; pointer-events: none; }
+.sc-acts { display: flex; gap: 2px; margin-left: auto; }
+.sc-timer .te { color: var(--cat-formal); }
+.sc-timer .tp { color: var(--amber); }
+.sc-timer .tef { color: var(--green); }
+.sc-timer .btn-expand {
+  background: none; border: 1px solid var(--border); cursor: pointer;
+  font-size: 9px; padding: 0 5px; opacity: .65;
+  transition: opacity .12s, transform .15s;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  border-radius: 4px;
+}
+.sc-timer .btn-expand:hover { opacity: 1; background: var(--bg); }
+.sc-timer .btn-expand:active { transform: scale(.9); }
+
+/* Session card buttons — 3-button always shown */
+.s-card .sc-acts .btn-play { color: var(--green); }
+.s-card .sc-acts .btn-pause { color: var(--amber); }
+.s-card .sc-acts .btn-stop { color: var(--red); }
+.s-card .sc-acts .btn-del { opacity: .3; transition: opacity .12s; }
+.s-card .sc-acts .btn-del:hover { opacity: 1; color: var(--red); }
+.s-card .sc-acts .btn-del:disabled { opacity: .15; cursor: default; pointer-events: none; }
+
+/* Day item today highlight */
+.day-item.today { background: var(--primary-light); border-left: 2px solid var(--primary); }
+
+/* Category tags in overlay */
+.cat-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 5px; font-size: 11px; border: 1px solid var(--border); background: var(--surface); }
+.cat-tag .cat-del { cursor: pointer; opacity: .5; font-size: 10px; }
+.cat-tag .cat-del:hover { opacity: 1; color: var(--red); }
+.cat-tag.builtin { opacity: .7; }
+
+/* Category overlay list items */
+.co-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; border: 1px solid var(--border); margin-bottom: 4px; background: var(--surface); }
+.co-item .co-del { margin-left: auto; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+.co-item .co-del:hover { background: var(--bg); color: var(--red); }
+
+/* ============================== SESSION OVERLAY ============================== */
+.so-field { margin-bottom: 12px; }
+.so-field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+.so-field input[type="text"],
+.so-field input[type="time"],
+.so-field select,
+.so-field textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg); font-family: var(--font); font-size: 13px; color: var(--text); outline: none;
+  box-sizing: border-box;
+}
+.so-field input:focus,
+.so-field select:focus,
+.so-field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(79,70,229,.12); }
+.so-field textarea { min-height: 60px; resize: vertical; }
+.so-row { display: flex; gap: 12px; }
+.so-row .so-field { flex: 1; }
+.so-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* ============================== SCROLL WRAPPERS ============================== */
+.sessions-scroll-wrapper {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.sessions-scroll-wrapper::-webkit-scrollbar { width: 3px; }
+.sessions-scroll-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.habits-wrapper {
+  /* reserved for daily tracking — sits below session list */
+}
+
+/* ============================== MORNING MIND GEN PILL ============================== */
+/* Inline indicator rendered next to the day title in #agenda-center while
+   the auto-create POST for the daily "Ritual Matinal" (mind 04:30) is in
+   flight. Owned by agenda-core.js (render path) and agenda-mind.js
+   (_cleanup: removes the node from the DOM once the POST settles). No JS
+   timers, no setTimeout — the pill re-paints on every render via
+   isGenerating(dateStr). Discreet: small, muted, animated shimmer. */
+.mind-gen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-left: 10px;
+  animation: mind-gen-fade-in .35s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+.mind-gen-pill .mind-gen-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: mind-gen-spin .9s linear infinite;
+  flex-shrink: 0;
+}
+.mind-gen-pill-text {
+  /* Animated shimmer via background-clip:text — pure CSS, no JS timers.
+     When the browser does not support text-clipping, the @supports block
+     below restores a solid colour so the text stays readable. */
+  background-image: linear-gradient(
+    90deg,
+    var(--text-muted) 0%,
+    var(--primary) 50%,
+    var(--text-muted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+          color: transparent;
+  animation: mind-gen-shimmer 2.4s ease-in-out infinite;
+}
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .mind-gen-pill-text {
+    background-image: none;
+    -webkit-text-fill-color: var(--text-muted);
+            color: var(--text-muted);
+  }
+}
+@keyframes mind-gen-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes mind-gen-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes mind-gen-fade-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* FIX 3 — Stack wrapper for the pill + the mini-terminal log.
+   Inline-block column so the pill sits ABOVE the log (not floated
+   next to it). Margin-left:10px keeps it visually detached from
+   the H2 day-title's text. gap:2px avoids the log touching the pill.
+   No absolute positioning — the stack respects the natural flow of
+   the header flex, so timeline/week views also render correctly
+   (their headers share the same structure but with a different h2). */
+.mind-gen-pill-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-left: 10px;
+  vertical-align: top;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* FIX B-2 — Mini-terminal: a discreet monospace log block that shows
+   ALL provider steps (FIX 3 used to exclude the very latest; FIX B-2
+   keeps it so the user reads both the active beat on the pill and the
+   full context in the log below it). Pure CSS — no JS timers.
+   The 5-line cap is enforced via max-height + overflow:hidden so
+   older entries vanish without DOM churn. */
+.mind-gen-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+               "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  max-width: 320px;
+  /* 5 lines + small breathing room */
+  max-height: calc(10px * 1.35 * 5 + 8px);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  word-break: break-word;
+  white-space: normal;
+  animation: mind-gen-fade-in .35s ease;
+  align-self: flex-start;
+}
+.mind-gen-log-line {
+  margin: 0;
+  padding: 0;
+  /* Fallback opacity (newest = fullest). The :nth-last-child rules
+     below decay older lines so the most recent context is the
+     brightest. */
+  opacity: 1;
+  white-space: pre-wrap;
+}
+/* Opacity gradient — newest (last child) brightest, then fades up
+   the stack. Rule indexes match DOM order: line N-1 = most recent
+   prior step = brightest, line 0 = oldest visible = faintest.
+   Chronological order is "oldest first, newest last" so a fresh
+   line simply replaces/appends at the bottom and the :nth-last-child
+   rules grab the BOTTOM row (newest) for the brightest opacity. */
+.mind-gen-log-line:nth-last-child(1) { opacity: 1;    }
+.mind-gen-log-line:nth-last-child(2) { opacity: 0.85; }
+.mind-gen-log-line:nth-last-child(3) { opacity: 0.7;  }
+.mind-gen-log-line:nth-last-child(4) { opacity: 0.55; }
+.mind-gen-log-line:nth-last-child(5) { opacity: 0.45; }
+.mind-gen-log-line:nth-last-child(n+6) { opacity: 0.45; display: none; }
+
+@media (max-width: 768px) {
+
+  /* ─── Calendar ─── */
+  .mc-grid .mc-day { padding: 3px 0; }
+  .mc-grid .mc-day .mc-day-num { font-size: 9px; }
+  .mc-grid .mc-day .mc-circle { width: 4px; height: 4px; }
+
+  /* ─── Day list ─── */
+  .day-item { padding: 6px; gap: 4px; }
+  .day-item .d-name { font-size: 11px; min-width: 20px; }
+  .day-item .d-num { font-size: 11px; min-width: 14px; }
+  .day-item .d-stats { font-size: 8px; }
+  .day-item .d-eff { font-size: 8px; }
+
+  /* ─── Session cards ─── */
+  .s-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .s-card .sc-title { font-size: 12px; }
+  .s-card .sc-sub { font-size: 10px; }
+  .s-card .sc-time { font-size: 10px; }
+  .sc-timer { flex-wrap: wrap; gap: 4px; }
+  .sc-timer button { font-size: 12px; }
+  .sc-acts { gap: 4px; flex-wrap: wrap; }
+  /* ─── Session overlay (full-width) ─── */
+  #session-overlay .omodal { max-width: 100% !important; margin: 0; border-radius: 0; height: 100vh; overflow-y: auto; }
+  #session-overlay .omodal-body { padding: 12px; }
+  .so-row { flex-direction: column; gap: 0; }
+  .so-field input[type="time"] { font-size: 16px; } /* prevent iOS zoom */
+  .so-field input[type="text"],
+  .so-field select,
+  .so-field textarea { font-size: 16px; } /* prevent iOS zoom */
+
+  /* ─── Category overlay ─── */
+  #category-overlay .omodal { max-width: 100% !important; margin: 8px; border-radius: var(--radius); }
+
+  /* ─── Columns overlay ─── */
+  #columns-overlay .omodal { max-width: 100% !important; margin: 8px; border-radius: var(--radius); }
+
+  /* ─── Note overlay ─── */
+  #note-overlay .omodal { max-width: 100% !important; margin: 8px; border-radius: var(--radius); }
+
+  /* ─── Week summary ─── */
+  .week-summary { padding: 6px; }
+  .week-summary .ws { font-size: 10px; }
+
+  /* ─── Unscheduled ─── */
+  .tlw-unscheduled-days { flex-direction: column; }
+  .tlw-unsched-day { min-width: auto; }
+
+  /* ─── Header row: title + controls ─── */
+  #agenda-center > div:first-child {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  /* ─── View toggle: wrap on small screens ─── */
+  .view-toggle {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  /* ─── Add session button: full-width ─── */
+  #agenda-center > div:nth-child(2) .ht-btn {
+    flex: 1;
+  }
+
+  /* ─── Empty state: full-width add button ─── */
+  .empty-state .ht-btn {
+    width: 100%;
+  }
+}
+
+/* ============================== DARK THEME OVERRIDES ==============================
+   v2 agenda.css was designed for the light theme; v3 PWA ships dark by default.
+   The override block below replaces v2's hard-coded light backgrounds with
+   semi-transparent variants of the same category colour so cards stay readable
+   on the v3 dark surface (#16213e) without redesigning anything. */
+
+/* ─── Focus mode (toggled by ⌘/Ctrl+B or body double-tap in agenda tab)
+   Expands the center column and hides the left side panel so the user can
+   focus on a single day of sessions + habits table. ────────────── */
+.main.sf-focus-mode #agenda-left { display: none; }
+.main.sf-focus-mode #agenda-center { flex: 1 1 100%; max-width: 100%; }
+
+.sc-tag.formal { background: rgba(79, 140, 255, 0.15); }
+.sc-tag.self   { background: rgba(168, 85, 247, 0.18); }
+.sc-tag.work   { background: rgba(249, 115, 22, 0.18); }
+.sc-tag.lang   { background: rgba(6, 182, 212, 0.18); }
+.sc-tag.health { background: rgba(34, 197, 94, 0.18); }
+.sc-tag.mind   { background: rgba(236, 72, 153, 0.18); }
+.sc-tag.project{ background: rgba(245, 158, 11, 0.18); }
+
+/* Month-calendar pending/done cells — light orange/green replaced with
+   semi-transparent dark variants so the day number stays readable. */
+.mc-grid .mc-day.mc-day-pending { background: rgba(249, 115, 22, 0.18); }
+.mc-grid .mc-day.mc-day-done { background: rgba(34, 197, 94, 0.18); }
+
+/* Session card running / paused backgrounds — same logic, dark-friendly tints. */
+.s-card.running { background: rgba(34, 197, 94, 0.10); }
+.s-card.paused  { background: rgba(245, 158, 11, 0.10); }
+
+/* Timeline grid even-row alternation — original was rgba(0,0,0,.02) which is
+   invisible on a dark background; flip to a faint white tint. */
+.tl-row:nth-child(even),
+.tlw-row:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+
+/* Hover state on month-cal day cells (transparent in v2 against light bg,
+   was readable; dark bg needs a slightly stronger surface hover). */
+.mc-grid .mc-day:hover { background: var(--surface-hover); }
+.day-item:hover { background: var(--surface-hover); }
+.tl-unsched-item:hover { background: var(--surface-hover); }
+.tlw-unsched-item:hover { background: var(--surface-hover); }

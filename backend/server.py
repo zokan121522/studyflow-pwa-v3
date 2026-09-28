@@ -7,6 +7,11 @@ from flask_cors import CORS
 
 from backend.routes.auth import bp as auth_bp
 from backend.routes.agenda import bp as agenda_bp
+from backend.routes.agenda_sessions import bp as agenda_sessions_bp
+from backend.routes.agenda_state import bp as agenda_state_bp
+from backend.routes.agenda_categories import bp as agenda_categories_bp
+from backend.routes.quick_notes import bp as quick_notes_bp
+from backend.routes.calendar import bp as calendar_bp
 from backend.routes.habits import bp as habits_bp
 from backend.routes.courses import bp as courses_bp
 from backend.routes.pdf import bp as pdf_bp
@@ -20,29 +25,40 @@ from backend.routes.tts import bp as tts_bp
 def create_app() -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__)
+    _configure_app(app)
+    CORS(app, origins=_cors_origins(), supports_credentials=True)
+    _register_blueprints(app)
+    _register_error_handlers(app)
+    return app
 
-    # Configuration
+
+def _configure_app(app: Flask) -> None:
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
     app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-change-in-production')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = int(
+        os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 3600)
+    )
 
-    # CORS for frontend (dev on 3000, prod on 8080)
-    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://localhost:8080').split(',')
-    CORS(app, origins=cors_origins, supports_credentials=True)
 
-    # Register blueprints with /api prefix
-    app.register_blueprint(health_bp, url_prefix='/api')
-    app.register_blueprint(auth_bp, url_prefix='/api')
-    app.register_blueprint(agenda_bp, url_prefix='/api')
-    app.register_blueprint(habits_bp, url_prefix='/api')
-    app.register_blueprint(courses_bp, url_prefix='/api')
-    app.register_blueprint(pdf_bp, url_prefix='/api')
-    app.register_blueprint(quiz_bp, url_prefix='/api')
-    app.register_blueprint(todos_bp, url_prefix='/api')
-    app.register_blueprint(audio_bp, url_prefix='/api')
-    app.register_blueprint(tts_bp, url_prefix='/api')
+def _cors_origins() -> list:
+    return os.environ.get(
+        'CORS_ORIGINS', 'http://localhost:3000,http://localhost:8080'
+    ).split(',')
 
-    # Global error handlers
+
+def _register_blueprints(app: Flask) -> None:
+    blueprints = [
+        health_bp, auth_bp, agenda_bp, agenda_sessions_bp,
+        agenda_state_bp, agenda_categories_bp,
+        quick_notes_bp, calendar_bp,
+        habits_bp, courses_bp, pdf_bp, quiz_bp,
+        todos_bp, audio_bp, tts_bp,
+    ]
+    for bp in blueprints:
+        app.register_blueprint(bp, url_prefix='/api')
+
+
+def _register_error_handlers(app: Flask) -> None:
     @app.errorhandler(400)
     def bad_request(e):
         return jsonify({'error': 'Bad request', 'message': str(e)}), 400
@@ -63,12 +79,10 @@ def create_app() -> Flask:
     def internal_error(e):
         return jsonify({'error': 'Internal server error', 'message': 'An unexpected error occurred'}), 500
 
-    return app
-
 
 # Create app instance for gunicorn
 app = create_app()
 
 if __name__ == '__main__':
     # Development only
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('FLASK_RUN_PORT', '8080')), debug=True)

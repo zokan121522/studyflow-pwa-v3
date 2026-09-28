@@ -2,9 +2,36 @@
 """Data models and SQL DDL for StudyFlow PWA v3."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from enum import Enum
 from typing import Optional, List, Dict, Any
 import json
+
+
+# ─── Enums (Agenda) ───────────────────────────────────────────────
+class SessionCategory(str, Enum):
+    FORMAL_STUDY = "formal_study"      # 🎓
+    SELF_STUDY = "self_study"          # 📚
+    WORK = "work"                      # 💼
+    LANGUAGE = "language"              # 🌐
+    HEALTH = "health"                  # 🏋️
+    MIND = "mind"                      # 🧠
+    PROJECT = "project"                # ⚡
+
+
+class SessionState(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+# ─── Helpers ──────────────────────────────────────────────────────
+def iso_week_key(d: Optional[date] = None) -> str:
+    """Return ISO week key like '2026-W23'."""
+    d = d or date.today()
+    iso = d.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
 
 
 # ============================== SQL DDL ==============================
@@ -38,55 +65,6 @@ class User:
             email=row['email'],
             name=row.get('name'),
             avatar_url=row.get('avatar_url'),
-            created_at=row.get('created_at'),
-            updated_at=row.get('updated_at'),
-        )
-
-
-@dataclass
-class Session:
-    id: int
-    user_id: int
-    title: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    color: Optional[str] = None
-    is_recurring: bool = False
-    recurrence_rule: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'title': self.title,
-            'description': self.description,
-            'category': self.category,
-            'start_time': self.start_time.isoformat() if self.start_time else None,
-            'end_time': self.end_time.isoformat() if self.end_time else None,
-            'color': self.color,
-            'is_recurring': self.is_recurring,
-            'recurrence_rule': self.recurrence_rule,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-        }
-
-    @classmethod
-    def from_row(cls, row: Dict[str, Any]) -> 'Session':
-        return cls(
-            id=row['id'],
-            user_id=row['user_id'],
-            title=row['title'],
-            description=row.get('description'),
-            category=row.get('category'),
-            start_time=row.get('start_time'),
-            end_time=row.get('end_time'),
-            color=row.get('color'),
-            is_recurring=row.get('is_recurring', False),
-            recurrence_rule=row.get('recurrence_rule'),
             created_at=row.get('created_at'),
             updated_at=row.get('updated_at'),
         )
