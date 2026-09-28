@@ -38,7 +38,7 @@ window.App.CoursesBlocks = (function () {
   const { escHtml } = window.App.UI;
   const {
     addBlock, updateBlock, deleteBlock,
-    toggleBlockDone, reorderBlocks, listTopicBlocks,
+    reorderBlocks, listTopicBlocks,
   } = window.App.CoursesAPI;
   const { _renderMd } = window.App.ContentBlocks;
   const MdEditor = window.App.MarkdownEditor;
@@ -141,11 +141,6 @@ window.App.CoursesBlocks = (function () {
     }" data-block-id="${b.id}" data-block-type="${escHtml(type)}"
        data-course-id="${courseId}">
       <div class="sf-td-block-head sf-td-block-head-inner">
-        <label class="sf-td-done" title="Marcar como hecho">
-          <input type="checkbox" class="sf-td-done-cb" ${
-            done ? "checked" : ""
-          }/>
-        </label>
         <span class="sf-td-block-icon">${m.icon}</span>
         <span class="sf-td-block-title">${title}</span>
       </div>
@@ -203,21 +198,9 @@ window.App.CoursesBlocks = (function () {
     centerEl.dataset._sfBlocksHandlers = "1";
 
     centerEl.addEventListener("click", async (e) => {
-      // Done toggle
-      const doneCb = e.target.closest(".sf-td-done-cb");
-      if (doneCb) {
-        e.stopPropagation();
-        const blockEl = doneCb.closest(".sf-td-block") || (doneCb.closest(".sf-block-card")||document).querySelector(".sf-td-block");
-        if (!blockEl) return;
-        const bid = Number(blockEl.dataset.blockId);
-        try {
-          await toggleBlockDone(courseId, bid);
-          blockEl.classList.toggle("is-done", doneCb.checked);
-        } catch (err) {
-          alert("❌ Error: " + (err.message || err));
-        }
-        return;
-      }
+      // NOTE: done-toggle checkbox was removed from the block body (v2
+      // parity — done lives only in the sidebar block checkbox). Keep
+      // this listener purely for edit / save / delete / add actions.
 
       // Edit
       const editBtn = e.target.closest(".sf-td-edit");

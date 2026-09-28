@@ -1,9 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v14 (7.7c): bumped ASSET_CACHE so the activate handler evicts v13.
-// Task progress is now a floating terminal panel (ai-tasks.js + ai.css).
-const ASSET_CACHE = 'studyflow-assets-v14';
+// v15 (layout-parity): bumped ASSET_CACHE so the activate handler evicts v14.
+// Layout aligned to studyflow-hub v2 (fixed viewport, dashboard outside main,
+// theme-toggle light/dark, header utilities, done checkbox moved to sidebar).
+const ASSET_CACHE = 'studyflow-assets-v15';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

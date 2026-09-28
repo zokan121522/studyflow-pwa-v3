@@ -35,18 +35,6 @@
   gap: 8px;
   margin-bottom: 6px;
 }
-.sf-td-done {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.sf-td-done-cb {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--primary);
-}
 .sf-td-block-icon { font-size: 16px; flex-shrink: 0; }
 .sf-td-block-title {
   flex: 1;
@@ -64,7 +52,6 @@
    .sf-block-card because the card head (sf-bc-head) already owns
    the ✏️ / 🗑️ actions. This keeps ONE tidy button row per block. */
 .sf-td-block-head-inner .sf-td-block-actions { display: none; }
-.sf-td-block-head-inner .sf-td-done { margin-right: 2px; }
 
 .sf-td-block-body {
   font-size: 13px;

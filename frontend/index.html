@@ -2,6 +2,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <!-- Theme bootstrap: apply saved theme BEFORE first paint (no flash).
+       Default (no data-theme attr) = dark. Light = v2 studyflow-hub palette. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("sf-theme") === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#16213e">
   <meta name="description" content="StudyFlow PWA - Planificación de estudio, cursos, hábitos y agenda">
@@ -68,28 +79,22 @@
 
   <!-- App container (hidden until initialized) -->
   <div id="app" class="app hidden">
-    <!-- Header -->
+    <!-- Header (v2 parity: 3 flex sections, static, 48px) -->
     <header class="header">
       <div class="header-left">
         <button class="hamburger" id="hamburger-btn" aria-label="Menú">☰</button>
         <div class="header-logo">
           <span class="logo-icon">📚</span>
-          <span class="logo-text">StudyFlow</span>
-          <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
+          <span class="logo-text">studyflow</span>
         </div>
       </div>
-      <div class="header-center" id="header-week">
-        <span class="week-nav" id="week-prev" aria-label="Semana anterior">◀</span>
+      <div class="header-week">
+        <span class="arr" id="week-prev" aria-label="Semana anterior">◀</span>
         <span id="week-label"><strong>Cargando...</strong></span>
-        <span class="week-nav" id="week-next" aria-label="Semana siguiente">▶</span>
+        <span class="arr" id="week-next" aria-label="Semana siguiente">▶</span>
       </div>
       <div class="header-right">
-        <!-- SA.2 — addons entry moved OUT of the header (user correction).
-             The marketplace nav now lives in the Studyflow left column
-             ABOVE the course tree as a qs-nav-item (see courses-sidebar.js
-             + addons-manager.js renderMarketplaceNav). The catalog is
-             rendered as a CENTER VIEW (App.AddonsManager.renderView)
-             routed by App.Courses.updateCenter when STATE._view === "addons". -->
+        <!-- user-nav (v2 marker; hidden until auth lands) -->
         <div id="user-nav" class="user-nav" style="display:none;">
           <div id="user-nav-trigger" class="user-nav-trigger">
             <span id="user-avatar" class="user-avatar"></span>
@@ -107,6 +112,11 @@
             <button id="btn-logout" class="dropdown-item dropdown-danger">🚪 Cerrar sesión</button>
           </div>
         </div>
+        <!-- Theme toggle (dual dark/light, v2 palette) -->
+        <button id="btn-theme" class="hdr-btn" title="Cambiar tema (oscuro/claro)" aria-label="Cambiar tema">☀️</button>
+        <!-- Backup / Restore — frontend only (Google Drive próximamente) -->
+        <button id="btn-backup" class="hdr-btn" title="Backup — próximamente vía Google Drive">📦 Backup</button>
+        <button id="btn-restore" class="hdr-btn" title="Restore — próximamente vía Google Drive">⬆️ Restore</button>
       </div>
     </header>
 
@@ -120,40 +130,41 @@
       </button>
     </div>
 
-    <!-- Main Content -->
-    <main class="main" role="main">
-      <!-- Dashboard View (welcome) -->
-      <div class="view-panel" id="view-dashboard">
-        <div class="dashboard-container">
-          <div class="dashboard-profile">
-            <div class="dashboard-avatar" id="dashboard-avatar">👤</div>
-            <div class="dashboard-greeting">
-              <h1 id="dashboard-title">Bienvenido a StudyFlow</h1>
-              <p id="dashboard-subtitle" class="dashboard-subtitle">Tu centro de planificación de estudio</p>
+    <!-- Dashboard View (welcome) — OUTSIDE .main (v2 architecture: it is a
+         full-width sibling of the grid, not a grid cell) -->
+    <div class="view-panel" id="view-dashboard">
+      <div class="dashboard-container">
+        <div class="dashboard-profile">
+          <div class="dashboard-avatar" id="dashboard-avatar">👤</div>
+          <div class="dashboard-greeting">
+            <h1 id="dashboard-title">Bienvenido a StudyFlow</h1>
+            <p id="dashboard-subtitle" class="dashboard-subtitle">Tu centro de planificación de estudio</p>
+          </div>
+        </div>
+        <div class="dashboard-badges">
+          <span class="badge badge-base">🏛️ Cuenta BASE</span>
+        </div>
+        <div class="dashboard-nav-grid">
+          <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
+            <div class="dnc-icon">📅</div>
+            <div class="dnc-text">
+              <div class="dnc-label">Agenda</div>
+              <div class="dnc-desc">Planificar sesiones, hábitos, calendario semanal</div>
             </div>
           </div>
-          <div class="dashboard-badges">
-            <span class="badge badge-base">🏛️ Cuenta BASE</span>
-          </div>
-          <div class="dashboard-nav-grid">
-            <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
-              <div class="dnc-icon">📅</div>
-              <div class="dnc-text">
-                <div class="dnc-label">Agenda</div>
-                <div class="dnc-desc">Planificar sesiones, hábitos, calendario semanal</div>
-              </div>
-            </div>
-            <div class="dashboard-nav-card" data-tab="studyflow" data-accent="green">
-              <div class="dnc-icon">📖</div>
-              <div class="dnc-text">
-                <div class="dnc-label">Studyflow</div>
-                <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
-              </div>
+          <div class="dashboard-nav-card" data-tab="studyflow" data-accent="green">
+            <div class="dnc-icon">📖</div>
+            <div class="dnc-text">
+              <div class="dnc-label">Studyflow</div>
+              <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
+    <!-- Main Content: v2 grid (340px 1fr) — only the tab views live here -->
+    <main class="main" role="main">
       <!-- Agenda View -->
       <div class="view-panel hidden" id="view-agenda">
         <div class="col col-left" id="agenda-left" role="complementary" aria-label="Navegación agenda"></div>
@@ -171,6 +182,12 @@
   <!-- Offline indicator -->
   <div id="offline-indicator" class="offline-indicator hidden" role="alert" aria-live="polite">
     📴 Sin conexión — Modo offline activo
+  </div>
+
+  <!-- Server status pill — moved OUT of the header logo (v2 parity);
+       fixed bottom-left, discreet. Polled by shared/server-status.js -->
+  <div id="server-status-wrap">
+    <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
   </div>
 
   <!-- ============================== AGENDA OVERLAYS ============================== -->

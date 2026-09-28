@@ -276,6 +276,17 @@ window.addEventListener('auth:unauthorized', () => {
 document.addEventListener('DOMContentLoaded', async () => {
   const tabButtons = document.querySelectorAll('.tab-btn');
   const viewPanels = document.querySelectorAll('.view-panel');
+  const mainEl = document.querySelector('.main');
+
+  // ─── Sync main grid visibility ────────────────────────────────
+  // The dashboard lives OUTSIDE .main (v2 parity). Both are flex:1
+  // children of #app, so when the dashboard is shown the main grid must
+  // be hidden — otherwise the empty grid steals half the viewport.
+  const syncMainWithDashboard = () => {
+    if (!mainEl) return;
+    const dashShown = !document.getElementById('view-dashboard')?.classList.contains('hidden');
+    mainEl.classList.toggle('hidden', dashShown);
+  };
   
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -291,6 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       viewPanels.forEach(p => p.classList.add('hidden'));
       const view = document.getElementById(`view-${tab}`);
       if (view) view.classList.remove('hidden');
+      syncMainWithDashboard();
       
       App.state.activeTab = tab;
       
@@ -315,7 +327,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     viewPanels.forEach(p => p.classList.add('hidden'));
     document.getElementById('view-dashboard')?.classList.remove('hidden');
     App.state.activeTab = 'dashboard';
+    syncMainWithDashboard();
   });
+
+  // ─── Theme toggle (dual dark/light, v2 palette) ────────────────
+  const btnTheme = document.getElementById('btn-theme');
+  if (btnTheme) {
+    const syncThemeIcon = () => {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      btnTheme.textContent = isLight ? '🌙' : '☀️';
+      btnTheme.title = isLight ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro';
+    };
+    syncThemeIcon();
+    btnTheme.addEventListener('click', () => {
+      const root = document.documentElement;
+      const isLight = root.getAttribute('data-theme') === 'light';
+      if (isLight) root.removeAttribute('data-theme');
+      else root.setAttribute('data-theme', 'light');
+      try { localStorage.setItem('sf-theme', isLight ? 'dark' : 'light'); } catch (e) {}
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', isLight ? '#16213e' : '#ffffff');
+      syncThemeIcon();
+    });
+  }
+
+  // ─── Backup / Restore — frontend only (Google Drive próximamente) ─
+  const btnBackup = document.getElementById('btn-backup');
+  const btnRestore = document.getElementById('btn-restore');
+  if (btnBackup) {
+    btnBackup.addEventListener('click', () =>
+      alert('📦 Backup — próximamente vía Google Drive'));
+  }
+  if (btnRestore) {
+    btnRestore.addEventListener('click', () =>
+      alert('⬆️ Restore — próximamente vía Google Drive'));
+  }
   
   const hamburger = document.getElementById('hamburger-btn');
   const appEl = document.getElementById('app');
@@ -377,6 +423,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   renderActiveTab();
   updateOnlineStatus();
+  syncMainWithDashboard();
 
   const loading = document.getElementById('loading-screen');
   if (loading) loading.classList.add('hidden');
