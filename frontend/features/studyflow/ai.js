@@ -206,31 +206,70 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     const gen = window.App.AI.Generation;
 
     if (action === "notebooklm-md") {
-      if (bid && gen) await gen.generateNbMd(bid, tid);
-      else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
+      // Phase 7.7 — open the markdown config modal first (template/length/language)
+      const modal = window.App.AiConfigModal;
+      if (bid && gen && modal) {
+        await modal.open({
+          title: "📄 NotebookLM → Markdown",
+          submitLabel: "✨ Generar con NotebookLM",
+          errorStatus: (msg) => _showStatus(bid, msg, true),
+          onSubmit: (params) => gen.generateNbMd(bid, tid, params),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de configuración no disponible", true);
+      }
     } else if (action === "notebooklm-html") {
       if (bid && gen) await gen.generateNbHtml(bid, tid);
       else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
     } else if (action === "nb-md-content") {
-      if (bid && gen) await gen.generateNbMdFromContent(bid, tid);
-      else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
+      // Phase 7.7 — improve existing markdown: same config modal
+      const modal = window.App.AiConfigModal;
+      if (bid && gen && modal) {
+        await modal.open({
+          title: "✍️ NotebookLM → Mejorar Markdown",
+          submitLabel: "✨ Mejorar con NotebookLM",
+          errorStatus: (msg) => _showStatus(bid, msg, true),
+          onSubmit: (params) => gen.generateNbMdFromContent(bid, tid, params),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de configuración no disponible", true);
+      }
     } else if (action === "nb-html-content") {
       if (bid && gen) await gen.generateNbHtmlFromContent(bid, tid);
       else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
     } else if (action === "notebooklm-youtube") {
       _showYoutubeDialog(tid, cid, { provider: "notebooklm" });
-    } else if (action === "nb-test") {
-      if (gen) await gen.generateNbTest(bid, tid);
-      else _showStatus(bid, "⚠️ Módulo de test no disponible", true);
-    } else if (action === "notebooklm-test") {
-      if (gen) await gen.generateNbTest([bid], tid);
-      else _showStatus(bid, "⚠️ Módulo de test no disponible", true);
+    } else if (action === "nb-test" || action === "notebooklm-test") {
+      // Phase 7.7 — test config modal (10/20/30 questions)
+      const modals = window.App.AiModals;
+      if (gen && modals) {
+        await modals.openTestConfig({
+          onSubmit: (numQuestions) => gen.generateNbTest([bid], tid, numQuestions),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de test no disponible", true);
+      }
     } else if (action === "infographic") {
-      if (gen) await gen.generateInfographic(bid, tid);
-      else _showStatus(bid, "⚠️ Módulo de infografía no disponible", true);
+      // Phase 7.7 — infographic config modal (style + language)
+      const modals = window.App.AiModals;
+      if (gen && modals) {
+        await modals.openInfographicConfig({
+          onSubmit: (params) => gen.generateInfographic([bid], tid, params),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de infografía no disponible", true);
+      }
     } else if (action === "audio") {
-      if (gen) await gen.generateAudio(bid, tid);
-      else _showStatus(bid, "⚠️ Módulo de audio no disponible", true);
+      // Phase 7.7 — audio config modal (duration + language)
+      const modals = window.App.AiModals;
+      if (gen && modals) {
+        await modals.openAudioConfig({
+          language: "es",
+          onSubmit: (params) => gen.generateAudio([bid], tid, params.language, params.duration),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de audio no disponible", true);
+      }
     } else {
       _showStatus(bid, `❌ Acción "${action}" no implementada en v3`, true);
     }

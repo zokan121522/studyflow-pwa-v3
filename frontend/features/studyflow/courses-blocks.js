@@ -149,8 +149,8 @@ window.App.CoursesBlocks = (function () {
         <span class="sf-td-block-icon">${m.icon}</span>
         <span class="sf-td-block-title">${title}</span>
       </div>
-      <div class="sf-td-block-body">${bodyHtml}</div>
       ${aiToolbarHtml}
+      <div class="sf-td-block-body">${bodyHtml}</div>
       <div class="sf-td-edit-form" style="display:none;"></div>
     </div>`;
   }

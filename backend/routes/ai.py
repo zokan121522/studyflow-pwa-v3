@@ -40,6 +40,7 @@ from ai.notebooklm.tasks_pdf import (
     create_notebooklm_md_task, create_notebooklm_html_task,
 )
 from ai.notebooklm.tasks_flashcards import create_notebooklm_flashcards_task
+from ai.notebooklm.md_templates_catalog import list_md_templates
 
 bp = Blueprint("ai", __name__)
 
@@ -69,6 +70,20 @@ def get_ai_config(current_user_id: int):
     """GET /api/ai/config — return current AI config."""
     cfg = _get_ai_config()
     return jsonify(cfg)
+
+
+@bp.route("/ai/md-templates", methods=["GET"])
+@token_required
+def get_md_templates(current_user_id: int):
+    """GET /api/ai/md-templates — list markdown prompt templates (public UI).
+
+    Returns public metadata (id, name, emoji, description, mock) for the
+    config modal grid + live preview. Internal prompt builders are NOT exposed.
+
+    Returns:
+        {"templates": [ {"id", "name", "emoji", "description", "mock"}, ... ]}
+    """
+    return jsonify(templates=list_md_templates()), 200
 
 
 @bp.route("/ai/config", methods=["POST"])

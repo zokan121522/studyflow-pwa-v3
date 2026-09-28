@@ -1,9 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v12 (7.7): bumped ASSET_CACHE so the activate handler evicts v11.
-// AI ✨ Generate toolbar (ai.js/ai-tasks.js/ai-notebooklm.js/ai.css).
-const ASSET_CACHE = 'studyflow-assets-v12';
+// v13 (7.7b): bumped ASSET_CACHE so the activate handler evicts v12.
+// Config modals: ai-config-modal.js (template/length/language) +
+// ai-modals.js (test/audio/infographic).
+const ASSET_CACHE = 'studyflow-assets-v13';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -45,6 +46,8 @@ const PRECACHE_ASSETS = [
   // + streaming task poll/modal + toolbar styles.
   '/features/studyflow/ai-tasks.js',
   '/features/studyflow/ai-notebooklm.js',
+  '/features/studyflow/ai-config-modal.js',
+  '/features/studyflow/ai-modals.js',
   '/features/studyflow/ai.js',
   '/features/studyflow/ai.css',
   '/vendor/pdfjs/pdf.min.js',
