@@ -284,3 +284,7 @@
   }
   .md-color-panel { right: auto; left: 0; }
 }
+
+/* ─── Fix: edit-form width collapse inside SF-Card (parent is flex) ── */
+.sf-block-card .sf-td-edit-form,
+.sf-block-card .sf-td-md-edit { width: 100%; min-width: 0; box-sizing: border-box; }

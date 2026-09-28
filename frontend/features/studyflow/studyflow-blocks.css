@@ -335,3 +335,5 @@
   gap: 6px;
   margin-top: 6px;
 }
+/* Fix: head+body viven en la columna 1fr (grid de 2 col, 3 hijos) */
+.sf-bc-head, .sf-bc-body { grid-column: 2; min-width: 0; }
