@@ -1,10 +1,12 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v15 (layout-parity): bumped ASSET_CACHE so the activate handler evicts v14.
-// Layout aligned to studyflow-hub v2 (fixed viewport, dashboard outside main,
-// theme-toggle light/dark, header utilities, done checkbox moved to sidebar).
-const ASSET_CACHE = 'studyflow-assets-v15';
+// v16 (V3-fixes): bumped ASSET_CACHE so the activate handler evicts v15.
+//  - topics/blocks full-width body + left-flushed titles
+//  - real drag&drop reorder (topics + blocks)
+//  - removed the S4.7 sticky floating toolbar ("📌 Bloque activo")
+//  - server status pill moved into the header next to the wordmark
+const ASSET_CACHE = 'studyflow-assets-v16';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -52,12 +54,11 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/ai.css',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
-  // SA.2 + S4.7: addons foundation (registry + marketplace) and the
-  // sticky floating toolbar (Phase 59 port).
+  // SA.2: addons foundation (registry + marketplace). The S4.7 sticky
+  // floating toolbar was removed in V3 — see git history.
   '/features/addons/addons-core.js',
   '/features/addons/addons-manager.js',
   '/features/addons/addons.css',
-  '/features/studyflow/studyflow-float.js',
 ];
 
 // Maximum age for cached API responses (5 minutes)

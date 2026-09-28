@@ -17,7 +17,7 @@ works without changes, while leaving the canonical routes intact.
 
 from flask import Blueprint, request, jsonify
 
-from database import execute, fetchone
+from database import execute, fetchall, fetchone
 from routes.auth import token_required
 
 

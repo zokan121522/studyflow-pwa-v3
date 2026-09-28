@@ -203,6 +203,17 @@ window.App.CoursesAPI = (function () {
     return data && data.block;
   }
 
+  // ── reorderTopics(courseId, topicIds) ─────────────────────────
+  // topicIds: array of topic ids in the desired order (same course).
+  // Uses the v2 alias endpoint scoped to the course.
+  async function reorderTopics(courseId, topicIds) {
+    await API.post(
+      `/courses/${courseId}/topics/reorder`,
+      { topic_ids: topicIds || [] }
+    );
+    clearDetailCache(courseId);
+  }
+
   // ── getTopicNotes(courseId, topicId) ──────────────────────────
   // S4: returns the freeform notes string for a topic.
   async function getTopicNotes(courseId, topicId) {
@@ -256,6 +267,7 @@ window.App.CoursesAPI = (function () {
     toggleBlockDone,
     reorderBlocks,
     moveBlock,
+    reorderTopics,
     // Topic notes (S4)
     getTopicNotes,
     saveTopicNotes,

@@ -133,6 +133,22 @@ window.App.Courses = (function () {
     }
   }
 
+  // ── promptEditDescription(courseId) ─────────────────────────
+  // Edit (or clear) the course description shown under the title.
+  async function promptEditDescription(courseId) {
+    const list = await fetchCourses();
+    const c = (list || []).find((x) => x.id === courseId);
+    const current = c ? (c.description || "") : "";
+    const next = (prompt("Descripción del curso (déjelo vacío para quitar):", current) || "").trim();
+    if (next === current) return;
+    try {
+      await updateDescription(courseId, next);
+      await renderStudyflow();
+    } catch (err) {
+      alert("❌ Error al editar la descripción: " + (err.message || err));
+    }
+  }
+
   // ── promptDeleteCourse(courseId, title) ──────────────────────
   async function promptDeleteCourse(courseId, title) {
     if (!confirm(`¿Borrar el curso "${title}" y todos sus temas?`)) return;
@@ -472,35 +488,14 @@ window.App.Courses = (function () {
     if (s._view === "addons" && window.App.AddonsManager
         && typeof window.App.AddonsManager.renderView === "function") {
       await window.App.AddonsManager.renderView(centerEl);
-      // S4.7 — hide the sticky floating toolbar while the marketplace
-      // owns the center (no .sf-block-card there).
-      try {
-        if (window.App.StudyflowFloat
-            && typeof window.App.StudyflowFloat.unmount === "function") {
-          window.App.StudyflowFloat.unmount();
-        }
-      } catch (_) { /* safe to skip */ }
     } else if (s.selectedTopicId && s.currentCourseId) {
       await _renderTopicDetail(centerEl, s.currentCourseId, s.selectedTopicId);
     } else if (s.currentCourseId) {
       await _renderCourseLanding(centerEl, s.currentCourseId);
-      // S4.7 — hide the float on the course landing (no block cards yet).
-      try {
-        if (window.App.StudyflowFloat
-            && typeof window.App.StudyflowFloat.unmount === "function") {
-          window.App.StudyflowFloat.unmount();
-        }
-      } catch (_) { /* safe to skip */ }
     } else {
       centerEl.innerHTML =
         '<div class="empty-state"><span class="big">📖</span><br>'
         + 'Selecciona un curso del panel izquierdo o crea uno nuevo.</div>';
-      try {
-        if (window.App.StudyflowFloat
-            && typeof window.App.StudyflowFloat.unmount === "function") {
-          window.App.StudyflowFloat.unmount();
-        }
-      } catch (_) { /* safe to skip */ }
     }
     // Sub-phase SA — defensive addon gate. Lets S5 (quiz), S6
     // (flashcards) and S9 (playground) plug in their stats panels
@@ -545,8 +540,8 @@ window.App.Courses = (function () {
 
   // ── _renderCourseLanding(centerEl, courseId) ─────────────────
   // Course title + description + grid of topic cards. Each card opens
-  // the topic detail (read-only). Topics include their blocks rendered
-  // via App.ContentBlocks._renderMd when present.
+  // the topic detail (read-only). Cards show ONLY the topic title and
+  // its block counter (v2 parity) — blocks render inside the topic detail.
   async function _renderCourseLanding(centerEl, courseId) {
     const [list, detail] = await Promise.all([
       fetchCourses(),
@@ -562,20 +557,12 @@ window.App.Courses = (function () {
 
     const cards = topics.map((t) => {
       const blocks = t.blocks || [];
-      const preview = blocks
-        .slice(0, 3)
-        .map((b) => `<div class="sf-cl-tblock md-view">`
-          + `<div class="sf-cl-tblock-title">${escHtml(b.title || "Bloque")}</div>`
-          + `<div class="sf-cl-tblock-content">${_renderMd(b.content || "")}</div>`
-          + `</div>`).join("");
       return `<div class="sf-cl-card" data-topic-id="${t.id}" data-course-id="${courseId}">
         <div class="sf-cl-card-head">
           <span class="sf-cl-card-icon">📁</span>
           <span class="sf-cl-card-title">${escHtml(t.title || "Sin título")}</span>
           <span class="sf-cl-card-count">${blocks.length} bloques</span>
         </div>
-        <div class="sf-cl-card-body">${preview
-          || '<div class="sf-cl-empty">Sin bloques todavía</div>'}</div>
       </div>`;
     }).join("");
 
@@ -628,7 +615,10 @@ window.App.Courses = (function () {
       : '<div class="empty-state"><span class="big">📝</span><br>'
         + 'Este tema no tiene bloques aún.<br>'
         + 'Crea uno con “+ Añadir bloque”.</div>';
-    const addBar = Blocks._renderAddBar(courseId, topicId);
+    // v2 parity: the global ➕ Añadir bar only renders on EMPTY topics.
+    // On non-empty topics the create chips live inside each block's
+    // unified toolbar (ai.js ➕ Añadir group, below NotebookLM/OpenZen).
+    const addBar = blocks.length ? "" : Blocks._renderAddBar(courseId, topicId);
 
     centerEl.innerHTML = `
       <div class="sf-topic-detail">
@@ -660,17 +650,6 @@ window.App.Courses = (function () {
     // .pdf-container and hand it to App.PdfViewer.init; the viewer
     // fetches its own PDF bytes and renders the first page.
     _mountPdfViewers(centerEl);
-    // S4.7 — Phase 59 sticky floating toolbar (v2 port). After the
-    // topic is in the DOM, mount the float which sets up a scroll-spy
-    // and clones the active card's actions into the slot. The slot
-    // hides itself on marketplaces / landings because mount() checks
-    // for at least one .sf-block-card.
-    try {
-      if (window.App.StudyflowFloat
-          && typeof window.App.StudyflowFloat.mount === "function") {
-        window.App.StudyflowFloat.mount();
-      }
-    } catch (_) { /* float is optional progressive enhancement */ }
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {
@@ -713,6 +692,7 @@ window.App.Courses = (function () {
     // prompt/handlers exposed for sidebar inline onclick
     promptCreateCourse,
     promptRenameCourse,
+    promptEditDescription,
     promptDeleteCourse,
     promptAddTopic,
     promptRenameTopic,

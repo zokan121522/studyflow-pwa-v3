@@ -311,11 +311,17 @@ window.App.MarkdownEditor = (function () {
     formEl.dataset.sfMdLive = "1";
 
     const renderMd = () => {
+      const value = editor.value || "";
+      if (!value.trim()) {
+        preview.innerHTML =
+          '<div class="md-preview-empty">👁️ La vista previa aparecerá aquí…</div>';
+        return;
+      }
       const cb = window.App.ContentBlocks;
       if (cb && typeof cb._renderMd === "function") {
-        preview.innerHTML = cb._renderMd(editor.value);
+        preview.innerHTML = cb._renderMd(value);
       } else {
-        preview.textContent = editor.value;
+        preview.textContent = value;
       }
     };
 

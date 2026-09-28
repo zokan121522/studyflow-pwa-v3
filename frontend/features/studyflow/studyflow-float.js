@@ -72,24 +72,19 @@ window.App.StudyflowFloat = (function () {
 
   // ── _renderActionsFor(card) → [{act, label}] from card-head btns ──
   // Read the actual card-head action buttons (.sf-bc-collapse,
-  // .sf-bc-up, .sf-bc-down, .sf-td-edit, .sf-td-del) and build a
-  // label list. We don't clone the buttons — we synthesise a thin
-  // replica keyed by data-act so the click delegation can find the
-  // original.
+  // .sf-td-edit, .sf-td-del) and build a label list. We don't clone
+  // the buttons — we synthesise a thin replica keyed by data-act so
+  // the click delegation can find the original.
   function _readCardActions(card) {
     const actions = [];
     const sel = [
       ".sf-bc-collapse",
-      ".sf-bc-up",
-      ".sf-bc-down",
       ".sf-td-edit",
       ".sf-td-del",
     ].join(",");
     card.querySelectorAll(sel).forEach((btn) => {
       let act = null;
       if (btn.classList.contains("sf-bc-collapse")) act = "collapse";
-      else if (btn.classList.contains("sf-bc-up")) act = "up";
-      else if (btn.classList.contains("sf-bc-down")) act = "down";
       else if (btn.classList.contains("sf-td-edit")) act = "edit";
       else if (btn.classList.contains("sf-td-del")) act = "delete";
       if (!act) return;
@@ -147,8 +142,6 @@ window.App.StudyflowFloat = (function () {
   function _titleFor(act) {
     const titles = {
       collapse: "Plegar / desplegar",
-      up: "Subir",
-      down: "Bajar",
       edit: "Editar",
       delete: "Borrar",
     };
@@ -177,8 +170,6 @@ window.App.StudyflowFloat = (function () {
     const act = btn.dataset.act;
     const selMap = {
       collapse: ".sf-bc-collapse",
-      up:       ".sf-bc-up",
-      down:     ".sf-bc-down",
       edit:     ".sf-td-edit",
       delete:   ".sf-td-del",
     };

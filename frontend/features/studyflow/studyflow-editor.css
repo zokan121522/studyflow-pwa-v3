@@ -181,6 +181,21 @@
 }
 .md-edit-split .md-preview > :first-child { margin-top: 0; }
 .md-edit-split .md-preview > :last-child { margin-bottom: 0; }
+/* V3: placeholder shown while the preview has no content yet */
+.md-edit-split .md-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
 /* Tables / pre / code blocks inside the preview: small & compact */
 .md-edit-split .md-preview pre {
   background: #0f172a;

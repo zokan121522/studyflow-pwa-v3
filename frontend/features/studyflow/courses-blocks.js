@@ -38,7 +38,7 @@ window.App.CoursesBlocks = (function () {
   const { escHtml } = window.App.UI;
   const {
     addBlock, updateBlock, deleteBlock,
-    reorderBlocks, listTopicBlocks,
+    listTopicBlocks,
   } = window.App.CoursesAPI;
   const { _renderMd } = window.App.ContentBlocks;
   const MdEditor = window.App.MarkdownEditor;
@@ -321,15 +321,29 @@ window.App.CoursesBlocks = (function () {
         return;
       }
 
-      // "+ Añadir bloque" chip (create block of the matching type)
+      // "+ Añadir bloque" chip (create block of the matching type).
+      // Works in BOTH contexts: inside the global .sf-td-add-bar (empty
+      // topics) and inside the per-block ➕ Añadir toolbar group (ai.js
+      // _renderGenerateSectionHtml). course/topic ids come from the bar
+      // when present, otherwise from the closest block toolbar + card.
       const chip = e.target.closest(".sf-td-add-chip");
       if (chip) {
         e.stopPropagation();
         const bar = chip.closest(".sf-td-add-bar");
-        if (!bar) return;
-        const cid = Number(bar.dataset.courseId);
-        const tid = bar.dataset.topicId
-          ? Number(bar.dataset.topicId) : null;
+        let cid = Number(bar ? bar.dataset.courseId : 0);
+        let tid = bar && bar.dataset.topicId ? Number(bar.dataset.topicId) : null;
+        if (!cid) {
+          cid = Number((chip.closest("[data-course-id]") || {}).dataset
+            && chip.closest("[data-course-id]").dataset.courseId) || 0;
+        }
+        if (tid === null) {
+          const toolbar = chip.closest(".block-toolbar");
+          const t = toolbar ? toolbar.dataset.topicId
+            : (chip.closest(".toolbar-group") || {}).dataset
+            && chip.closest(".toolbar-group").dataset.topicId;
+          tid = t ? Number(t) : null;
+        }
+        if (!cid) return;
         const type = chip.dataset.type;
         const meta = TYPE_META[type] || TYPE_META.markdown;
         const def = meta.defaults || { content: "", url: "", title: "" };
@@ -377,8 +391,9 @@ window.App.CoursesBlocks = (function () {
   // v2-style "block-detail" wrapper around the S3 block body. Adds:
   //   • a left-edge color strip derived from the block type
   //   • a collapsed/expanded toggle on the header (▼ / ▶)
-  //   • up / down reorder buttons in the header
   //   • keeps the existing done / edit / delete affordances
+  // NOTE: reorder happens via drag&drop in the sidebar, so there are
+  // no up/down buttons here (removed per Señor).
   // The body is the same S3 markup so edit/save handlers wired by
   // _attachBlockHandlers keep working without changes.
   function _renderBlockCard(b, courseId) {
@@ -403,8 +418,6 @@ window.App.CoursesBlocks = (function () {
         <span class="sf-bc-icon">${m.icon}</span>
         <span class="sf-bc-title">${title}</span>
         <span class="sf-bc-actions">
-          <button class="sf-bc-up ht-btn-mini" title="Subir">⬆️</button>
-          <button class="sf-bc-down ht-btn-mini" title="Bajar">⬇️</button>
           <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
           <button class="sf-td-del ht-btn-mini" title="Borrar">🗑️</button>
         </span>
@@ -414,10 +427,9 @@ window.App.CoursesBlocks = (function () {
   }
 
   // ── _attachCardHandlers(host, courseId, topicId) ──────────────
-  // Idempotent: delegates collapse / up / down clicks on .sf-block-card.
-  // Reorder: reads the current DOM order of block ids and calls the
-  // existing reorderBlocks API, then dispatches studyflow:blocks-changed
-  // so updateCenter re-renders.
+  // Idempotent: delegates collapse clicks on .sf-block-card.
+  // Reorder is handled via drag&drop in the sidebar (no up/down
+  // buttons on the card).
   function _attachCardHandlers(host, courseId, topicId) {
     if (!host) return;
     if (host.dataset._sfCardHandlers === "1") return;
@@ -448,36 +460,7 @@ window.App.CoursesBlocks = (function () {
         return;
       }
 
-      // Up / Down reorder
-      const bump = e.target.closest(".sf-bc-up, .sf-bc-down");
-      if (bump) {
-        e.stopPropagation();
-        const card = bump.closest(".sf-block-card");
-        if (!card) return;
-        const direction = bump.classList.contains("sf-bc-up") ? -1 : 1;
-        const sibling = direction === -1
-          ? card.previousElementSibling
-          : card.nextElementSibling;
-        if (!sibling
-            || !sibling.classList.contains("sf-block-card")) return;
-        const parent = card.parentElement;
-        if (direction === -1) parent.insertBefore(card, sibling);
-        else parent.insertBefore(sibling, card);
-        // Collect the new order from the DOM and PATCH.
-        const ids = Array.from(
-          parent.querySelectorAll(".sf-block-card")
-        ).map((el) => Number(el.dataset.blockId));
-        try {
-          await reorderBlocks(courseId, ids);
-          const evt = new CustomEvent("studyflow:blocks-changed", {
-            detail: { courseId, topicId }
-          });
-          window.dispatchEvent(evt);
-        } catch (err) {
-          alert("❌ Error al reordenar: " + (err.message || err));
-        }
-        return;
-      }
+      return;
     });
   }
 

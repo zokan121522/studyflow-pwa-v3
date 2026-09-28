@@ -86,6 +86,12 @@
         <div class="header-logo">
           <span class="logo-icon">📚</span>
           <span class="logo-text">studyflow</span>
+          <!-- Server status — lives next to the logo (V3). Polled by
+               shared/server-status.js; dot + "API" pill. -->
+          <span id="server-status-wrap" class="server-status-wrap">
+            <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
+            <span class="server-status-label">API</span>
+          </span>
         </div>
       </div>
       <div class="header-week">
@@ -182,12 +188,6 @@
   <!-- Offline indicator -->
   <div id="offline-indicator" class="offline-indicator hidden" role="alert" aria-live="polite">
     📴 Sin conexión — Modo offline activo
-  </div>
-
-  <!-- Server status pill — moved OUT of the header logo (v2 parity);
-       fixed bottom-left, discreet. Polled by shared/server-status.js -->
-  <div id="server-status-wrap">
-    <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
   </div>
 
   <!-- ============================== AGENDA OVERLAYS ============================== -->
@@ -421,11 +421,6 @@
   <script src="/features/studyflow/pdf-import-stream.js"></script>
   <script src="/features/studyflow/pdf-import.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
-  <!-- S4.7 — sticky floating block toolbar (Phase 59 v2 port).
-       Loads AFTER courses-blocks.js so its mount() can read the
-       .sf-block-card structure, and BEFORE courses.js so the
-       courses.js _renderTopicDetail hook sees App.StudyflowFloat.mount. -->
-  <script src="/features/studyflow/studyflow-float.js"></script>
   <script src="/features/studyflow/courses.js"></script>
   <!-- S7b-B — floating study menu (⋯ FAB) + SCORM/Moodle credentials
        settings panel. study-scheduler.js self-mounts on DOMContentLoaded

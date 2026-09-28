@@ -17,10 +17,39 @@
   transition: width .2s ease;
 }
 
+/* ─── V3-DND: whole-item drag & drop reorder ────────────────────
+   The entire .topic-item / .block-item is draggable (draggable=true
+   on the element). We keep a subtle grab affordance on hover and
+   strong visual feedback while dragging / over a drop target. */
+.topic-item[draggable="true"],
+.block-item[draggable="true"] {
+  cursor: grab;
+}
+.topic-item[draggable="true"]:active,
+.block-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+.topic-item.dragging,
+.block-item.dragging {
+  opacity: .45;
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
+}
+.topic-item.drag-over,
+.block-item.drag-over {
+  opacity: 1;
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+  background: rgba(79,140,255,.10);
+  border-radius: 6px;
+}
+
 /* ─── Topic tree (course-children → course-topics) ─────────────── */
+/* V3-L: topics flush left — title starts at the nav edge (was 12px
+   margin + 8px padding + a grab handle before the title). */
 .course-topics {
-  margin: 6px 0 4px 12px;
-  padding-left: 8px;
+  margin: 6px 0 4px 2px;
+  padding-left: 4px;
   border-left: 2px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -30,18 +59,21 @@
 .topic-item {
   display: flex;
   flex-direction: column;
+  align-items: stretch; /* overrides courses.css align-items:center —
+                           this was centering the .topic-header inside
+                           the column, pushing titles to the middle */
   gap: 2px;
 }
 
 .topic-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
+  gap: 5px;
+  padding: 5px 6px 5px 2px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text);
   border: 1px solid transparent;
   transition: background .12s, border-color .12s, color .12s;
 }
@@ -54,15 +86,6 @@
   border-color: var(--primary);
   color: var(--text);
 }
-
-.topic-drag-handle {
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: grab;
-  flex-shrink: 0;
-  user-select: none;
-}
-.topic-drag-handle:hover { color: var(--text); }
 
 .topic-arrow {
   display: inline-block;
@@ -135,17 +158,6 @@
   opacity: 0.6;
   text-decoration: line-through;
 }
-
-.bi-drag-handle {
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: grab;
-  flex-shrink: 0;
-  user-select: none;
-  width: 14px;
-  text-align: center;
-}
-.bi-drag-handle:hover { color: var(--text); }
 
 .bi-check {
   display: inline-flex;
