@@ -16,6 +16,7 @@ window.App.NotebookLmSettings = (function () {
 
   let _overlay = null;
   let _status = null; // cached from GET /settings/notebooklm/status
+  let _loginPoll = null; // login-status polling interval
 
   function _el(tag, attrs, children) {
     const node = document.createElement(tag);
@@ -44,7 +45,12 @@ window.App.NotebookLmSettings = (function () {
   }
 
   function _close() {
+    _stopLoginPoll();
     if (_overlay) { _overlay.remove(); _overlay = null; }
+  }
+
+  function _stopLoginPoll() {
+    if (_loginPoll) { clearInterval(_loginPoll); _loginPoll = null; }
   }
 
   // ── Actions (each re-renders the body after a state change) ────────
@@ -145,20 +151,105 @@ window.App.NotebookLmSettings = (function () {
     const act = _el("div", { class: "nb-actions" }, [
       _btn("🔍 Verificar", "", () => _verify(statusEl)),
       _btn("🔄 Actualizar", "", () => _updateStatus(bodyEl, statusEl)),
+      _btn("🌐 Iniciar sesión", "", () => _showLogin(bodyEl, statusEl)),
       _btn("📥 Script Chrome", "", () => _showChromeExport(bodyEl, statusEl)),
       _btn("⬆️ Subir cookies", "", () => _showUpload(bodyEl, statusEl)),
     ]);
     bodyEl.appendChild(act);
 
     // Collapsible areas
+    bodyEl.appendChild(_el("div", { id: "nb-login-area", class: "nb-collapse" }));
     bodyEl.appendChild(_el("div", { id: "nb-upload-area", class: "nb-collapse" }));
     bodyEl.appendChild(_el("div", { id: "nb-chrome-area", class: "nb-collapse" }));
+  }
+
+  function _showLogin(bodyEl, statusEl) {
+    const area = bodyEl.querySelector("#nb-login-area");
+    const chrome = bodyEl.querySelector("#nb-chrome-area");
+    const upload = bodyEl.querySelector("#nb-upload-area");
+    if (chrome) { chrome.style.display = "none"; chrome.innerHTML = ""; }
+    if (upload) { upload.style.display = "none"; upload.innerHTML = ""; }
+    if (!area) return;
+    area.style.display = "block";
+
+    const emailInput = _el("input", { type: "email", placeholder: "tu.email@gmail.com" });
+    if (_status && _status.active_profile) emailInput.value = _status.active_profile;
+    const status = _text("div", "nb-login-status", "");
+    const startBtn = _btn("🌐 Abrir Chrome", "", () => _startLogin(emailInput, startBtn, status, bodyEl, statusEl));
+    const hideBtn = _btn("↩ Cerrar", "", () => {
+      _stopLoginPoll();
+      area.style.display = "none"; area.innerHTML = "";
+    });
+
+    area.innerHTML = "";
+    area.appendChild(_text("h4", "", "🌐 Iniciar sesión en Google"));
+    area.appendChild(_text("p", "ss-settings-hint",
+      "Se abre una ventana real de Google Chrome. Completa el login con tu cuenta "
+      + "y vuelve aquí: la app detecta las cookies automáticamente."));
+    area.appendChild(_text("label", "ss-settings-field", "Email de la cuenta:"));
+    area.appendChild(emailInput);
+    area.appendChild(_el("div", { class: "nb-inline-actions" }, [startBtn, hideBtn]));
+    area.appendChild(status);
+  }
+
+  async function _startLogin(emailInput, startBtn, status, bodyEl, statusEl) {
+    const account = emailInput.value.trim();
+    if (!account) { status.textContent = "⚠️ Introduce el email de la cuenta primero"; return; }
+    startBtn.disabled = true;
+    startBtn.textContent = "⏳ Abriendo…";
+    status.textContent = "Abriendo ventana de Google Chrome…";
+    status.className = "nb-login-status nb-login-info";
+    _stopLoginPoll();
+    try {
+      const resp = await API.post("/settings/notebooklm/login-start", { account });
+      if (resp && resp.success) {
+        status.textContent = "✅ " + (resp.message || "Ventana abierta. Completa el login en Chrome.");
+        status.className = "nb-login-status nb-login-ok";
+        _pollLogin(status, bodyEl, statusEl);
+      } else {
+        status.textContent = "❌ " + ((resp && resp.message) || "Error al abrir el login");
+        status.className = "nb-login-status nb-login-err";
+        startBtn.disabled = false;
+        startBtn.textContent = "🌐 Abrir Chrome";
+      }
+    } catch (err) {
+      status.textContent = "❌ " + err.message;
+      status.className = "nb-login-status nb-login-err";
+      startBtn.disabled = false;
+      startBtn.textContent = "🌐 Abrir Chrome";
+    }
+  }
+
+  function _pollLogin(status, bodyEl, statusEl) {
+    _stopLoginPoll();
+    _loginPoll = setInterval(async () => {
+      try {
+        const st = await API.get("/settings/notebooklm/login-status");
+        if (st.storage_created) {
+          // Cookies landed — stop polling, refresh list
+          _stopLoginPoll();
+          status.textContent = "✅ Cookies guardadas. Perfil actualizado.";
+          status.className = "nb-login-status nb-login-ok";
+          _refresh(bodyEl);
+          _setStatus(statusEl, "✅ Login completado. Cookies guardadas.", "ok");
+        } else if (st.login_complete) {
+          // Browser closed without cookies — offer retry
+          _stopLoginPoll();
+          status.textContent = "⚠️ El navegador se cerró sin guardar cookies. Vuelve a intentarlo.";
+          status.className = "nb-login-status nb-login-err";
+        }
+      } catch (err) {
+        // transient — keep polling
+      }
+    }, 2000);
   }
 
   function _showChromeExport(bodyEl, statusEl) {
     const area = bodyEl.querySelector("#nb-chrome-area");
     const upload = bodyEl.querySelector("#nb-upload-area");
+    const login = bodyEl.querySelector("#nb-login-area");
     if (upload) { upload.innerHTML = ""; upload.style.display = "none"; }
+    if (login) { login.style.display = "none"; login.innerHTML = ""; _stopLoginPoll(); }
     if (!area) return;
     area.style.display = "block";
 
@@ -220,7 +311,9 @@ window.App.NotebookLmSettings = (function () {
   function _showUpload(bodyEl, statusEl) {
     const area = bodyEl.querySelector("#nb-upload-area");
     const chrome = bodyEl.querySelector("#nb-chrome-area");
+    const login = bodyEl.querySelector("#nb-login-area");
     if (chrome) { chrome.style.display = "none"; chrome.innerHTML = ""; }
+    if (login) { login.style.display = "none"; login.innerHTML = ""; _stopLoginPoll(); }
     if (!area) return;
     area.style.display = "block";
 

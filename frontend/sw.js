@@ -1,9 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v10 (7.2): bumped ASSET_CACHE so the activate handler evicts v9.
-// Adds the NotebookLM settings panel (notebooklm-settings.js).
-const ASSET_CACHE = 'studyflow-assets-v10';
+// v11 (7.3): bumped ASSET_CACHE so the activate handler evicts v10.
+// NotebookLM settings panel now includes the interactive Chrome login flow
+// (login-start/login-status polling + login-stop).
+const ASSET_CACHE = 'studyflow-assets-v11';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
