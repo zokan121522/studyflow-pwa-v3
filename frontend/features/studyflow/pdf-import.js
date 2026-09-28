@@ -44,9 +44,28 @@ window.App.PdfImport = (function () {
     }
     return h;
   }
+  // Multipart-safe headers.
+  //
+  // The shared Auth.getHeaders() (app.js) ALWAYS injects
+  // `Content-Type: application/json`. Sending that with a FormData body is
+  // fatal: the browser then skips the `multipart/form-data; boundary=…`
+  // header, Werkzeug refuses to parse the body, `request.files` stays empty
+  // and POST /pdf/import answers
+  //   400 "Body must be multipart 'file' or JSON {mode:'scorm',…}"
+  // — even though a perfectly valid file was attached. cURL never showed it
+  // because `curl -F` sets the boundary itself.
+  //
+  // Rule: on FormData uploads send ONLY Accept (+ Authorization). Never
+  // Content-Type — the browser owns the boundary.
+  function _uploadHeaders() {
+    const h = { Accept: "application/json" };
+    const auth = _authHeaders();
+    if (auth && auth.Authorization) h.Authorization = auth.Authorization;
+    return h;
+  }
   async function _uploadForm(path, fd) {
     const r = await fetch(_apiBase() + path, {
-      method: "POST", body: fd, headers: _authHeaders(),
+      method: "POST", body: fd, headers: _uploadHeaders(),
       credentials: "include",
     });
     if (!r.ok && r.status !== 400 && r.status !== 413) {
