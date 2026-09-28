@@ -32,7 +32,6 @@ window.App.Courses = (function () {
   } = window.App.CoursesSidebar;
   const { _renderMd } = window.App.ContentBlocks;
   const Blocks = window.App.CoursesBlocks;
-  const Notes = window.App.CoursesNotes;
 
   function STATE() { return window.STATE; }
 
@@ -313,7 +312,6 @@ window.App.Courses = (function () {
     // S4 handlers — collapse / up / down reorder.
     Blocks._attachCardHandlers(centerEl, courseId, topicId);
     // S4 — per-topic notes drawer.
-    Notes.render(centerEl, courseId, topicId);
     // S7 — pdf-ref blocks mount a real pdf.js viewer. Iterate every
     // .pdf-container and hand it to App.PdfViewer.init; the viewer
     // fetches its own PDF bytes and renders the first page.

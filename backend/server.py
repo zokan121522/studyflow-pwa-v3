@@ -5,6 +5,8 @@ import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 
+from backend.static_serve import init_static
+
 from backend.routes.auth import bp as auth_bp
 from backend.routes.agenda import bp as agenda_bp
 from backend.routes.agenda_sessions import bp as agenda_sessions_bp
@@ -31,6 +33,7 @@ def create_app() -> Flask:
     CORS(app, origins=_cors_origins(), supports_credentials=True)
     _register_blueprints(app)
     _register_error_handlers(app)
+    init_static(app)
     return app
 
 

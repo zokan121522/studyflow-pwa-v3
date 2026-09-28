@@ -2,10 +2,10 @@
 
 // ─── Configuration ────────────────────────────────────────────────────
 const API_URL = (() => {
-  // In production, API is on same origin
-  // In development, frontend on :3000, backend on :8080
-  const isLocalDev = location.port === '3000' || location.hostname === 'localhost';
-  return isLocalDev ? 'http://localhost:8082/api' : '/api';
+  // Mismo origen: el backend (Flask) sirve la PWA y el /api juntos.
+  // Solo en dev local con http.server aparte (:3000) se apunta a :8082.
+  if (location.port === '3000') return 'http://localhost:8082/api';
+  return '/api';
 })();
 
 
