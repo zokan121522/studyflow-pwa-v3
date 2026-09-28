@@ -8,10 +8,10 @@ import uuid
 from datetime import date, datetime, timedelta
 from flask import Blueprint, jsonify, request
 
-from database import execute, fetchone, fetchall
-from models import SessionState, iso_week_key
-from routes.auth import token_required
-from routes.agenda import _upsert_week, _upsert_day
+from backend import database as db
+from backend.models import SessionState, iso_week_key
+from backend.routes.auth import token_required
+from backend.routes.agenda import _upsert_week, _upsert_day
 
 
 bp = Blueprint("agenda_sessions", __name__)

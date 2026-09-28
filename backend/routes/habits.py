@@ -18,8 +18,8 @@ v3 conventions:
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 
-from database import execute, fetchone, fetchall
-from routes.auth import token_required
+from backend import database as db
+from backend.routes.auth import token_required
 
 
 bp = Blueprint("habits", __name__)

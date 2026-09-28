@@ -12,8 +12,8 @@ Body: { session_id, state, timer_state? }
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 
-from database import execute, fetchone, fetchall
-from routes.auth import token_required
+from backend import database as db
+from backend.routes.auth import token_required
 
 
 bp = Blueprint("agenda_state", __name__)
