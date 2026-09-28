@@ -14,14 +14,12 @@ without the heavy scraping stack.
 """
 
 import os
-import uuid
 import zipfile
 from typing import Any, Dict, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
-from flask import current_app
-
-from backend.database import execute, fetchone
+from backend.database import fetchone
+from backend.pdf_resources import save_pdf_and_block
 
 
 MAX_ZIP_SIZE = 200 * 1024 * 1024
@@ -38,21 +36,43 @@ def import_scorm(
     user_id: int, *, url: str = "", path: str = "",
     course_id: Optional[int] = None,
     topic_id: Optional[int] = None, title: str = "",
+    progress_cb: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Dispatch import to the right branch. Returns JSON-safe dict."""
+    """Dispatch import to the right branch. Returns JSON-safe dict.
+
+    `progress_cb` (callable(str) | None) receives short step messages that
+    the SSE pseudo-terminal streams to the frontend. It is deliberately a
+    local helper here — the ZIP branch must never import the scraping stack.
+    """
     if path:
-        return _import_scorm_zip(user_id, path, course_id, topic_id, title)
+        return _import_scorm_zip(
+            user_id, path, course_id, topic_id, title, progress_cb
+        )
     if url:
-        return _import_scorm_url(user_id, url, course_id, topic_id, title)
+        return _import_scorm_url(
+            user_id, url, course_id, topic_id, title, progress_cb
+        )
     return {"ok": False, "reason": "Provide either a SCORM .zip path or a Moodle URL."}
+
+
+def _emit(progress_cb: Any, msg: str) -> None:
+    """Push one progress line. Never raises (a listener bug must not abort)."""
+    if not progress_cb:
+        return
+    try:
+        progress_cb(msg)
+    except Exception:
+        pass
 
 
 # ── Branch A: SCORM-ZIP ─────────────────────────────────────────────
 def _import_scorm_zip(
     user_id: int, path: str,
     course_id: Optional[int], topic_id: Optional[int], title: str,
+    progress_cb: Any = None,
 ) -> Dict[str, Any]:
     """Open the zip, parse the manifest, register every PDF resource."""
+    _emit(progress_cb, f"Abriendo paquete {os.path.basename(path)}")
     preflight = _zip_preflight(path)
     if preflight:
         return preflight
@@ -61,7 +81,7 @@ def _import_scorm_zip(
             return _run_zip_import(
                 user_id=user_id, path=path,
                 course_id=course_id, topic_id=topic_id,
-                title=title, zf=zf,
+                title=title, zf=zf, progress_cb=progress_cb,
             )
     except zipfile.BadZipFile:
         return {"ok": False, "reason": "El archivo no es un ZIP válido."}
@@ -79,38 +99,64 @@ def _zip_preflight(path: str) -> Optional[Dict[str, Any]]:
 
 def _run_zip_import(
     *, user_id: int, path: str,
-    course_id: Optional[int], topic_id: Optional[int],
-    title: str, zf: zipfile.ZipFile,
+    course_id: Optional[int], topic_id: Optional[int], title: str,
+    zf: zipfile.ZipFile, progress_cb: Any = None,
 ) -> Dict[str, Any]:
     """Parse manifest + register every PDF resource. Zip-branch driver."""
-    names = zf.namelist()
-    parsed = _read_manifest(zf, names)
+    plan = _zip_plan(zf, path, title, user_id, course_id, topic_id)
+    if isinstance(plan, dict):
+        return plan  # soft-error dict
+    manifest_title, pdf_resources = plan
+    _emit(progress_cb, f"Paquete «{manifest_title}» — "
+                       f"{len(pdf_resources)} PDF(s) importables")
+    _emit(progress_cb, "Registrando bloques…")
+    blocks = _create_blocks_from_resources(
+        user_id=user_id, course_id=course_id, topic_id=topic_id,
+        zf=zf, resources=pdf_resources, manifest_title=manifest_title,
+    )
+    return _zip_envelope(
+        manifest_title=manifest_title, blocks=blocks,
+        course_id=course_id, progress_cb=progress_cb,
+    )
+
+
+def _zip_plan(
+    zf: zipfile.ZipFile, path: str, title: str,
+    user_id: int, course_id: Optional[int], topic_id: Optional[int],
+) -> Any:
+    """Resolve (manifest_title, pdf_resources), or a soft-error dict."""
+    parsed = _read_manifest(zf, zf.namelist())
     if "ok" in parsed:
-        return parsed  # soft-error dict
+        return parsed
     manifest, resources = parsed
     if not manifest["title"]:
         manifest["title"] = title or os.path.splitext(os.path.basename(path))[0]
-    pdf_resources = _pick_pdfs(resources, names)
+    pdf_resources = _pick_pdfs(resources, zf.namelist())
     if not pdf_resources:
         return {"ok": False, "reason": "El ZIP no contiene PDFs importables."}
-    pdf_resources = pdf_resources[:MAX_PDFS_PER_IMPORT]
     err = _validate_target(user_id, course_id, topic_id)
     if err:
         return err
-    blocks = _create_blocks_from_resources(
-        user_id=user_id, course_id=course_id, topic_id=topic_id,
-        zf=zf, resources=pdf_resources, manifest_title=manifest["title"],
-    )
+    return manifest["title"], pdf_resources[:MAX_PDFS_PER_IMPORT]
+
+
+def _zip_envelope(
+    *, manifest_title: str, blocks: List[Dict[str, Any]],
+    course_id: Optional[int], progress_cb: Any,
+) -> Dict[str, Any]:
+    """Success envelope for the ZIP branch + final terminal line."""
     if not blocks and not course_id:
+        _emit(progress_cb, "Sin course_id — no se crean bloques.")
         return {
             "ok": True, "mode": "scorm-zip",
-            "manifest_title": manifest["title"],
+            "manifest_title": manifest_title,
             "blocks": [], "count": 0,
             "note": "Sin course_id no se crean bloques.",
         }
+    _emit(progress_cb, f"✔ {len(blocks)} bloque(s) creado(s)")
     return {
         "ok": True, "mode": "scorm-zip",
-        "manifest_title": manifest["title"],
+        "manifest_title": manifest_title,
         "blocks": blocks, "count": len(blocks),
     }
 
@@ -228,131 +274,38 @@ def _register_zip_resource(
     safe_name = os.path.basename(href)
     title = (resource.get("item_title") or resource.get("title")
              or os.path.splitext(safe_name)[0] or manifest_title)
-    return _save_pdf_and_block(
+    return save_pdf_and_block(
         user_id=user_id, course_id=course_id, topic_id=topic_id,
         data=data, original_name=safe_name, title=title,
     )
-
-
-def _save_pdf_and_block(
-    *, user_id: int, course_id: Optional[int], topic_id: Optional[int],
-    data: bytes, original_name: str, title: str,
-) -> Optional[Dict[str, Any]]:
-    """Write bytes to PDF store + insert row + create pdf-ref block."""
-    pdf_id = _persist_pdf_bytes(
-        user_id=user_id, course_id=course_id, topic_id=topic_id,
-        data=data, original_name=original_name,
-    )
-    if not pdf_id:
-        return None
-    url_path = f"/api/pdf/{pdf_id}"
-    block_id = _create_pdf_ref_block(
-        user_id=user_id, course_id=course_id, topic_id=topic_id,
-        title=title, url_path=url_path,
-    )
-    if not block_id:
-        return None
-    return {
-        "block_id": block_id, "pdf_id": pdf_id,
-        "title": title, "url": url_path, "original_name": original_name,
-    }
-
-
-def _persist_pdf_bytes(
-    *, user_id: int, course_id: Optional[int], topic_id: Optional[int],
-    data: bytes, original_name: str,
-) -> Optional[int]:
-    """Write PDF bytes to disk + insert a pdfs row. Returns the pdf id or None."""
-    upload_folder = current_app.config.get(
-        "PDF_UPLOAD_FOLDER",
-        os.environ.get("PDF_UPLOAD_FOLDER", "/app/uploads/pdfs"),
-    )
-    os.makedirs(upload_folder, exist_ok=True)
-    storage_name = f"{uuid.uuid4().hex}.pdf"
-    storage_path = os.path.join(upload_folder, storage_name)
-    try:
-        with open(storage_path, "wb") as f:
-            f.write(data)
-    except OSError:
-        return None
-    page_count = _count_pages(data)
-    try:
-        execute(
-            """INSERT INTO pdfs
-                 (user_id, course_id, topic_id, filename, original_name,
-                  file_size, page_count, storage_path)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (user_id, course_id, topic_id, storage_name, original_name,
-             len(data), page_count, storage_path),
-        )
-    except Exception:
-        try:
-            os.remove(storage_path)
-        except OSError:
-            pass
-        return None
-    row = fetchone(
-        "SELECT * FROM pdfs WHERE user_id = %s ORDER BY id DESC LIMIT 1",
-        (user_id,),
-    )
-    return row["id"] if row else None
-
-
-def _create_pdf_ref_block(
-    *, user_id: int, course_id: Optional[int], topic_id: Optional[int],
-    title: str, url_path: str,
-) -> Optional[int]:
-    """Insert one pdf-ref block. Returns id or None."""
-    order_index = _next_order(user_id, course_id, topic_id)
-    try:
-        execute(
-            """INSERT INTO blocks
-                 (user_id, course_id, topic_id, type, title, content,
-                  url, order_index, color, collapsed, done)
-               VALUES (%s, %s, %s, 'pdf-ref', %s, '', %s,
-                        %s, '', FALSE, FALSE)""",
-            (user_id, course_id, topic_id, title, url_path, order_index),
-        )
-    except Exception:
-        return None
-    row = fetchone(
-        "SELECT * FROM blocks WHERE user_id = %s ORDER BY id DESC LIMIT 1",
-        (user_id,),
-    )
-    return row["id"] if row else None
-
-
-def _count_pages(pdf_bytes: bytes) -> Optional[int]:
-    """Best-effort page count via PyMuPDF; returns None if unavailable."""
-    try:
-        import fitz
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        n = doc.page_count
-        doc.close()
-        return n
-    except Exception:
-        return None
 
 
 # ── Branch B: Moodle URL (gated to selenium stack) ──────────────────
 def _import_scorm_url(
     user_id: int, url: str,
     course_id: Optional[int], topic_id: Optional[int], title: str,
+    progress_cb: Any = None,
 ) -> Dict[str, Any]:
     """Run the v2 selenium scraper if it's both enabled AND importable."""
     gate_error = _scraping_gate_error()
     if gate_error:
+        _emit(progress_cb, f"❌ {gate_error['reason']}")
         return gate_error
     if not _own_course(user_id, course_id):
+        _emit(progress_cb, "❌ Curso no encontrado.")
         return {"ok": False, "reason": "Curso no encontrado."}
-    pdf_path = _run_scraper(url, title)
-    if not isinstance(pdf_path, str) or pdf_path.startswith("error: "):
+    pdf_path = _run_scraper(url, title, progress_cb)
+    if isinstance(pdf_path, str) and pdf_path.startswith("error: "):
+        reason = pdf_path[len("error: "):] or "Scraping falló."
+        _emit(progress_cb, f"❌ {reason}")
+        return {"ok": False, "reason": reason}
+    if not isinstance(pdf_path, str) or not os.path.isfile(pdf_path):
+        _emit(progress_cb, "❌ El scraper no produjo ningún PDF.")
         return {"ok": False, "reason": "Scraping no produjo PDF."}
-    if not os.path.isfile(pdf_path):
-        return {"ok": False, "reason": "Scraping no produjo PDF."}
+    _emit(progress_cb, "Registrando el PDF scrapeado…")
     return _import_scrape_result(
         user_id=user_id, course_id=course_id, topic_id=topic_id,
-        pdf_path=pdf_path, title=title,
+        pdf_path=pdf_path, title=title, progress_cb=progress_cb,
     )
 
 
@@ -370,7 +323,8 @@ def _scraping_gate_error() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _run_scraper(url: str, title: str) -> Optional[str]:
+def _run_scraper(url: str, title: str, progress_cb: Any = None) -> Optional[str]:
+    """Run the Selenium scraper, returning the PDF path or "error: …"."""
     from backend.scraping.runner import run_scrape  # type: ignore
     scrape_dir = os.environ.get("SCRAPED_DIR", "/tmp/scraped_pdfs")
     os.makedirs(scrape_dir, exist_ok=True)
@@ -378,6 +332,7 @@ def _run_scraper(url: str, title: str) -> Optional[str]:
         return run_scrape(
             url=url, course_title=title or "scorm_export",
             output_dir=scrape_dir, max_pages=200, timeout=120,
+            progress_cb=progress_cb,
         )
     except Exception as exc:
         return f"error: {exc}"
@@ -385,21 +340,24 @@ def _run_scraper(url: str, title: str) -> Optional[str]:
 
 def _import_scrape_result(
     *, user_id: int, course_id: Optional[int], topic_id: Optional[int],
-    pdf_path: str, title: str,
+    pdf_path: str, title: str, progress_cb: Any = None,
 ) -> Dict[str, Any]:
     """Take the scraper's PDF file and register it as a pdf-ref block."""
     try:
         with open(pdf_path, "rb") as f:
             data = f.read()
     except OSError as exc:
+        _emit(progress_cb, f"❌ No se pudo leer el PDF: {exc}")
         return {"ok": False, "reason": f"No se pudo leer PDF: {exc}"}
     original_name = os.path.basename(pdf_path)
-    record = _save_pdf_and_block(
+    record = save_pdf_and_block(
         user_id=user_id, course_id=course_id, topic_id=topic_id,
         data=data, original_name=original_name, title=title or original_name,
     )
     if not record:
+        _emit(progress_cb, "❌ No se pudo registrar el PDF scrapeado.")
         return {"ok": False, "reason": "No se pudo registrar el PDF scrapeado."}
+    _emit(progress_cb, f"✔ Bloque creado: {title or original_name}")
     return {"ok": True, "mode": "moodle-scrape", "blocks": [record], "count": 1}
 
 
@@ -450,13 +408,3 @@ def _own_topic(user_id: int, course_id: Optional[int], topic_id: int) -> bool:
         (topic_id, course_id, user_id),
     )
     return bool(row)
-
-
-def _next_order(user_id: int, course_id: Optional[int], topic_id) -> int:
-    row = fetchone(
-        """SELECT COALESCE(MAX(order_index), -1) + 1 AS n
-           FROM blocks WHERE course_id = %s AND user_id = %s
-             AND (%s IS NULL OR topic_id IS NOT DISTINCT FROM %s)""",
-        (course_id, user_id, topic_id, topic_id),
-    )
-    return (row["n"] if row else 0) or 0

@@ -1,17 +1,79 @@
 # backend/scraping/runner.py
 """Moodle SCORM → PDF scraper (Selenium headless).
 
-Exports a single function `run_scrape` matching the signature expected by
-scorm_import._run_scraper.
+Exports `run_scrape` — the signature expected by scorm_import._run_scraper —
+plus an optional `progress_cb`: a callable(str) invoked with short,
+human-readable step messages. The SSE pseudo-terminal (S7b-A) forwards those
+to the frontend; with `progress_cb` omitted the scraper behaves exactly as
+before, and a listener that raises never breaks the scrape.
+
+selenium is imported lazily inside each helper so the app boots clean for
+users without the scraping stack.
 """
 
 import os
 import time
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+ProgressCb = Optional[Callable[[str], None]]
+
+# Headless Chrome flags — identical set to the pre-streaming runner.
+_CHROME_ARGS = (
+    "--headless=new",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--window-size=1920,1080",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-sync",
+    "--disable-default-apps",
+    "--no-first-run",
+    "--disable-popup-blocking",
+)
+
+# Bounded polling budgets.
+#
+# The pre-streaming runner waited `WebDriverWait(driver, 120)` PER SELECTOR:
+# 6 iframe selectors + 6 embed selectors = up to 24 minutes of silent hanging
+# when the page had neither. Polling with a global budget keeps the same
+# discovery logic while capping the stall at FRAME_BUDGET_S + EMBED_BUDGET_S.
+FRAME_BUDGET_S = 20
+EMBED_BUDGET_S = 10
+
+# Locators are spelled out as selenium `By` string values ("tag name",
+# "css selector", "xpath") so this module never imports selenium at top level.
+_IFRAME_SELECTORS = (
+    ("tag name", "iframe"),
+    ("css selector", "iframe[name*='scorm']"),
+    ("css selector", "iframe[id*='scorm']"),
+    ("css selector", "iframe[src*='scorm']"),
+    ("css selector", "#scorm_iframe"),
+    ("css selector", ".scorm-player iframe"),
+)
+
+_EMBED_SELECTORS = (
+    ("css selector", "object[data$='.pdf']"),
+    ("css selector", "embed[src$='.pdf']"),
+    ("css selector", "iframe[src$='.pdf']"),
+    ("xpath", "//object[contains(@data, '.pdf')]"),
+    ("xpath", "//embed[contains(@src, '.pdf')]"),
+    ("xpath", "//iframe[contains(@src, '.pdf')]"),
+)
+
+
+def _emit(progress_cb: ProgressCb, msg: str) -> None:
+    """Safely invoke the optional progress callback. Never raises."""
+    if not progress_cb:
+        return
+    try:
+        progress_cb(msg)
+    except Exception as exc:  # pragma: no cover — listener bug
+        logger.debug("runner progress_cb raised (ignored): %s", exc)
 
 
 def run_scrape(
@@ -20,237 +82,280 @@ def run_scrape(
     output_dir: str,
     max_pages: int = 200,
     timeout: int = 120,
+    progress_cb: ProgressCb = None,
 ) -> str:
-    """
-    Open Chrome headless, navigate to the Moodle SCORM URL, find and download
-    the PDF, and return the absolute path to the local PDF file.
+    """Open Chrome headless, scrape `url` and return the local PDF path.
 
-    Raises:
-        RuntimeError: If Chrome/selenium setup fails or PDF not found.
-        Exception:    Propagates any unexpected selenium errors.
+    Emits one progress message per stage through `progress_cb`. Raises
+    RuntimeError when Chrome fails or no PDF can be produced.
     """
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
     from selenium.common.exceptions import TimeoutException, WebDriverException
 
     os.makedirs(output_dir, exist_ok=True)
+    _emit(progress_cb, "Iniciando Chrome headless…")
+    driver = _open_driver(timeout, output_dir, progress_cb)
+    try:
+        return _scrape(driver, url, course_title, output_dir, progress_cb)
+    except WebDriverException as exc:
+        logger.error("[scraper] WebDriver error: %s", exc)
+        _emit(progress_cb, f"❌ Chrome/Selenium falló: {exc}")
+        raise RuntimeError(f"Chrome/selenium error: {exc}") from exc
+    except TimeoutException as exc:
+        logger.error("[scraper] Timeout: %s", exc)
+        _emit(progress_cb, f"❌ Tiempo de espera agotado: {exc}")
+        raise RuntimeError(f"Page load timeout: {exc}") from exc
+    finally:
+        _quit_driver(driver)
 
-    # ── Chrome options for headless scraping ──────────────────────────
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-background-networking")
-    chrome_options.add_argument("--disable-sync")
-    chrome_options.add_argument("--disable-default-apps")
-    chrome_options.add_argument("--no-first-run")
-    chrome_options.add_argument("--disable-popup-blocking")
-    # Allow downloads
-    prefs = {
+
+def _scrape(
+    driver,
+    url: str,
+    course_title: str,
+    output_dir: str,
+    progress_cb: ProgressCb,
+) -> str:
+    """Navigate, enter the SCORM frame and produce the PDF file."""
+    _emit(progress_cb, f"Navegando a {url}")
+    driver.get(url)
+    _emit(progress_cb, "Página cargada — buscando el reproductor SCORM")
+    _warn_if_login_wall(driver, progress_cb)
+    if _switch_to_scorm_frame(driver, progress_cb):
+        _emit(progress_cb, "Dentro del iframe SCORM")
+    else:
+        _emit(progress_cb, "Sin iframe SCORM — documento principal")
+    pdf_path = _find_and_download_pdf(
+        driver, output_dir, course_title, progress_cb
+    )
+    if not (pdf_path and os.path.isfile(pdf_path)):
+        raise RuntimeError("No PDF found in SCORM package")
+    size_kb = os.path.getsize(pdf_path) // 1024
+    _emit(progress_cb, f"PDF listo: {os.path.basename(pdf_path)} ({size_kb} KB)")
+    return pdf_path
+
+
+def _warn_if_login_wall(driver, progress_cb: ProgressCb) -> None:
+    """Announce a login redirect so the terminal tells the truth.
+
+    Moodle sends unauthenticated scrapes to /login/index.php. The scrape
+    still "succeeds" (print-to-PDF of the login form) without this hint,
+    which is exactly how four junk PDFs got imported before it existed.
+    """
+    final_url = (driver.current_url or "").lower()
+    if "/login" in final_url:
+        _emit(
+            progress_cb,
+            "⚠ Redirigido a la página de login — sin credenciales el PDF "
+            f"solo contendrá el formulario ({driver.current_url})",
+        )
+
+
+def _download_prefs(output_dir: str) -> dict:
+    """Chrome prefs: save downloads into output_dir and open PDFs externally."""
+    return {
         "download.default_directory": output_dir,
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
-        "plugins.always_open_pdf_externally": True,  # Download PDF instead of viewing
+        "plugins.always_open_pdf_externally": True,
     }
-    chrome_options.add_experimental_option("prefs", prefs)
 
-    # Let Selenium Manager (built into selenium 4.6+) auto-download matching chromedriver
-    service = Service()
 
-    driver = None
+def _open_driver(timeout: int, output_dir: str, progress_cb: ProgressCb):
+    """Build the headless Chrome WebDriver (Selenium Manager resolves driver)."""
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+
+    options = Options()
+    for arg in _CHROME_ARGS:
+        options.add_argument(arg)
+    options.add_experimental_option("prefs", _download_prefs(output_dir))
+    driver = webdriver.Chrome(service=Service(), options=options)
+    driver.set_page_load_timeout(timeout)
+    _emit(progress_cb, "Chrome listo — esperando la página")
+    return driver
+
+
+def _quit_driver(driver) -> None:
+    """Close Chrome if it was opened. Never raises."""
+    if not driver:
+        return
     try:
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.set_page_load_timeout(timeout)
-
-        logger.info(f"[scraper] Navigating to {url}")
-        driver.get(url)
-
-        # Wait for page to load - try multiple selectors common in Moodle SCORM
-        wait = WebDriverWait(driver, timeout)
-
-        # Moodle SCORM player often loads in an iframe
-        _switch_to_scorm_frame(driver, wait)
-
-        # Try to find a PDF link or embed
-        pdf_path = _find_and_download_pdf(driver, wait, output_dir, course_title)
-
-        if pdf_path and os.path.isfile(pdf_path):
-            logger.info(f"[scraper] PDF downloaded to {pdf_path}")
-            return pdf_path
-
-        raise RuntimeError("No PDF found in SCORM package")
-
-    except WebDriverException as e:
-        logger.error(f"[scraper] WebDriver error: {e}")
-        raise RuntimeError(f"Chrome/selenium error: {e}") from e
-    except TimeoutException as e:
-        logger.error(f"[scraper] Timeout: {e}")
-        raise RuntimeError(f"Page load timeout: {e}") from e
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
-
-
-def _switch_to_scorm_frame(driver, wait: "WebDriverWait") -> bool:
-    """Try to switch into the SCORM player iframe if present."""
-    try:
-        # Common Moodle SCORM iframe selectors
-        iframe_selectors = [
-            (By.TAG_NAME, "iframe"),
-            (By.CSS_SELECTOR, "iframe[name*='scorm']"),
-            (By.CSS_SELECTOR, "iframe[id*='scorm']"),
-            (By.CSS_SELECTOR, "iframe[src*='scorm']"),
-            (By.CSS_SELECTOR, "#scorm_iframe"),
-            (By.CSS_SELECTOR, ".scorm-player iframe"),
-        ]
-        for by, sel in iframe_selectors:
-            try:
-                iframe = wait.until(EC.presence_of_element_located((by, sel)))
-                driver.switch_to.frame(iframe)
-                logger.debug(f"[scraper] Switched to iframe: {by}={sel}")
-                return True
-            except TimeoutException:
-                continue
+        driver.quit()
     except Exception:
         pass
-    return False
+
+
+def _poll_locate(driver, selectors, budget_s: float, pick):
+    """Poll `selectors` until `pick(elements)` returns a value or time's up.
+
+    Replaces `WebDriverWait(driver, 120)` per selector (up to 24 minutes of
+    silent hanging when nothing matched) with a single global budget.
+    """
+    deadline = time.time() + budget_s
+    while time.time() < deadline:
+        for by, sel in selectors:
+            try:
+                found = pick(driver.find_elements(by, sel))
+            except Exception:
+                continue
+            if found:
+                return found
+        time.sleep(0.5)
+    return None
+
+
+def _first(elements):
+    """pick() helper: first element of the match list, or None."""
+    return elements[0] if elements else None
+
+
+def _switch_to_scorm_frame(driver, progress_cb: ProgressCb = None) -> bool:
+    """Try to switch into the SCORM player iframe if present."""
+    _emit(progress_cb, "Buscando el iframe del reproductor SCORM…")
+    iframe = _poll_locate(driver, _IFRAME_SELECTORS, FRAME_BUDGET_S, _first)
+    if not iframe:
+        return False
+    try:
+        driver.switch_to.frame(iframe)
+        logger.debug("[scraper] Switched to SCORM iframe")
+        return True
+    except Exception:
+        return False
 
 
 def _find_and_download_pdf(
-    driver, wait: "WebDriverWait", output_dir: str, course_title: str
+    driver, output_dir: str, course_title: str, progress_cb: ProgressCb = None
 ) -> Optional[str]:
     """Locate a PDF in the page/iframe and trigger its download."""
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+    _emit(progress_cb, "Buscando enlaces PDF en la página…")
+    link = _find_pdf_link(driver)
+    if link:
+        return _download_via_link(driver, link, output_dir, progress_cb)
 
-    # Strategy 1: Direct PDF link (<a href="...pdf">)
-    pdf_link_selectors = [
+    _emit(progress_cb, "Sin enlaces directos — probando visores embebidos…")
+    embed = _find_embedded_pdf(driver)
+    if embed:
+        return _download_via_link(driver, embed, output_dir, progress_cb)
+
+    _emit(progress_cb, "Sin visores embebidos — usando print-to-PDF (CDP)")
+    try:
+        return _print_page_to_pdf(driver, output_dir, course_title, progress_cb)
+    except Exception as exc:
+        logger.warning("[scraper] Print-to-PDF fallback failed: %s", exc)
+        _emit(progress_cb, f"❌ print-to-PDF falló: {exc}")
+        return None
+
+
+def _find_pdf_link(driver) -> Optional[str]:
+    """Strategy 1: an <a> whose href points at a .pdf file."""
+    from selenium.webdriver.common.by import By
+    from selenium.common.exceptions import StaleElementReferenceException
+
+    selectors = [
         (By.CSS_SELECTOR, "a[href$='.pdf']"),
         (By.CSS_SELECTOR, "a[href*='.pdf']"),
         (By.XPATH, "//a[contains(@href, '.pdf')]"),
         (By.CSS_SELECTOR, "a[download][href*='.pdf']"),
     ]
-    for by, sel in pdf_link_selectors:
+    for by, sel in selectors:
         try:
-            links = driver.find_elements(by, sel)
-            for link in links:
+            for link in driver.find_elements(by, sel):
                 href = link.get_attribute("href")
                 if href and href.lower().endswith(".pdf"):
-                    return _download_via_link(driver, href, output_dir, course_title)
+                    return href
         except StaleElementReferenceException:
             continue
         except Exception:
             continue
-
-    # Strategy 2: Embedded PDF viewer (object/embed/iframe with PDF src)
-    pdf_embed_selectors = [
-        (By.CSS_SELECTOR, "object[data$='.pdf']"),
-        (By.CSS_SELECTOR, "embed[src$='.pdf']"),
-        (By.CSS_SELECTOR, "iframe[src$='.pdf']"),
-        (By.XPATH, "//object[contains(@data, '.pdf')]"),
-        (By.XPATH, "//embed[contains(@src, '.pdf')]"),
-        (By.XPATH, "//iframe[contains(@src, '.pdf')]"),
-    ]
-    for by, sel in pdf_embed_selectors:
-        try:
-            el = wait.until(EC.presence_of_element_located((by, sel)))
-            src = el.get_attribute("data") or el.get_attribute("src")
-            if src and src.lower().endswith(".pdf"):
-                return _download_via_link(driver, src, output_dir, course_title)
-        except TimeoutException:
-            continue
-        except Exception:
-            continue
-
-    # Strategy 3: Print to PDF (fallback - capture the whole page as PDF)
-    # This requires Chrome's headless print-to-PDF capability
-    try:
-        return _print_page_to_pdf(driver, output_dir, course_title)
-    except Exception as e:
-        logger.warning(f"[scraper] Print-to-PDF fallback failed: {e}")
-
     return None
 
 
-def _download_via_link(
-    driver, pdf_url: str, output_dir: str, course_title: str
-) -> Optional[str]:
-    """Navigate directly to PDF URL to trigger download."""
-    import urllib.parse
+def _find_embedded_pdf(driver) -> Optional[str]:
+    """Strategy 2: object/embed/iframe whose src/data points at a .pdf."""
 
-    logger.info(f"[scraper] Downloading PDF from {pdf_url}")
+    def pick(elements):
+        for el in elements:
+            src = el.get_attribute("data") or el.get_attribute("src")
+            if src and src.lower().endswith(".pdf"):
+                return src
+        return None
+
+    return _poll_locate(driver, _EMBED_SELECTORS, EMBED_BUDGET_S, pick)
+
+
+def _newest_pdf(files, min_size: int = 1024) -> Optional[Path]:
+    """Newest PDF in `files` above `min_size` bytes, or None."""
+    candidates = [f for f in files if f.stat().st_size > min_size]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda f: f.stat().st_mtime)
+
+
+def _download_via_link(
+    driver, pdf_url: str, output_dir: str, progress_cb: ProgressCb = None
+) -> Optional[str]:
+    """Navigate directly to the PDF URL and wait for Chrome to save it."""
+    _emit(progress_cb, f"Descargando {pdf_url}")
     driver.get(pdf_url)
 
-    # Wait for download to complete (Chrome downloads to output_dir)
-    # Poll for a new .pdf file in output_dir
     start = time.time()
-    timeout = 30
+    deadline = start + 30
     seen_files = set(Path(output_dir).glob("*.pdf"))
+    next_beat = 5
 
-    while time.time() - start < timeout:
-        current_files = set(Path(output_dir).glob("*.pdf"))
-        new_files = current_files - seen_files
-        if new_files:
-            # Return the newest/largest PDF file
-            latest = max(new_files, key=lambda f: f.stat().st_size)
-            if latest.stat().st_size > 1024:  # At least 1KB
-                return str(latest.absolute())
+    while time.time() < deadline:
+        elapsed = int(time.time() - start)
+        if elapsed >= next_beat:  # keep the terminal (and proxies) alive
+            _emit(progress_cb, f"Esperando descarga… {elapsed}s")
+            next_beat += 5
+        fresh = set(Path(output_dir).glob("*.pdf")) - seen_files
+        latest = _newest_pdf(fresh)
+        if latest:
+            _emit(progress_cb, f"Descarga completada ({latest.stat().st_size // 1024} KB)")
+            return str(latest.absolute())
         time.sleep(0.5)
 
-    # If no new file detected, check if the current page IS the PDF
-    # (Chrome headless sometimes renders PDF inline)
-    current_files = list(Path(output_dir).glob("*.pdf"))
-    if current_files:
-        latest = max(current_files, key=lambda f: f.stat().st_mtime)
-        if latest.stat().st_size > 1024:
-            return str(latest.absolute())
-
+    # Chrome sometimes renders the PDF inline instead of saving it.
+    latest = _newest_pdf(set(Path(output_dir).glob("*.pdf")))
+    if latest:
+        _emit(progress_cb, f"PDF recogido del visor ({latest.stat().st_size // 1024} KB)")
+        return str(latest.absolute())
     return None
 
 
 def _print_page_to_pdf(
-    driver, output_dir: str, course_title: str
+    driver, output_dir: str, course_title: str, progress_cb: ProgressCb = None
 ) -> Optional[str]:
-    """Use Chrome DevTools Protocol to print the current page as PDF."""
-    import base64
-    import json
-
+    """Strategy 3: render the current page with Chrome's print-to-PDF."""
+    _emit(progress_cb, "Generando PDF con print-to-PDF…")
+    pdf_path = os.path.join(output_dir, _safe_filename(course_title))
+    pdf_bytes = _cdp_print_pdf(driver)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes)
+    if os.path.getsize(pdf_path) < 1024:
+        raise RuntimeError("Generated PDF too small")
     logger.info("[scraper] Using print-to-PDF fallback")
+    return pdf_path
 
-    # Sanitize filename
-    safe_title = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in course_title)
-    safe_title = safe_title.strip()[:100] or "scorm_export"
-    pdf_filename = f"{safe_title}.pdf"
-    pdf_path = os.path.join(output_dir, pdf_filename)
 
-    # CDP command: Page.printToPDF
+def _safe_filename(course_title: str) -> str:
+    """Turn the course title into a filesystem-safe .pdf name."""
+    safe = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in course_title)
+    return (safe.strip()[:100] or "scorm_export") + ".pdf"
+
+
+def _cdp_print_pdf(driver) -> bytes:
+    """Issue CDP Page.printToPDF and return the raw PDF bytes."""
+    import base64
+
     result = driver.execute_cdp_cmd("Page.printToPDF", {
         "landscape": False,
         "displayHeaderFooter": False,
         "printBackground": True,
         "preferCSSPageSize": True,
     })
-
     pdf_base64 = result.get("data")
     if not pdf_base64:
         raise RuntimeError("CDP printToPDF returned no data")
-
-    pdf_bytes = base64.b64decode(pdf_base64)
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_bytes)
-
-    if os.path.getsize(pdf_path) < 1024:
-        raise RuntimeError("Generated PDF too small")
-
-    return pdf_path
+    return base64.b64decode(pdf_base64)

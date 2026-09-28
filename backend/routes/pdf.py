@@ -3,6 +3,8 @@
 
 S7b — unified PDF + SCORM import endpoint:
   POST /pdf/import     → multipart file OR JSON {mode:'scorm',…}
+                        ?stream=1 on the SCORM branch → text/event-stream
+                        progress frames (see backend/scorm_stream.py)
   GET  /pdf/import/status → {pdf, scorm_zip, moodle_scraping} capability flags
 """
 
@@ -302,6 +304,7 @@ def import_pdf_or_scorm(current_user_id: int):
 
     • multipart with `file` field     → upload a local PDF
     • JSON {mode:'scorm', path|url,…} → SCORM zip or Moodle scrape
+                                         (+ ?stream=1 → SSE progress)
     • otherwise                       → 400 {error}
     """
     if request.files:
@@ -312,6 +315,8 @@ def import_pdf_or_scorm(current_user_id: int):
             'ok': False,
             'reason': "Body must be multipart 'file' or JSON {mode:'scorm',…}",
         }), 400
+    if request.args.get('stream') == '1':
+        return _stream_scorm_import(current_user_id, payload)
     return _import_via_scorm(current_user_id, payload)
 
 
@@ -351,3 +356,30 @@ def _import_via_scorm(current_user_id: int, payload: dict):
     # Only success-with-blocks bumps to 201 so the popover can distinguish.
     status = 201 if (result.get('ok') and result.get('count', 0) > 0) else 200
     return jsonify(result), status
+
+
+def _stream_scorm_import(current_user_id: int, payload: dict):
+    """SSE variant of the SCORM branch: step frames, then one final frame.
+
+    The import runs on a worker thread because the Selenium scrape can
+    outlive any proxy timeout (Cloudflare → HTTP 524 after 100s silence).
+    """
+    from flask import current_app
+    from backend.scorm_import import import_scorm
+    from backend.scorm_stream import stream_import
+
+    app = current_app._get_current_object()  # real app, not a LocalProxy
+    args = {
+        'url': (payload.get('url') or '').strip(),
+        'path': (payload.get('path') or '').strip(),
+        'course_id': payload.get('course_id'),
+        'topic_id': payload.get('topic_id'),
+        'title': (payload.get('title') or '').strip(),
+    }
+
+    def work(emit):
+        # _save_pdf_and_block reads current_app.config → needs app context.
+        with app.app_context():
+            return import_scorm(current_user_id, progress_cb=emit, **args)
+
+    return stream_import(work)
