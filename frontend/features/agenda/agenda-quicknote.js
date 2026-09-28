@@ -1,21 +1,20 @@
 // ─── Agenda QuickNote module — load + auto-save quick note ──────────
 // Namespace: window.App.AgendaQuickNote
-// Dependencies: authHeaders() from window.App.Auth
+// Dependencies: API (global, defined in app.js — routes through API_URL on :8082
+//                and adds the auth header; the static server on :3000 has no
+//                /api/* route, so raw fetch() previously 404'd).
 
 window.App = window.App || {};
 window.App.AgendaQuickNote = (function () {
   "use strict";
-
-  const { authHeaders } = window.App.Auth;
 
   // ─── Load quick note from API and wire auto-save on blur ────────
   async function load() {
     const qn = document.getElementById("quick-note");
     if (!qn) return;
     try {
-      const r = await fetch("/api/quick-note", { headers: { ...authHeaders() } });
-      const data = await r.json();
-      qn.value = data.content || "";
+      const data = await API.get("/quick-note");
+      qn.value = (data && data.content) || "";
     } catch {
       qn.value = "";
     }
@@ -27,11 +26,7 @@ window.App.AgendaQuickNote = (function () {
       statusEl.textContent = "◌";
       statusEl.className = "note-status saving";
       try {
-        await fetch("/api/quick-note", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ content: qn.value }),
-        });
+        await API.put("/quick-note", { content: qn.value });
         statusEl.textContent = "✓";
         statusEl.className = "note-status ok";
         setTimeout(() => {

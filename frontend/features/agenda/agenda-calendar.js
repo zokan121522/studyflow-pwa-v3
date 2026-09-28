@@ -1,13 +1,14 @@
 // ─── Agenda Calendar — monthly calendar + move session modal ───────
 // Namespace: window.App.AgendaCalendar
-// Dependencies: API (global), STATE (global), window.App.Auth (authHeaders),
-//                window.App.UI (escHtml)
+// Dependencies: API (global), STATE (global), window.App.UI (escHtml).
+// Calls /api/agenda/month via the API client so requests hit the backend
+// on :8082 with the bearer token (raw fetch('/api/agenda/month?...') was
+// resolving to :3000 and 404'ing).
 
 window.App = window.App || {};
 window.App.AgendaCalendar = (function () {
   "use strict";
 
-  const { authHeaders } = window.App.Auth;
   const { escHtml } = window.App.UI;
 
   let _calMonthOffset = 0;    // month navigation offset for calendar widget
@@ -29,8 +30,7 @@ window.App.AgendaCalendar = (function () {
 
     let monthData = { year, month: month + 1, days: {} };
     try {
-      const r = await fetch(`/api/agenda/month?date=${monthStr}`, { headers: { ...authHeaders() } });
-      monthData = await r.json();
+      monthData = await API.get(`/agenda/month?date=${monthStr}`);
     } catch { /* use empty data */ }
 
     const selDate = STATE.currentDay || dateStr;
@@ -232,8 +232,7 @@ window.App.AgendaCalendar = (function () {
 
     let monthData = { year, month: month + 1, days: {} };
     try {
-      const r = await fetch(`/api/agenda/month?date=${monthStr}`, { headers: { ...authHeaders() } });
-      monthData = await r.json();
+      monthData = await API.get(`/agenda/month?date=${monthStr}`);
     } catch { /* use empty */ }
 
     const todayNum = new Date().getDate();
