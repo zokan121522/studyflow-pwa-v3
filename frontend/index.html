@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/features/agenda/agenda.css">
   <link rel="stylesheet" href="/features/agenda/agenda-overlays.css">
+  <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
   <link rel="stylesheet" href="/features/habits/habits.css">
   
   <!-- PWA Meta Tags -->
@@ -369,6 +370,17 @@
   <script src="/features/agenda/agenda-dnd.js"></script>
   <script src="/features/agenda/agenda-session.js"></script>
   <script src="/features/agenda/agenda-calendar.js"></script>
+  <!-- Agenda Timeline (sub-phase C port). The 3 split files load BEFORE
+       agenda-month-view.js (which captures `var AgendaTimeline =
+       window.App.AgendaTimeline` at parse time) and BEFORE agenda-core.js
+       (which destructures App.AgendaTimeline.renderDay / renderWeek /
+       bindDrag / bindWeekDrag at parse time). Load order between the
+       three split files matters too: agenda-timeline.js creates the
+       namespace, week + month attach their render/bind functions onto
+       it, so core must come last. -->
+  <script src="/features/agenda/agenda-timeline.js"></script>
+  <script src="/features/agenda/agenda-timeline-week.js"></script>
+  <script src="/features/agenda/agenda-timeline-month.js"></script>
   <script src="/features/agenda/agenda-month-view.js"></script>
   <script src="/features/agenda/agenda-core.js"></script>
   <script src="/features/agenda/agenda-calendars.js"></script>

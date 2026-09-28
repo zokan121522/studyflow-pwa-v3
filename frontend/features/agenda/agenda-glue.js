@@ -217,17 +217,13 @@ if (!window.App.UI.displayTitle) {
 // ─── Stubs for deferred sub-phases ────────────────────────────────
 // App.Habits is fully ported by features/habits/habits.js (sub-phase D);
 // agenda-habits.js uses it directly. No stub needed here.
-// agenda-timeline.js (sub-phase C) needs App.AgendaTimeline.{renderDay,
-// renderWeek, renderMonth, bindDrag, bindWeekDrag, bindMonthDrag}. The
-// ported core.js calls these only when the user picks the timeline view —
-// we return empty markup so the page never throws.
-window.App.AgendaTimeline = window.App.AgendaTimeline || {
-  renderDay: function () { return '<div class="empty-state">📅 Vista día (sub-fase C)</div>'; },
-  renderWeek: function () { return '<div class="empty-state">🗓️ Vista semana (sub-fase C)</div>'; },
-  renderMonth: function () { return '<div class="empty-state">📅 Vista mes (sub-fase C)</div>'; },
-  bindDrag: function () {},
-  bindWeekDrag: function () {},
-  bindMonthDrag: function () {},
-};
+// agenda-timeline.js (sub-phase C) lands the real App.AgendaTimeline
+// implementation (split across agenda-timeline.js, -week.js, -month.js);
+// these scripts must load BEFORE agenda-core.js so the namespace exists
+// when agenda-core.js destructures App.AgendaTimeline.renderDay /
+// renderWeek / bindDrag / bindWeekDrag. AgendaMonthView (already
+// loaded above) calls AgendaTimeline.renderMonth / bindMonthDrag at
+// render time, which is satisfied because the timeline split files
+// load in the same tick.
 
 console.log("[Glue] agenda-glue.js loaded");
