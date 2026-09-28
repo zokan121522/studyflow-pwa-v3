@@ -39,6 +39,7 @@ from routes.notebooklm_settings import bp as notebooklm_settings_bp
 from routes.notebooklm_login import bp as notebooklm_login_bp
 from routes.ai import bp as ai_bp
 from routes.notebooklm_content import bp as notebooklm_content_bp
+from routes.backup import bp as backup_bp
 
 
 def create_app() -> Flask:
@@ -75,7 +76,7 @@ def _register_blueprints(app: Flask) -> None:
         pdf_bp, quiz_bp, addons_bp,
         todos_bp, audio_bp, tts_bp, settings_bp,
         notebooklm_settings_bp, notebooklm_login_bp,
-        ai_bp, notebooklm_content_bp,
+        ai_bp, notebooklm_content_bp, backup_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp, url_prefix='/api')

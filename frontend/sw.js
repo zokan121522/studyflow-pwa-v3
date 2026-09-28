@@ -1,12 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v16 (V3-fixes): bumped ASSET_CACHE so the activate handler evicts v15.
-//  - topics/blocks full-width body + left-flushed titles
-//  - real drag&drop reorder (topics + blocks)
-//  - removed the S4.7 sticky floating toolbar ("📌 Bloque activo")
-//  - server status pill moved into the header next to the wordmark
-const ASSET_CACHE = 'studyflow-assets-v16';
+// v17 (Backup/Restore): bumped ASSET_CACHE so the activate handler evicts v16.
+//  - local backup/restore buttons (ZIP export/import, issue #7)
+//  - new shared/backup-restore.js + review modal with conflict resolution
+const ASSET_CACHE = 'studyflow-assets-v17';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

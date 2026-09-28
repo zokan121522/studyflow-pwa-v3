@@ -121,9 +121,9 @@
         </div>
         <!-- Theme toggle (dual dark/light, v2 palette) -->
         <button id="btn-theme" class="hdr-btn" title="Cambiar tema (oscuro/claro)" aria-label="Cambiar tema">☀️</button>
-        <!-- Backup / Restore — frontend only (Google Drive próximamente) -->
-        <button id="btn-backup" class="hdr-btn" title="Backup — próximamente vía Google Drive">📦 Backup</button>
-        <button id="btn-restore" class="hdr-btn" title="Restore — próximamente vía Google Drive">⬆️ Restore</button>
+        <!-- Backup / Restore — local (ZIP on disk, issue #7) -->
+        <button id="btn-backup" class="hdr-btn" title="Backup — guardar datos locales (ZIP)">📦 Backup</button>
+        <button id="btn-restore" class="hdr-btn" title="Restore — restaurar desde un ZIP local">⬆️ Restore</button>
       </div>
     </header>
 
@@ -486,6 +486,7 @@
   <script src="/features/agenda/agenda.js"></script>
   <script src="/features/agenda/agenda-handlers.js"></script>
   <script src="/app.js"></script>
+  <script src="/shared/backup-restore.js"></script>
   <script src="/shared/server-status.js"></script>
 </body>
 </html>

@@ -351,18 +351,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // ─── Backup / Restore — frontend only (Google Drive próximamente) ─
-  const btnBackup = document.getElementById('btn-backup');
-  const btnRestore = document.getElementById('btn-restore');
-  if (btnBackup) {
-    btnBackup.addEventListener('click', () =>
-      alert('📦 Backup — próximamente vía Google Drive'));
-  }
-  if (btnRestore) {
-    btnRestore.addEventListener('click', () =>
-      alert('⬆️ Restore — próximamente vía Google Drive'));
-  }
-  
   const hamburger = document.getElementById('hamburger-btn');
   const appEl = document.getElementById('app');
   if (hamburger && appEl) {
