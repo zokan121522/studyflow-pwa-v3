@@ -1,0 +1,265 @@
+/* ============================== STUDYFLOW PWA — RESPONSIVE ============================== */
+
+/* ============================== RESPONSIVE <768px ============================== */
+@media (max-width: 768px) {
+  :root {
+    --header-h: 52px;
+  }
+
+  /* Main grid: single column */
+  .main {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  /* Sidebar: slide-over overlay */
+  .col-left {
+    position: fixed;
+    top: 0; left: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,.4);
+    border-right: none;
+    padding: 16px 12px;
+    padding-top: calc(var(--header-h) + 16px);
+  }
+
+  .sidebar-open .col-left {
+    transform: translateX(0);
+  }
+
+  .sidebar-open .col-left::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: -1;
+  }
+
+  .col-center {
+    padding: 16px;
+    padding-bottom: 100px;
+  }
+
+  /* Header compact */
+  .header {
+    padding: 0 12px;
+  }
+
+  .header-logo .logo-text {
+    display: none;
+  }
+
+  .header-center {
+    gap: 8px;
+  }
+
+  .week-nav {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  #week-label {
+    font-size: 12px;
+  }
+
+  /* Hamburger */
+  .hamburger {
+    display: flex !important;
+  }
+
+  .sidebar-open .hamburger {
+    position: relative;
+    z-index: 1001;
+  }
+
+  .sidebar-open .header-center {
+    display: none;
+  }
+
+  /* Tab bar scrollable */
+  .tab-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 8px;
+  }
+
+  .tab-bar::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .tab-subtitle {
+    display: none;
+  }
+
+  /* Dashboard */
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .dashboard-profile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .dashboard-nav-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-nav-card {
+    padding: 16px;
+  }
+
+  .dnc-icon { font-size: 28px; }
+
+  /* Install button position */
+  .install-btn {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    text-align: center;
+  }
+
+  .update-notification {
+    left: 16px;
+    right: 16px;
+    transform: none;
+  }
+
+  /* Agenda day columns stack */
+  .day-column { margin-bottom: 16px; }
+
+  /* Habits grid: smaller cells */
+  .habit-grid { gap: 3px; }
+  .habit-day { font-size: 9px; }
+
+  /* Course cards */
+  .course-header { padding: 12px; }
+  .course-topics { padding: 8px 12px; }
+  .topic-item { padding: 8px 10px; }
+
+  /* Quiz */
+  .quiz-card { padding: 16px; }
+  .quiz-question { font-size: 14px; }
+  .quiz-option { padding: 10px 12px; }
+
+  /* Modals */
+  .omodal { margin: 16px; max-height: 90vh; }
+  .omodal-body { padding: 16px; }
+
+  /* Auth forms */
+  .auth-form { margin: 16px; }
+}
+
+/* ============================== EXTRA SMALL: <480px ============================== */
+@media (max-width: 480px) {
+  .col-left {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .header-logo {
+    font-size: 0;
+  }
+
+  .header-logo .logo-icon {
+    margin: 0 auto;
+  }
+
+  .tab-btn {
+    padding: 10px 10px;
+    font-size: 11px;
+  }
+
+  .dashboard-avatar { width: 56px; height: 56px; font-size: 24px; }
+  .dashboard-greeting h1 { font-size: 18px; }
+  .dashboard-nav-card { padding: 12px; gap: 12px; }
+  .dnc-icon { font-size: 24px; }
+  .dnc-label { font-size: 14px; }
+  .dnc-desc { font-size: 11px; }
+
+  .btn { padding: 10px 14px; font-size: 13px; }
+  input, select, textarea { padding: 10px 12px; font-size: 13px; }
+
+  .omodal-head { padding: 12px 16px; }
+  .omodal-body { padding: 16px; }
+
+  .quiz-actions { flex-direction: column; }
+  .quiz-actions .btn { width: 100%; }
+}
+
+/* ============================== TABLET: 768px - 1024px ============================== */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .main { grid-template-columns: 280px 1fr; }
+  .col-left { padding: 12px 10px 80px 10px; }
+  .col-center { padding: 16px 20px; }
+  .dashboard-nav-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================== LARGE: >1024px ============================== */
+@media (min-width: 1025px) {
+  .dashboard-nav-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================== LANDSCAPE MOBILE ============================== */
+@media (max-width: 768px) and (orientation: landscape) {
+  .col-left {
+    max-width: 50vw;
+    width: 320px;
+  }
+  
+  .install-btn { bottom: 8px; }
+  .update-notification { bottom: 8px; }
+}
+
+/* ============================== HIGH DPI ============================== */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Sharper borders on retina */
+  .session-block,
+  .habit-day,
+  .topic-item,
+  .quiz-option,
+  .todo-item {
+    border-width: 0.5px;
+  }
+}
+
+/* ============================== REDUCED MOTION ============================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================== DARK MODE (system) ============================== */
+@media (prefers-color-scheme: dark) {
+  /* Already dark by default, but ensure consistency */
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --text: #eaeef5;
+  }
+}
+
+/* ============================== LIGHT MODE (system) - future support ============================== */
+@media (prefers-color-scheme: light) {
+  /* Placeholder for future light theme */
+  /* :root { --bg: #f8f9fa; --surface: #fff; --text: #1a1a2e; ... } */
+}

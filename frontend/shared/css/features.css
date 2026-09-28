@@ -1,0 +1,313 @@
+/* ============================== STUDYFLOW PWA — FEATURE COMPONENTS ============================== */
+
+/* ============================== AGENDA COMPONENTS ============================== */
+.day-column {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.day-header {
+  padding: 10px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.day-name { font-weight: 600; font-size: 13px; }
+.day-date { font-size: 11px; color: var(--text-muted); }
+
+.day-sessions { padding: 8px; min-height: 60px; }
+
+.session-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.session-block:hover {
+  border-color: var(--primary);
+  transform: translateX(2px);
+}
+
+.session-block.dragging { opacity: 0.5; transform: scale(1.02); }
+
+.session-time { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.session-title { font-size: 13px; font-weight: 500; }
+.session-category { font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 8px; }
+
+.session-category.formal { background: var(--cat-formal); color: #fff; }
+.session-category.self { background: var(--cat-self); color: #fff; }
+.session-category.work { background: var(--cat-work); color: #fff; }
+.session-category.lang { background: var(--cat-lang); color: #fff; }
+.session-category.health { background: var(--cat-health); color: #fff; }
+.session-category.mind { background: var(--cat-mind); color: #fff; }
+.session-category.project { background: var(--cat-project); color: #fff; }
+
+/* ============================== HABITS COMPONENTS ============================== */
+.habit-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.habit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.habit-name { font-weight: 600; font-size: 14px; }
+.habit-streak { font-size: 12px; color: var(--green); font-weight: 500; }
+
+.habit-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.habit-day {
+  aspect-ratio: 1;
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.habit-day.completed {
+  background: var(--green-bg);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.habit-day:hover:not(.completed) {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+}
+
+/* ============================== COURSES COMPONENTS ============================== */
+.course-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.course-header {
+  padding: 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.course-title { font-size: 15px; font-weight: 600; }
+.course-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.course-progress {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.course-progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.course-topics { padding: 12px 16px; }
+
+.topic-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+
+.topic-item:hover { background: var(--surface-hover); }
+.topic-item.active { background: var(--primary-light); border: 1px solid var(--primary); }
+
+.topic-title { font-weight: 500; font-size: 13px; margin-bottom: 2px; }
+.topic-meta { font-size: 11px; color: var(--text-muted); display: flex; gap: 12px; }
+
+.topic-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.topic-status.pending { background: var(--amber-bg); color: var(--amber); }
+.topic-status.in-progress { background: var(--primary-light); color: var(--primary); }
+.topic-status.done { background: var(--green-bg); color: var(--green); }
+
+/* ============================== PDF VIEWER ============================== */
+.pdf-viewer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.pdf-toolbar {
+  padding: 12px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pdf-canvas-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pdf-page { box-shadow: var(--shadow-md); background: #fff; }
+
+/* ============================== QUIZ COMPONENTS ============================== */
+.quiz-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.quiz-question { font-size: 15px; font-weight: 500; margin-bottom: 16px; }
+
+.quiz-options { display: flex; flex-direction: column; gap: 8px; }
+
+.quiz-option {
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.quiz-option:hover { border-color: var(--primary); background: var(--surface-hover); }
+.quiz-option.selected { border-color: var(--primary); background: var(--primary-light); }
+.quiz-option.correct { border-color: var(--green); background: var(--green-bg); }
+.quiz-option.incorrect { border-color: var(--red); background: var(--red-bg); }
+
+.quiz-actions { margin-top: 16px; display: flex; gap: 12px; justify-content: flex-end; }
+
+/* ============================== TODO COMPONENTS ============================== */
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  margin-bottom: 6px;
+  transition: border-color 0.15s;
+}
+
+.todo-item:hover { border-color: var(--primary); }
+
+.todo-item.completed .todo-text { text-decoration: line-through; color: var(--text-muted); }
+
+.todo-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.todo-item.completed .todo-checkbox {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.todo-text { flex: 1; font-size: 13px; min-width: 0; }
+
+.todo-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.todo-item:hover .todo-actions { opacity: 1; }
+
+.todo-action-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.todo-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ============================== AUTH FORMS ============================== */
+.auth-form { max-width: 360px; margin: 0 auto; }
+
+.auth-form h2 { text-align: center; margin-bottom: 24px; font-size: 20px; }
+
+.auth-form .form-group { margin-bottom: 16px; }
+
+.auth-form label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+
+.auth-form input { width: 100%; }
+
+.auth-form .btn { width: 100%; margin-top: 8px; }
+
+.auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
+.auth-switch a { color: var(--primary); text-decoration: none; font-weight: 500; }
+.auth-switch a:hover { text-decoration: underline; }
+
+/* ============================== CATEGORY COLORS ============================== */
+.cat-formal { color: var(--cat-formal); }
+.cat-self { color: var(--cat-self); }
+.cat-work { color: var(--cat-work); }
+.cat-lang { color: var(--cat-lang); }
+.cat-health { color: var(--cat-health); }
+.cat-mind { color: var(--cat-mind); }
+.cat-project { color: var(--cat-project); }
+
+.bg-formal { background: var(--cat-formal); }
+.bg-self { background: var(--cat-self); }
+.bg-work { background: var(--cat-work); }
+.bg-lang { background: var(--cat-lang); }
+.bg-health { background: var(--cat-health); }
+.bg-mind { background: var(--cat-mind); }
+.bg-project { background: var(--cat-project); }

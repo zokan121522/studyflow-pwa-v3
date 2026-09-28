@@ -1,0 +1,323 @@
+/* ============================== STUDYFLOW PWA — CORE COMPONENTS ============================== */
+
+/* ============================== LOADING SCREEN ============================== */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================== OFFLINE INDICATOR ============================== */
+.offline-indicator {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--amber-bg);
+  color: var(--amber);
+  padding: 8px 16px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: var(--shadow-md);
+  animation: slideUp 0.3s ease;
+}
+
+.offline-indicator.hidden { display: none; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ============================== SHARED UTILITIES ============================== */
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.empty-state .big {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.flex { display: flex; }
+.flex-b { display: flex; justify-content: space-between; align-items: center; }
+.mt-6 { margin-top: 6px; }
+
+/* ============================== BUTTONS ============================== */
+.btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn:hover { background: var(--surface-hover); }
+.btn:active { background: var(--border); }
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover { background: var(--primary-dark); }
+
+.btn-danger {
+  background: var(--red-bg);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-danger:hover { background: var(--red); color: #fff; }
+
+/* ============================== INPUTS ============================== */
+input, select, textarea {
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+/* ============================== OVERLAYS / MODALS ============================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.omodal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 480px;
+  width: 100%;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95);
+  transition: transform 0.2s;
+}
+
+.overlay.open .omodal { transform: scale(1); }
+
+.omodal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.omodal-head h3 { font-size: 15px; font-weight: 600; }
+
+.omodal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ============================== INSTALL BUTTON ============================== */
+.install-btn {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  animation: slideUp 0.3s ease;
+}
+
+.install-btn:hover { background: var(--primary-dark); }
+
+/* ============================== UPDATE NOTIFICATION ============================== */
+.update-notification {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 9999;
+  animation: slideUp 0.3s ease;
+}
+
+.update-notification button {
+  padding: 6px 14px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ============================== DASHBOARD ============================== */
+.dashboard-container {
+  padding: 24px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.dashboard-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.dashboard-greeting h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.dashboard-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.dashboard-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-base {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.dashboard-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.dashboard-nav-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.dashboard-nav-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.dnc-icon { font-size: 32px; flex-shrink: 0; }
+.dnc-text { min-width: 0; flex: 1; }
+.dnc-label { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.dnc-desc { font-size: 12px; color: var(--text-muted); }
