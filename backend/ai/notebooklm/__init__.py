@@ -1,0 +1,1 @@
+"""NotebookLM sub-package — client, utils, and prompts (Phase 7)."""

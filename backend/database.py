@@ -73,9 +73,14 @@ def _create_tables(cur) -> None:
     for ddl in _TABLE_DDL:
         cur.execute(ddl)
     _create_ai_tasks(cur)
+    _create_ai_usage_log(cur)
+    _create_user_config(cur)
+    _migrate_user_config_v2(cur)
+    _create_notebooklm_owned_profiles(cur)
     _migrate_sessions(cur)
     _migrate_habits(cur)
     _migrate_topic_notes(cur)
+    _migrate_ai_tasks_v2(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
 
@@ -120,6 +125,119 @@ def _create_ai_tasks(cur) -> None:
         "CREATE INDEX IF NOT EXISTS idx_ai_tasks_user_status "
         "ON ai_tasks(user_id, status)"
     )
+
+
+def _migrate_ai_tasks_v2(cur) -> None:
+    """Widen `ai_tasks` to the v2 NotebookLM schema (Phase 7 — AI Hub).
+
+    v3 created a minimal table for the agenda Mind ritual; v2's task runner
+    stores richer metadata per job (source type/id, format, model, template,
+    language, length). ADD COLUMN IF NOT EXISTS upgrades in place, matching
+    the _migrate_topic_notes convention (no migration tool in this repo).
+    """
+    for col, ddl in [
+        ("topic_id", "INTEGER"),
+        ("format", "TEXT DEFAULT ''"),
+        ("source_type", "TEXT DEFAULT ''"),
+        ("source_id", "TEXT DEFAULT ''"),
+        ("model_used", "TEXT DEFAULT ''"),
+        ("template_id", "TEXT DEFAULT ''"),
+        ("language", "TEXT DEFAULT ''"),
+        ("length", "TEXT DEFAULT ''"),
+    ]:
+        cur.execute(
+            f"ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS {col} {ddl}"
+        )
+
+
+def _create_ai_usage_log(cur) -> None:
+    """Per-request AI usage/cost log (v2 `ai_usage_log`).
+
+    One row per model call; the /api/ai/usage endpoint aggregates by
+    task_type for the daily-limit counters shown in the ✨ toolbar.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_usage_log (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            task_type   TEXT DEFAULT '',
+            source      TEXT DEFAULT '',
+            model_id    TEXT DEFAULT '',
+            provider_id TEXT DEFAULT '',
+            tokens      INTEGER DEFAULT 0,
+            cost        REAL DEFAULT 0,
+            created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date "
+        "ON ai_usage_log(user_id, created_at)"
+    )
+
+
+def _create_user_config(cur) -> None:
+    """Per-user AI configuration (v2 `user_config`).
+
+    The DB row is the source of truth: active provider, voice/personality,
+    the encrypted API-key blob (Fernet via secret_box, SECRET_KEY-derived)
+    and the NotebookLM profile email attached to this user. Column names
+    mirror v2 exactly (`provider`, `key_index`).
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_config (
+            user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            provider           TEXT DEFAULT 'notebooklm',
+            personality        TEXT DEFAULT 'alvaro',
+            voice_mode         TEXT DEFAULT '',
+            vault_path         TEXT DEFAULT '',
+            priority_context   TEXT DEFAULT '',
+            api_keys_encrypted TEXT DEFAULT '',
+            key_index          INTEGER DEFAULT 0,
+            notebooklm_profile TEXT DEFAULT '',
+            updated_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+
+
+def _migrate_user_config_v2(cur) -> None:
+    """Phase 7: align a 7.0-created user_config with the v2 schema.
+
+    7.0 bootstrapped the table with `active_provider`; v2 calls the column
+    `provider` and also carries `key_index` (active API-key slot per user).
+    Rename in place only if the old name still exists (idempotent), then
+    ADD COLUMN IF NOT EXISTS for the remaining v2 fields.
+    """
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'user_config' AND column_name = 'active_provider'"
+    )
+    if cur.fetchone():
+        cur.execute(
+            "ALTER TABLE user_config RENAME COLUMN active_provider TO provider"
+        )
+    for col, ddl in [
+        ("key_index", "INTEGER DEFAULT 0"),
+    ]:
+        cur.execute(
+            f"ALTER TABLE user_config ADD COLUMN IF NOT EXISTS {col} {ddl}"
+        )
+
+
+def _create_notebooklm_owned_profiles(cur) -> None:
+    """Profile ownership map (v2 `notebooklm_owned_profiles`).
+
+    Per-user isolation for NotebookLM cookie profiles: a profile email can
+    only be switched/disconnected by the user who uploaded/created it, which
+    prevents cross-user IDOR via /api/settings/notebooklm/profile/<email>.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS notebooklm_owned_profiles (
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            email      TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            PRIMARY KEY (user_id, email)
+        )
+    """)
 
 
 def _migrate_habits(cur) -> None:
