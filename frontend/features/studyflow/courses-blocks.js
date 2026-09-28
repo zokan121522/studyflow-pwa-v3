@@ -178,7 +178,7 @@ window.App.CoursesBlocks = (function () {
       const doneCb = e.target.closest(".sf-td-done-cb");
       if (doneCb) {
         e.stopPropagation();
-        const blockEl = doneCb.closest(".sf-td-block");
+        const blockEl = doneCb.closest(".sf-td-block") || (doneCb.closest(".sf-block-card")||document).querySelector(".sf-td-block");
         if (!blockEl) return;
         const bid = Number(blockEl.dataset.blockId);
         try {
@@ -194,7 +194,7 @@ window.App.CoursesBlocks = (function () {
       const editBtn = e.target.closest(".sf-td-edit");
       if (editBtn) {
         e.stopPropagation();
-        const blockEl = editBtn.closest(".sf-td-block");
+        const blockEl = editBtn.closest(".sf-td-block") || (editBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
         if (!blockEl) return;
         const bid = Number(blockEl.dataset.blockId);
         // Pull fresh block data from cache (or listTopicBlocks)
@@ -227,7 +227,7 @@ window.App.CoursesBlocks = (function () {
       const saveBtn = e.target.closest(".sf-td-save");
       if (saveBtn) {
         e.stopPropagation();
-        const blockEl = saveBtn.closest(".sf-td-block");
+        const blockEl = saveBtn.closest(".sf-td-block") || (saveBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
         if (!blockEl) return;
         const bid = Number(blockEl.dataset.blockId);
         const titleInput = blockEl.querySelector(".sf-td-md-title");
@@ -257,7 +257,7 @@ window.App.CoursesBlocks = (function () {
       const cancelBtn = e.target.closest(".sf-td-cancel");
       if (cancelBtn) {
         e.stopPropagation();
-        const blockEl = cancelBtn.closest(".sf-td-block");
+        const blockEl = cancelBtn.closest(".sf-td-block") || (cancelBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
         if (!blockEl) return;
         const form = blockEl.querySelector(".sf-td-edit-form");
         if (form) {
@@ -275,7 +275,7 @@ window.App.CoursesBlocks = (function () {
       const delBtn = e.target.closest(".sf-td-del");
       if (delBtn) {
         e.stopPropagation();
-        const blockEl = delBtn.closest(".sf-td-block");
+        const blockEl = delBtn.closest(".sf-td-block") || (delBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
         if (!blockEl) return;
         const bid = Number(blockEl.dataset.blockId);
         if (!confirm("¿Borrar este bloque?")) return;
