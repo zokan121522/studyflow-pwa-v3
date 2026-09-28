@@ -201,7 +201,36 @@ window.App.Courses = (function () {
   // ── _toggleBlockDone(courseId, blockId) — called from sidebar checkbox ────
   async function _toggleBlockDone(courseId, blockId) {
     try {
+      // Capture topics BEFORE API call (toggleBlockDone clears STATE._expandedCourseTopics via clearDetailCache)
+      const s = STATE();
+      const capturedTopics = (s._expandedCourseTopics || []).map(t => ({
+        ...t,
+        blocks: (t.blocks || []).map(b => ({ ...b }))
+      }));
+
       const newDone = await toggleBlockDone(courseId, blockId);
+
+      // Restore topics with updated block status
+      for (const t of capturedTopics) {
+        const b = (t.blocks || []).find(b => b.id === Number(blockId));
+        if (b) { b.done = newDone; break; }
+      }
+      s._expandedCourseTopics = capturedTopics;
+
+      _updateCourseProgress(courseId);
+
+      // Also update the checkbox visual state in the sidebar
+      const checkbox = document.querySelector(
+        `.block-item[data-block-id="${blockId}"] input[type="checkbox"]`
+      );
+      if (checkbox) checkbox.checked = newDone;
+
+      // Toggle strikethrough on the block item title
+      const blockItem = document.querySelector(
+        `.block-item[data-block-id="${blockId}"]`
+      );
+      if (blockItem) blockItem.classList.toggle('is-done', newDone);
+
       // Dispatch event so center panel refreshes if this topic is active
       const evt = new CustomEvent("studyflow:blocks-changed", {
         detail: { courseId }
@@ -210,6 +239,16 @@ window.App.Courses = (function () {
       return newDone;
     } catch (err) {
       alert("❌ Error al cambiar estado: " + (err.message || err));
+      // Revert checkbox on error
+      const checkbox = document.querySelector(
+        `.block-item[data-block-id="${blockId}"] input[type="checkbox"]`
+      );
+      if (checkbox) checkbox.checked = !checkbox.checked;
+      // Revert strikethrough on error
+      const blockItemRevert = document.querySelector(
+        `.block-item[data-block-id="${blockId}"]`
+      );
+      if (blockItemRevert) blockItemRevert.classList.toggle('is-done', !checkbox.checked);
     }
   }
 
