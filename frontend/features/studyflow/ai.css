@@ -331,3 +331,123 @@
   transition: all 0.15s ease;
 }
 .test-qty-btn:hover { border-color: var(--primary, #4f8cff); }
+
+/* ── AI progress panel (floating terminal) ──────────────────────── */
+.sf-ai-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: min(400px, calc(100vw - 36px));
+  z-index: 9999;
+  display: none;
+  background: var(--surface, #16213e);
+  border: 1px solid var(--border, #2a3a5e);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-family: system-ui, sans-serif;
+  color: var(--text, #eaeef5);
+  overflow: hidden;
+}
+.sf-ai-p-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--surface-hover, #1f2a4a);
+  border-bottom: 1px solid var(--border, #2a3a5e);
+}
+.sf-ai-p-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border, #2a3a5e);
+  border-top-color: var(--primary, #4f8cff);
+  border-radius: 50%;
+  animation: sf-ai-spin 0.8s linear infinite;
+}
+.sf-ai-spinner[hidden] { display: none; }
+@keyframes sf-ai-spin { to { transform: rotate(360deg); } }
+.sf-ai-p-btns { display: flex; gap: 4px; }
+.sf-ai-p-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border, #2a3a5e);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #93a0b8);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.sf-ai-p-btn:hover { color: var(--text, #eaeef5); border-color: var(--primary, #4f8cff); }
+.sf-ai-panel.collapsed .sf-ai-p-body { display: none; }
+
+.sf-ai-p-body { padding: 10px 12px 12px; }
+.sf-ai-last {
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--surface-hover, #1f2a4a);
+  border: 1px solid var(--border, #2a3a5e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-ai-last.running { border-left: 3px solid var(--primary, #4f8cff); }
+.sf-ai-last.ok { border-left: 3px solid #2ecc71; }
+.sf-ai-last.err { border-left: 3px solid #e74c3c; }
+.sf-ai-last.warn { border-left: 3px solid #f5b041; }
+
+.sf-ai-log {
+  max-height: 180px;
+  overflow-y: auto;
+  background: #0b1022;
+  border: 1px solid var(--border, #2a3a5e);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.sf-ai-log-line { display: flex; gap: 8px; color: #b7c3e0; }
+.sf-ai-log-t { color: #5c6b8a; flex: none; }
+.sf-ai-log-i { flex: none; min-width: 14px; }
+.sf-ai-log-x { white-space: pre-wrap; word-break: break-word; }
+
+.sf-ai-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sf-ai-actions-right { display: flex; align-items: center; gap: 10px; }
+.sf-ai-timer { font-size: 12px; color: var(--text-muted, #93a0b8); }
+.sf-ai-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+.sf-ai-btn-danger {
+  background: transparent;
+  border-color: var(--border, #2a3a5e);
+  color: var(--text-muted, #93a0b8);
+}
+.sf-ai-btn-danger:hover { color: #e74c3c; border-color: #e74c3c; }
+.sf-ai-btn-primary {
+  background: var(--primary, #4f8cff);
+  color: #fff;
+}
+.sf-ai-btn-primary:hover { filter: brightness(1.1); }
