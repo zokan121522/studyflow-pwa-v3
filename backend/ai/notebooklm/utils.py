@@ -18,6 +18,7 @@ v3 changes from v2:
 import json
 import logging
 import os
+import uuid
 from pathlib import Path
 
 from database import query
@@ -29,6 +30,15 @@ COOKIE_DIR = os.environ.get(
     os.path.join(os.path.expanduser("~"), ".notebooklm"),
 )
 ACTIVE_FILE = os.path.join(COOKIE_DIR, "active.txt")
+
+
+def _new_task_id() -> str:
+    """Generate a fresh ai_tasks primary key (v3 table has no DEFAULT).
+
+    v2 relied on ``gen_random_uuid()::text`` as column default; the v3
+    schema omits it, so task creators must supply ``id`` explicitly.
+    """
+    return str(uuid.uuid4())
 
 
 def get_active_profile() -> str | None:
@@ -55,6 +65,33 @@ def get_active_profile() -> str | None:
 # ═══════════════════════════════════════════════════════════════════
 
 _BLOCK_CAP = 4000  # per-block char cap when combining multiple blocks
+
+
+def _coerce_id(value, field: str = "id") -> int | None:
+    """Coerce an id to int (v3 SERIAL columns) with a clean ValueError.
+
+    v2 used uuid-style string ids; v3 blocks/topics ids are SERIAL
+    integers. Accepts None/"" → None, int → int, numeric str → int.
+    """
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid {field}: '{value}' (must be a numeric id)")
+
+
+def _coerce_ids(ids, field: str = "block_ids") -> list[int]:
+    """Coerce a list of ids to ints (used for ``WHERE id = ANY(%s)``)."""
+    out = []
+    for i in ids:
+        v = _coerce_id(i, field)
+        if v is None:
+            continue
+        out.append(v)
+    if not out:
+        raise ValueError(f"Missing required field: {field} (must be a non-empty list)")
+    return out
 
 
 def _extract_pdf_text(pdf_path: str) -> str:
@@ -131,9 +168,7 @@ def _resolve_blocks_content(block_ids: str | list[str], user_id: str) -> tuple[s
     """
     if isinstance(block_ids, str):
         block_ids = [block_ids]
-    ids = [b.strip() for b in block_ids if b and b.strip()]
-    if not ids:
-        raise ValueError("Missing required field: block_ids (must be a non-empty list)")
+    ids = _coerce_ids(block_ids, "block_ids")
 
     rows = query(
         """SELECT b.*, c.title AS course_title, t.title AS topic_title
@@ -184,9 +219,7 @@ def _resolve_blocks_content_per_block(block_ids: str | list[str], user_id: str) 
     """
     if isinstance(block_ids, str):
         block_ids = [block_ids]
-    ids = [b.strip() for b in block_ids if b and b.strip()]
-    if not ids:
-        raise ValueError("Missing required field: block_ids (must be a non-empty list)")
+    ids = _coerce_ids(block_ids, "block_ids")
 
     rows = query(
         """SELECT b.*, c.title AS course_title, t.title AS topic_title
