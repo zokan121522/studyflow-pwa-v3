@@ -202,7 +202,17 @@ const Router = {
 
 
 // ─── App State ──────────────────────────────────────────────────────
-const App = {
+//
+// CRITICAL: App must be ANCHORED to the shared `window.App` namespace
+// created earlier by agenda-glue.js (UI, ContentBlocks, Courses,
+// Auth, STATE…). Reassigning `window.App = App` would clobber every
+// sub-namespace and break agenda-core.js:147 `App.UI.displayTitle(...)`,
+// leaving the Agenda CENTER column empty.
+//
+// Fix: define members in a definition object, then MERGE them onto the
+// pre-existing window.App via Object.assign. `App === window.App` so
+// every `App.X` reference below keeps working unchanged.
+const _appDef = {
   state: {
     currentUser: null,
     currentWeek: null,
@@ -213,17 +223,17 @@ const App = {
     selectedTopicId: null,
     habits: { showAll: false, expanded: false, weekData: null, weekDays: null }
   },
-  
+
   modules: {},
-  
+
   registerModule(name, module) {
     this.modules[name] = module;
   },
-  
+
   getModule(name) {
     return this.modules[name];
   },
-  
+
   async initAuth() {
     const token = Auth.getToken();
     if (token) {
@@ -241,8 +251,9 @@ const App = {
 };
 
 
-// Expose globally for feature modules
-window.App = App;
+// Expose globally for feature modules — MERGE into shared window.App,
+// do NOT replace it (agenda-glue.js / agenda modules already populated it).
+const App = Object.assign(window.App = window.App || {}, _appDef);
 window.Router = Router;
 window.API = API;
 window.Auth = Auth;
