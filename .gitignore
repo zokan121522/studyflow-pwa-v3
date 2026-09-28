@@ -43,6 +43,8 @@ build/
 
 # Uploads
 backend/uploads/
+# Runtime PDF store: user documents, not source. Keep out of the repo.
+uploads/
 
 # Testing
 .coverage
