@@ -1,155 +1,216 @@
-# backend/routes/agenda.py
-"""Agenda/sessions routes for StudyFlow PWA v3."""
+"""
+Agenda · week/day endpoints — port from studyflow-hub v2.
 
+Blueprints register at /api prefix (see server.py), so routes are declared
+WITHOUT the /api prefix (e.g. `/agenda/week/<week_id>`).
+
+Storage model mirrors v2: weeks + days are thin metadata rows; the
+canonical session list lives in `sessions` keyed by (user_id, day_date).
+"""
+import uuid
 from datetime import datetime
-from flask import Blueprint, request, jsonify
-from typing import Optional
+from flask import Blueprint, jsonify, request
 
-from backend.database import execute, fetchone, fetchall
+from backend import database as db
+from backend.models import SessionCategory, iso_week_key
 from backend.routes.auth import token_required
-from backend.models import Session
 
 
-bp = Blueprint('agenda', __name__)
+bp = Blueprint("agenda", __name__)
 
 
-def parse_datetime(dt_str: str) -> datetime:
-    """Parse ISO datetime string."""
-    return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+SESSION_FIELDS = [
+    "id", "category", "state", "start_time", "end_time",
+    "title", "notes",
+    "timer_state", "timer_started_at", "timer_paused_at",
+    "timer_paused_duration", "timer_elapsed", "timer_total", "timer_paused",
+]
 
 
-@bp.get('/agenda/sessions')
-@token_required
-def list_sessions(current_user_id: int):
-    """Get all sessions for the current user, optionally filtered by date range."""
-    start = request.args.get('start')
-    end = request.args.get('end')
+_INSERT_SESSION_SQL = """
+INSERT INTO sessions (
+    id, day_date, week_id, user_id, category, state,
+    start_time, end_time, title, notes,
+    timer_state, timer_started_at, timer_paused_at,
+    timer_paused_duration, timer_elapsed,
+    timer_total, timer_paused, position, updated_at
+) VALUES (
+    %(id)s, %(day_date)s, %(week_id)s, %(user_id)s,
+    %(category)s, %(state)s,
+    %(start_time)s, %(end_time)s, %(title)s, %(notes)s,
+    %(timer_state)s, %(timer_started_at)s, %(timer_paused_at)s,
+    %(timer_paused_duration)s, %(timer_elapsed)s,
+    %(timer_total)s, %(timer_paused)s, %(position)s, NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+    category      = EXCLUDED.category,
+    state         = EXCLUDED.state,
+    start_time    = EXCLUDED.start_time,
+    end_time      = EXCLUDED.end_time,
+    title         = EXCLUDED.title,
+    notes         = EXCLUDED.notes,
+    timer_state   = EXCLUDED.timer_state,
+    timer_started_at  = EXCLUDED.timer_started_at,
+    timer_paused_at   = EXCLUDED.timer_paused_at,
+    timer_paused_duration = EXCLUDED.timer_paused_duration,
+    timer_elapsed = EXCLUDED.timer_elapsed,
+    timer_total   = EXCLUDED.timer_total,
+    timer_paused  = EXCLUDED.timer_paused,
+    position      = EXCLUDED.position,
+    updated_at    = NOW()
+"""
 
-    query = 'SELECT * FROM sessions WHERE user_id = %s'
-    params = [current_user_id]
 
-    if start and end:
-        query += ' AND start_time >= %s AND end_time <= %s'
-        params.extend([start, end])
+# ─── Helpers ──────────────────────────────────────────────────────
 
-    query += ' ORDER BY start_time ASC'
+def _builtin_categories() -> dict:
+    icons = {
+        "formal_study": "🎓", "self_study": "📚", "work": "💼",
+        "language": "🌐", "health": "🏋️", "mind": "🧠", "project": "⚡",
+    }
+    labels = {
+        "formal_study": "Formal Study", "self_study": "Self Study", "work": "Work",
+        "language": "Language", "health": "Health", "mind": "Mind", "project": "Project",
+    }
+    return {
+        cat.value: {
+            "label": labels.get(cat.value, cat.name.replace("_", " ").title()),
+            "icon": icons.get(cat.value, "📌"),
+            "builtin": True,
+        }
+        for cat in SessionCategory
+    }
 
-    rows = fetchall(query, tuple(params))
-    return jsonify({'sessions': [Session.from_row(r).to_dict() for r in rows]})
 
+def _reconstruct_week(week_id: str, user_id: int) -> dict | None:
+    week = db.query_one(
+        "SELECT * FROM weeks WHERE week_id = %s AND user_id = %s",
+        (week_id, user_id),
+    )
+    if not week:
+        return None
 
-@bp.post('/agenda/sessions')
-@token_required
-def create_session(current_user_id: int):
-    """Create a new session."""
-    data = request.get_json() or {}
-
-    required = ['title', 'start_time', 'end_time']
-    for field in required:
-        if not data.get(field):
-            return jsonify({'error': f'{field} is required'}), 400
-
-    try:
-        start_time = parse_datetime(data['start_time'])
-        end_time = parse_datetime(data['end_time'])
-    except ValueError:
-        return jsonify({'error': 'Invalid datetime format. Use ISO 8601.'}), 400
-
-    if end_time <= start_time:
-        return jsonify({'error': 'end_time must be after start_time'}), 400
-
-    execute(
-        '''INSERT INTO sessions (user_id, title, description, category, start_time, end_time, color, is_recurring, recurrence_rule)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''',
-        (
-            current_user_id,
-            data['title'],
-            data.get('description'),
-            data.get('category'),
-            start_time,
-            end_time,
-            data.get('color'),
-            data.get('is_recurring', False),
-            data.get('recurrence_rule')
+    days_rows = db.query(
+        "SELECT date FROM days WHERE week_id = %s AND user_id = %s ORDER BY date",
+        (week_id, user_id),
+    )
+    days = {}
+    for d in days_rows:
+        sessions = db.query(
+            "SELECT * FROM sessions WHERE day_date = %s AND user_id = %s "
+            "ORDER BY position, start_time",
+            (d["date"], user_id),
         )
+        days[d["date"]] = {"date": d["date"], "sessions": sessions}
+
+    return {
+        "week_id": week_id,
+        "schema_version": week["schema_version"],
+        "days": days,
+    }
+
+
+def _upsert_week(week_id: str, user_id: int) -> None:
+    db.execute(
+        "INSERT INTO weeks (week_id, user_id, schema_version, updated_at) "
+        "VALUES (%s, %s, 2, NOW()) "
+        "ON CONFLICT (week_id, user_id) DO UPDATE SET updated_at = NOW()",
+        (week_id, user_id),
     )
 
-    # Get created session
-    row = fetchone(
-        'SELECT * FROM sessions WHERE user_id = %s ORDER BY created_at DESC LIMIT 1',
-        (current_user_id,)
+
+def _upsert_day(date_str: str, week_id: str, user_id: int) -> None:
+    db.execute(
+        "INSERT INTO days (date, week_id, user_id, updated_at) "
+        "VALUES (%s, %s, %s, NOW()) "
+        "ON CONFLICT (date, user_id) DO UPDATE SET "
+        "  week_id = EXCLUDED.week_id, updated_at = NOW()",
+        (date_str, week_id, user_id),
     )
-    session = Session.from_row(row)
-
-    return jsonify({'session': session.to_dict()}), 201
 
 
-@bp.get('/agenda/sessions/<int:session_id>')
+def _replace_day_sessions(date_str: str, week_id: str, user_id: int, sessions: list) -> None:
+    """Atomically replace all sessions for a single day (delete + insert)."""
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM sessions WHERE day_date = %s AND user_id = %s",
+                (date_str, user_id),
+            )
+            for idx, s in enumerate(sessions):
+                _insert_one_session(cur, date_str, week_id, user_id, idx, s)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        db.put_connection(conn)
+
+
+def _insert_one_session(cur, date_str: str, week_id: str,
+                        user_id: int, idx: int, s: dict) -> None:
+    fields = {k: s.get(k) for k in SESSION_FIELDS}
+    fields["id"] = fields.get("id") or str(uuid.uuid4())
+    fields["day_date"] = date_str
+    fields["week_id"] = week_id
+    fields["user_id"] = user_id
+    fields["position"] = idx
+    cur.execute(_INSERT_SESSION_SQL, fields)
+
+
+# ─── GET /api/agenda/week/<week_id> ──────────────────────────────
+@bp.get("/agenda/week/<week_id>")
 @token_required
-def get_session(current_user_id: int, session_id: int):
-    """Get a specific session."""
-    row = fetchone('SELECT * FROM sessions WHERE id = %s AND user_id = %s', (session_id, current_user_id))
-    if not row:
-        return jsonify({'error': 'Session not found'}), 404
+def get_week(current_user_id: int, week_id: str):
+    data = _reconstruct_week(week_id, current_user_id)
+    if data is None:
+        _upsert_week(week_id, current_user_id)
+        data = {"week_id": week_id, "schema_version": 2, "days": {}}
+    return jsonify(data)
 
-    return jsonify({'session': Session.from_row(row).to_dict()})
 
-
-@bp.patch('/agenda/sessions/<int:session_id>')
+# ─── PUT /api/agenda/week/<week_id> ──────────────────────────────
+@bp.put("/agenda/week/<week_id>")
 @token_required
-def update_session(current_user_id: int, session_id: int):
-    """Update a session."""
-    # Check ownership
-    row = fetchone('SELECT * FROM sessions WHERE id = %s AND user_id = %s', (session_id, current_user_id))
-    if not row:
-        return jsonify({'error': 'Session not found'}), 404
+def save_week(current_user_id: int, week_id: str):
+    body = request.get_json(silent=True) or {}
+    _upsert_week(week_id, current_user_id)
 
-    data = request.get_json() or {}
-    updates = []
-    params = []
+    days = body.get("days") or {}
+    for date_str, day_data in days.items():
+        _upsert_day(date_str, week_id, current_user_id)
+        _replace_day_sessions(
+            date_str, week_id, current_user_id,
+            day_data.get("sessions", []) if isinstance(day_data, dict) else [],
+        )
 
-    allowed_fields = ['title', 'description', 'category', 'start_time', 'end_time', 'color', 'is_recurring', 'recurrence_rule']
-    for field in allowed_fields:
-        if field in data:
-            if field in ('start_time', 'end_time') and data[field]:
-                try:
-                    updates.append(f'{field} = %s')
-                    params.append(parse_datetime(data[field]))
-                except ValueError:
-                    return jsonify({'error': f'Invalid {field} format. Use ISO 8601.'}), 400
-            else:
-                updates.append(f'{field} = %s')
-                params.append(data[field])
-
-    if not updates:
-        return jsonify({'error': 'No fields to update'}), 400
-
-    # Validate start_time < end_time if both provided
-    if 'start_time' in data and 'end_time' in data:
-        try:
-            start = parse_datetime(data['start_time'])
-            end = parse_datetime(data['end_time'])
-            if end <= start:
-                return jsonify({'error': 'end_time must be after start_time'}), 400
-        except ValueError:
-            pass  # Already handled above
-
-    updates.append('updated_at = NOW()')
-    params.append(session_id)
-
-    execute(f'UPDATE sessions SET {", ".join(updates)} WHERE id = %s', tuple(params))
-
-    # Return updated session
-    row = fetchone('SELECT * FROM sessions WHERE id = %s', (session_id,))
-    return jsonify({'session': Session.from_row(row).to_dict()})
+    data = _reconstruct_week(week_id, current_user_id)
+    return jsonify(data or {"week_id": week_id, "schema_version": 2, "days": {}})
 
 
-@bp.delete('/agenda/sessions/<int:session_id>')
+# ─── PATCH /api/agenda/week/<week_id>/day/<date> ─────────────────
+@bp.patch("/agenda/week/<week_id>/day/<date>")
 @token_required
-def delete_session(current_user_id: int, session_id: int):
-    """Delete a session."""
-    result = execute('DELETE FROM sessions WHERE id = %s AND user_id = %s', (session_id, current_user_id))
-    if result == 0:
-        return jsonify({'error': 'Session not found'}), 404
+def patch_day(current_user_id: int, week_id: str, date: str):
+    body = request.get_json(silent=True) or {}
+    _upsert_week(week_id, current_user_id)
+    _upsert_day(date, week_id, current_user_id)
 
-    return jsonify({'message': 'Session deleted successfully'})
+    if "sessions" in body:
+        _replace_day_sessions(date, week_id, current_user_id, body["sessions"])
+
+    data = _reconstruct_week(week_id, current_user_id) or {"days": {}}
+    return jsonify(data.get("days", {}).get(date, {"date": date, "sessions": []}))
+
+
+# ─── GET /api/agenda/current ─────────────────────────────────────
+@bp.get("/agenda/current")
+@token_required
+def get_current_week(current_user_id: int):
+    week_id = iso_week_key()
+    data = _reconstruct_week(week_id, current_user_id)
+    if data is None:
+        _upsert_week(week_id, current_user_id)
+        data = {"week_id": week_id, "schema_version": 2, "days": {}}
+    return jsonify(data)

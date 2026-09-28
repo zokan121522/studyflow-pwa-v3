@@ -66,169 +66,257 @@ def _seed_local_user() -> None:
 
 def _create_tables(cur) -> None:
     """Create all tables if they don't exist."""
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            name VARCHAR(100),
-            avatar_url VARCHAR(500),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
+    for ddl in _TABLE_DDL:
+        cur.execute(ddl)
+    _migrate_sessions(cur)
+    for stmt in _POST_INDEXES:
+        cur.execute(stmt)
 
+
+_TABLE_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name VARCHAR(100),
+        avatar_url VARCHAR(500),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS weeks (
+        week_id        TEXT NOT NULL,
+        user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        schema_version INTEGER DEFAULT 2,
+        created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (week_id, user_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS days (
+        date       TEXT NOT NULL,
+        week_id    TEXT,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (date, user_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS custom_categories (
+        key        TEXT NOT NULL,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        label      TEXT NOT NULL,
+        icon       TEXT DEFAULT '📌',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (key, user_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quick_notes (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        content    TEXT DEFAULT '',
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_settings (
+        user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        calendars_json TEXT DEFAULT '[]',
+        updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS habits (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        frequency VARCHAR(20) DEFAULT 'daily',
+        target_count INTEGER DEFAULT 1,
+        color VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS habit_entries (
+        id SERIAL PRIMARY KEY,
+        habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        count INTEGER DEFAULT 1,
+        completed BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(habit_id, date)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS courses (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        color VARCHAR(20),
+        progress INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS topics (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        order_index INTEGER DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'pending',
+        estimated_minutes INTEGER,
+        actual_minutes INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pdfs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        filename VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        file_size BIGINT,
+        page_count INTEGER,
+        storage_path VARCHAR(500),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quiz_questions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        question TEXT NOT NULL,
+        options JSONB NOT NULL,
+        correct_answer INTEGER NOT NULL,
+        explanation TEXT,
+        difficulty VARCHAR(20) DEFAULT 'medium',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quiz_results (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        question_id INTEGER REFERENCES quiz_questions(id) ON DELETE CASCADE,
+        selected_answer INTEGER,
+        is_correct BOOLEAN,
+        time_taken_ms INTEGER,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS todos (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        completed BOOLEAN DEFAULT FALSE,
+        priority VARCHAR(20) DEFAULT 'medium',
+        due_date TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audio_files (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        text_content TEXT,
+        audio_url VARCHAR(500),
+        duration_seconds INTEGER,
+        voice VARCHAR(50),
+        language VARCHAR(10) DEFAULT 'es',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+]
+
+
+# DROP old v3-shape `sessions` (SERIAL id) if it exists, then recreate the
+# v2-shape table that _TABLE_DDL declared above. Done in two steps so the
+# legacy v3 schema isn't left around on already-initialized DBs.
+_POST_DDL = [
+    "DROP TABLE IF EXISTS sessions_old CASCADE",  # placeholder, see _migrate_sessions
+]
+
+
+def _migrate_sessions(cur) -> None:
+    """DROP legacy v3 sessions (SERIAL id) and ensure v2-shape exists.
+
+    CREATE TABLE IF NOT EXISTS cannot replace an existing table with a
+    different schema, so the v3-shape legacy `sessions` (SERIAL) must be
+    dropped before the v2-shape (TEXT) CREATE.
+    """
+    if _sessions_is_legacy(cur):
+        cur.execute("DROP TABLE sessions CASCADE")
+    _create_v2_sessions(cur)
+
+
+def _sessions_is_legacy(cur) -> bool:
+    cur.execute(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = 'sessions' AND column_name = 'id'"
+    )
+    row = cur.fetchone()
+    return row is not None and row["data_type"] != "text"
+
+
+def _create_v2_sessions(cur) -> None:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            category VARCHAR(50),
-            start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-            end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-            color VARCHAR(20),
-            is_recurring BOOLEAN DEFAULT FALSE,
-            recurrence_rule VARCHAR(100),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            id                   TEXT PRIMARY KEY,
+            day_date             TEXT,
+            user_id              INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            week_id              TEXT,
+            category             TEXT NOT NULL DEFAULT 'formal_study',
+            state                TEXT NOT NULL DEFAULT 'pending',
+            start_time           TEXT,
+            end_time             TEXT,
+            title                TEXT DEFAULT '',
+            notes                TEXT DEFAULT '',
+            timer_state          TEXT,
+            timer_started_at     TEXT,
+            timer_paused_at      TEXT,
+            timer_paused_duration REAL DEFAULT 0,
+            timer_elapsed        REAL,
+            timer_total          REAL,
+            timer_paused         REAL,
+            position             INTEGER DEFAULT 0,
+            created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
     """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_day ON sessions(day_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_day ON sessions(user_id, day_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_week ON sessions(user_id, week_id)")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS habits (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            frequency VARCHAR(20) DEFAULT 'daily',
-            target_count INTEGER DEFAULT 1,
-            color VARCHAR(20),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS habit_entries (
-            id SERIAL PRIMARY KEY,
-            habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            date DATE NOT NULL,
-            count INTEGER DEFAULT 1,
-            completed BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            UNIQUE(habit_id, date)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS courses (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            color VARCHAR(20),
-            progress INTEGER DEFAULT 0,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS topics (
-            id SERIAL PRIMARY KEY,
-            course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            order_index INTEGER DEFAULT 0,
-            status VARCHAR(20) DEFAULT 'pending',
-            estimated_minutes INTEGER,
-            actual_minutes INTEGER DEFAULT 0,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS pdfs (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
-            topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
-            filename VARCHAR(255) NOT NULL,
-            original_name VARCHAR(255) NOT NULL,
-            file_size BIGINT,
-            page_count INTEGER,
-            storage_path VARCHAR(500),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS quiz_questions (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
-            topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
-            question TEXT NOT NULL,
-            options JSONB NOT NULL,
-            correct_answer INTEGER NOT NULL,
-            explanation TEXT,
-            difficulty VARCHAR(20) DEFAULT 'medium',
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS quiz_results (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
-            topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
-            question_id INTEGER REFERENCES quiz_questions(id) ON DELETE CASCADE,
-            selected_answer INTEGER,
-            is_correct BOOLEAN,
-            time_taken_ms INTEGER,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS todos (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            completed BOOLEAN DEFAULT FALSE,
-            priority VARCHAR(20) DEFAULT 'medium',
-            due_date TIMESTAMP WITH TIME ZONE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS audio_files (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(255) NOT NULL,
-            text_content TEXT,
-            audio_url VARCHAR(500),
-            duration_seconds INTEGER,
-            voice VARCHAR(50),
-            language VARCHAR(10) DEFAULT 'es',
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
-    """)
-
-    # Create indexes for common queries
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_time ON sessions(user_id, start_time)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_habit_entries_user_date ON habit_entries(user_id, date)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_topics_course_order ON topics(course_id, order_index)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_completed ON todos(user_id, completed)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_quiz_results_user_time ON quiz_results(user_id, created_at)")
+_POST_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_days_week ON days(week_id)",
+    "CREATE INDEX IF NOT EXISTS idx_habit_entries_user_date ON habit_entries(user_id, date)",
+    "CREATE INDEX IF NOT EXISTS idx_topics_course_order ON topics(course_id, order_index)",
+    "CREATE INDEX IF NOT EXISTS idx_todos_user_completed ON todos(user_id, completed)",
+    "CREATE INDEX IF NOT EXISTS idx_quiz_results_user_time ON quiz_results(user_id, created_at)",
+]
 
 
 @contextmanager
@@ -284,3 +372,46 @@ def close_pool() -> None:
     if _connection_pool:
         _connection_pool.closeall()
         _connection_pool = None
+
+
+# ─── v2-compatible helpers (port) ─────────────────────────────────
+def get_connection():
+    """Borrow a raw connection from the pool (caller manages tx + close)."""
+    if _connection_pool is None:
+        init_db()
+    return _connection_pool.getconn()
+
+
+def put_connection(conn) -> None:
+    """Return a connection borrowed via get_connection() to the pool."""
+    if _connection_pool is not None:
+        _connection_pool.putconn(conn)
+
+
+def query(sql: str, params: tuple = None) -> List[Dict[str, Any]]:
+    """Run a SELECT and return all rows as dicts."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+
+
+def query_one(sql: str, params: tuple = None):
+    """Run a SELECT and return the first row as a dict (or None)."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()
+
+
+def execute_returning(sql: str, params: tuple = None):
+    """Run INSERT/UPDATE/DELETE … RETURNING and return the first row.
+
+    Returns None when no row was returned (e.g. zero rows affected).
+    """
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            conn.commit()
+            return row
