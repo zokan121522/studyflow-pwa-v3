@@ -215,25 +215,12 @@ if (!window.App.UI.displayTitle) {
 })();
 
 // ─── Stubs for deferred sub-phases ────────────────────────────────
-// agenda-habits.js (sub-phase D) needs App.Habits.{getHabitColumns,
-// loadHabitColumns, openColumnsOverlay, closeColumnsOverlay, _habitRowsHtml,
-// updateHabitRow, noteOpen}. Until the habits port lands we render an empty
-// table so the agenda list view is fully usable.
+// App.Habits is fully ported by features/habits/habits.js (sub-phase D);
+// agenda-habits.js uses it directly. No stub needed here.
 // agenda-timeline.js (sub-phase C) needs App.AgendaTimeline.{renderDay,
 // renderWeek, renderMonth, bindDrag, bindWeekDrag, bindMonthDrag}. The
 // ported core.js calls these only when the user picks the timeline view —
 // we return empty markup so the page never throws.
-window.App.Habits = window.App.Habits || {
-  _cols: [],
-  getHabitColumns: function () { return window.App.Habits._cols; },
-  loadHabitColumns: async function () { return window.App.Habits._cols; },
-  openColumnsOverlay: function () { alert("Columnas: pendiente de portar (sub-fase D)"); },
-  closeColumnsOverlay: function () {},
-  _habitRowsHtml: function () { return ""; },
-  updateHabitRow: function () {},
-  noteOpen: function () {},
-};
-
 window.App.AgendaTimeline = window.App.AgendaTimeline || {
   renderDay: function () { return '<div class="empty-state">📅 Vista día (sub-fase C)</div>'; },
   renderWeek: function () { return '<div class="empty-state">🗓️ Vista semana (sub-fase C)</div>'; },

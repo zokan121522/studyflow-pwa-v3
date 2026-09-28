@@ -69,8 +69,77 @@ def _create_tables(cur) -> None:
     for ddl in _TABLE_DDL:
         cur.execute(ddl)
     _migrate_sessions(cur)
+    _migrate_habits(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
+
+
+def _migrate_habits(cur) -> None:
+    """Drop legacy v3-shape `habits` + `habit_entries` tables and create the
+    v2-shape columnar tables (habit_columns / habit_entries / habit_notes).
+
+    Sub-phase D ported the Hábitos feature from v2 which uses polymorphic
+    key/value entries per day instead of one row per habit. The legacy tables
+    were created by an earlier v3 init and are now stale; CREATE TABLE IF NOT
+    EXISTS can't replace them so we drop first.
+    """
+    cur.execute("DROP TABLE IF EXISTS habit_entries_old CASCADE")
+    if _habits_is_legacy(cur):
+        cur.execute("DROP TABLE IF EXISTS habit_entries CASCADE")
+        cur.execute("DROP TABLE IF EXISTS habits CASCADE")
+    _create_v2_habits(cur)
+
+
+def _habits_is_legacy(cur) -> bool:
+    """Return True if the existing `habit_entries` table has the v3 shape
+    (SERIAL id, habit_id FK) rather than the v2 shape (date+key+user_id PK).
+    """
+    cur.execute(
+        "SELECT to_regclass('public.habit_entries') AS reg"
+    )
+    row = cur.fetchone()
+    if not row or not row["reg"]:
+        return False  # table doesn't exist — nothing to migrate
+    cur.execute(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = 'habit_entries' AND column_name = 'id'"
+    )
+    id_row = cur.fetchone()
+    return id_row is not None and id_row["data_type"] == "integer"
+
+
+def _create_v2_habits(cur) -> None:
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS habit_columns (
+            key        TEXT NOT NULL,
+            user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            label      TEXT NOT NULL,
+            type       TEXT NOT NULL DEFAULT 'checkbox',
+            "order"    INTEGER DEFAULT 0,
+            note       TEXT DEFAULT '',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            PRIMARY KEY (key, user_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS habit_entries (
+            date       TEXT NOT NULL,
+            key        TEXT NOT NULL,
+            user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            value      TEXT DEFAULT '',
+            PRIMARY KEY (date, key, user_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS habit_notes (
+            date       TEXT NOT NULL,
+            key        TEXT NOT NULL,
+            user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            note       TEXT DEFAULT '',
+            PRIMARY KEY (date, key, user_id)
+        )
+    """)
 
 
 _TABLE_DDL = [
@@ -127,31 +196,6 @@ _TABLE_DDL = [
         user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         calendars_json TEXT DEFAULT '[]',
         updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS habits (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        frequency VARCHAR(20) DEFAULT 'daily',
-        target_count INTEGER DEFAULT 1,
-        color VARCHAR(20),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS habit_entries (
-        id SERIAL PRIMARY KEY,
-        habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        date DATE NOT NULL,
-        count INTEGER DEFAULT 1,
-        completed BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        UNIQUE(habit_id, date)
     )
     """,
     """
@@ -313,6 +357,7 @@ def _create_v2_sessions(cur) -> None:
 _POST_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_days_week ON days(week_id)",
     "CREATE INDEX IF NOT EXISTS idx_habit_entries_user_date ON habit_entries(user_id, date)",
+    "CREATE INDEX IF NOT EXISTS idx_habit_notes_user_date ON habit_notes(user_id, date)",
     "CREATE INDEX IF NOT EXISTS idx_topics_course_order ON topics(course_id, order_index)",
     "CREATE INDEX IF NOT EXISTS idx_todos_user_completed ON todos(user_id, completed)",
     "CREATE INDEX IF NOT EXISTS idx_quiz_results_user_time ON quiz_results(user_id, created_at)",

@@ -116,7 +116,7 @@
       } catch (e) { alert("Error al añadir categoría (puede que ya exista)"); }
     });
 
-    // Columns overlay (sub-phase D stub — just close button + TODO alert)
+    // Columns overlay (sub-phase D — wired to App.Habits.addColumn)
     document.getElementById("columns-overlay")?.addEventListener("click", function (e) {
       if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
     });
@@ -124,7 +124,9 @@
       document.getElementById("columns-overlay")?.classList.remove("open");
     });
     document.getElementById("clo-add")?.addEventListener("click", function () {
-      alert("Columnas de hábitos: pendiente de portar (sub-fase D)");
+      if (window.App.Habits && window.App.Habits.addColumn) {
+        window.App.Habits.addColumn();
+      }
     });
 
     // Habit-notes overlay (✕ button — the overlay shell also closes on
