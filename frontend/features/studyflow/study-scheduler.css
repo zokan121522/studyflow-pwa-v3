@@ -1,0 +1,167 @@
+/* ─── Study Scheduler FAB + SCORM settings panel (S7b-B) ────────────
+ * Ported from v2 study-scheduler.css (FAB + dropdown menu) and extended
+ * with the settings modal. Kept in its own file because studyflow-blocks.css
+ * already exceeds the 500-line ceiling.
+ */
+
+/* ─── Floating button ─────────────────────────────────────────────── */
+.study-scheduler-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 900;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.study-scheduler-fab:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 10px 26px rgba(79, 70, 229, 0.55);
+}
+.study-scheduler-fab:active { transform: scale(0.95); }
+
+/* ─── Dropdown menu ───────────────────────────────────────────────── */
+.study-scheduler-menu {
+  position: fixed;
+  bottom: 92px;             /* above the FAB */
+  right: 24px;
+  z-index: 899;             /* below the FAB so it stays clickable */
+  min-width: 230px;
+  max-width: 280px;
+  background: var(--surface-2, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  transform-origin: bottom right;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.study-scheduler-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.study-scheduler-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text, #1f2937);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.study-scheduler-menu-item:hover {
+  background: var(--surface-3, rgba(79, 70, 229, 0.09));
+}
+.ss-menu-icon { font-size: 16px; }
+.ss-menu-label { flex: 1; }
+
+/* ─── Settings modal ──────────────────────────────────────────────── */
+.ss-settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.ss-settings-modal {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  color: var(--text, #1f2937);
+}
+.ss-settings-modal h2 {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+}
+.ss-settings-sub {
+  margin: 0 0 16px 0;
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+  line-height: 1.5;
+}
+.ss-settings-field { margin-bottom: 12px; }
+.ss-settings-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.ss-settings-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--bg, #fff);
+  color: var(--text, #1f2937);
+}
+.ss-settings-field input:focus {
+  outline: 2px solid rgba(79, 70, 229, 0.5);
+  outline-offset: 1px;
+}
+.ss-settings-hint {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+}
+.ss-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.ss-settings-spacer { flex: 1; }
+.ss-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--surface-2, #f3f4f6);
+  color: var(--text, #1f2937);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ss-btn.primary {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  border-color: transparent;
+  color: #fff;
+}
+.ss-btn:disabled { opacity: 0.6; cursor: default; }
+.ss-settings-status {
+  font-size: 12px;
+  margin-top: 10px;
+  min-height: 16px;
+}
+.ss-settings-status.ok   { color: #16a34a; }
+.ss-settings-status.err  { color: #dc2626; }
+.ss-settings-status.info { color: var(--text-muted, #6b7280); }

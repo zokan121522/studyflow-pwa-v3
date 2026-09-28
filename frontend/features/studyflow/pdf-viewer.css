@@ -201,3 +201,23 @@
   overflow: auto;
 }
 .pdf-annots-list li { margin-bottom: 2px; word-break: break-word; }
+/* ── SCORM import pseudo-terminal (S7b-A: SSE progress stream) ────── */
+.sf-pdfi-term {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sf-pdfi-term > div { margin: 0; }
+.sf-pdfi-term-err  { color: #ff7b72; }
+.sf-pdfi-term-ok   { color: #56d364; font-weight: 600; }
+.sf-pdfi-term-info { color: #8b949e; }
+.sf-pdfi-term-dim  { color: #6e7681; }

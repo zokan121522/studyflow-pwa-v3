@@ -198,6 +198,25 @@ window.App.Courses = (function () {
     }
   }
 
+  // ── _updateCourseProgress(courseId) — actualiza barra de progreso ──
+  function _updateCourseProgress(courseId) {
+    const item = document.querySelector(`.course-item[data-course-id="${courseId}"]`);
+    if (!item) return;
+    const topics = STATE()._expandedCourseTopics || [];
+    let doneCount = 0, totalCount = 0;
+    for (const t of topics) {
+      for (const b of (t.blocks || [])) {
+        totalCount++;
+        if (b.done) doneCount++;
+      }
+    }
+    const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+    const fill = item.querySelector('.ci-progress-fill');
+    if (fill) fill.style.width = pct + '%';
+    const lbl = item.querySelector('.ci-block-count');
+    if (lbl) lbl.textContent = `${topics.length} temas · ${doneCount}/${totalCount}`;
+  }
+
   // ── _toggleBlockDone(courseId, blockId) — called from sidebar checkbox ────
   async function _toggleBlockDone(courseId, blockId) {
     try {
