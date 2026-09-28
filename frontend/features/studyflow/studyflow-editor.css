@@ -1,0 +1,286 @@
+/* ─── Studyflow Markdown Editor — toolbar + color picker + split ──
+   S4.5: dark-theme adapted from v2 courses.css (lines 989-1240).
+   Loaded AFTER courses.css + studyflow-blocks.css + content-blocks.css,
+   BEFORE courses-blocks.js (uses App.MarkdownEditor). All selectors
+   scoped to .sf-td-block / .sf-block-card so they don't leak into the
+   session overlay (which uses the same .md-toolbar class but is
+   already styled in content-blocks.css). */
+
+/* ─── Toolbar (bold | italic | h1… | ul/ol | link/code/table | quote/codeblock/hr | color) ── */
+.md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--bg);
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+}
+.md-tb-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: nowrap;
+  font-family: var(--font);
+  min-width: 28px;
+  transition: background .12s, border-color .12s;
+}
+.md-tb-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-light);
+}
+.md-tb-btn:active {
+  background: var(--primary);
+  color: #fff;
+}
+.md-tb-btn strong { font-weight: 700; }
+.md-tb-btn em { font-style: italic; }
+.md-tb-sep {
+  width: 1px;
+  background: var(--border);
+  margin: 2px 4px;
+  align-self: stretch;
+}
+
+/* ─── Color picker (🎨) — wrap, panel, grid, swatches ─────────── */
+.md-color-wrap {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+.md-color-btn { padding: 2px 6px; font-size: 14px; }
+.md-color-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+  min-width: 130px;
+}
+.md-color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  gap: 4px;
+}
+.md-color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform .12s;
+}
+.md-color-swatch:hover {
+  transform: scale(1.18);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+.md-color-free {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 4px;
+  cursor: pointer;
+  background: linear-gradient(135deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f);
+  overflow: hidden;
+}
+.md-color-free::-webkit-color-swatch-wrapper { padding: 0; }
+.md-color-free::-webkit-color-swatch { border: none; }
+.md-color-free::-moz-color-swatch { border: none; }
+.md-color-clear {
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+}
+.md-color-clear:hover { background: var(--surface-hover); }
+
+/* ─── Edit form chrome (title + toolbar + split + actions) ───── */
+.sf-td-md-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sf-td-md-title {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+}
+.sf-td-md-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* ─── Split editor (textarea | live preview) — the "doble pantalla" ── */
+.md-edit-split {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.md-edit-split .md-editor {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  resize: vertical;
+  min-height: 260px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  outline: none;
+}
+.md-edit-split .md-editor:focus {
+  background: #0f172a;
+}
+.md-edit-split .md-preview {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 600px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.md-edit-split .md-preview > :first-child { margin-top: 0; }
+.md-edit-split .md-preview > :last-child { margin-bottom: 0; }
+/* Tables / pre / code blocks inside the preview: small & compact */
+.md-edit-split .md-preview pre {
+  background: #0f172a;
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  margin: 8px 0;
+}
+.md-edit-split .md-preview code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.md-edit-split .md-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12.5px;
+  display: block;
+  overflow-x: auto;
+}
+.md-edit-split .md-preview th,
+.md-edit-split .md-preview td {
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  text-align: left;
+}
+.md-edit-split .md-preview th {
+  background: var(--bg);
+  font-weight: 600;
+}
+.md-edit-split .md-preview tr:nth-child(even) {
+  background: var(--bg);
+}
+
+/* Toolbar flush with the split container (no double border top) */
+.md-toolbar + .md-edit-split {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* ─── Block add bar (v2-style .abb-btn chips) ─────────────────── */
+.sf-td-add-bar {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  align-items: center;
+}
+.sf-td-add-toggle {
+  align-self: center;
+  font-weight: 700;
+}
+.sf-td-add-toggle-icon {
+  font-size: 14px;
+  margin-right: 4px;
+}
+.sf-td-add-chips {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.sf-td-add-bar.is-open .sf-td-add-chips { display: flex; }
+.sf-td-add-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--font);
+  transition: background .12s, border-color .12s;
+  line-height: 1;
+}
+.sf-td-add-chip:hover {
+  border-color: var(--primary);
+  background: var(--surface-hover);
+}
+.sf-td-add-chip-icon { font-size: 13px; }
+
+/* ─── Mobile responsive: stack split ─────────────────────────── */
+@media (max-width: 720px) {
+  .md-edit-split {
+    flex-direction: column;
+  }
+  .md-edit-split .md-editor {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    min-height: 160px;
+  }
+  .md-color-panel { right: auto; left: 0; }
+}
