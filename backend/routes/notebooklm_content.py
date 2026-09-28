@@ -7,7 +7,7 @@ Business logic in backend/ai/notebooklm/ modules (flat v3 imports).
 Registered by the server under the ``/api`` prefix, so full routes are:
   POST /api/ai/notebooklm/youtube-to-markdown   → YouTube → Markdown
   POST /api/ai/notebooklm/youtube-to-html       → YouTube → HTML
-  POST /api/ai/notebooklm/generate-audio        → OpenZEN script + transcript → edge-tts TTS
+  POST /api/ai/notebooklm/generate-audio        → AI script (NotebookLM/OpenZEN) + transcript → edge-tts TTS
   POST /api/ai/notebooklm/infographic           → NotebookLM artifact → PNG
   POST /api/ai/notebooklm/generate-test         → Gemini Chat API → JSON
   POST /api/ai/notebooklm/enhance-markdown      → Gemini Chat API → enhanced MD
@@ -136,11 +136,13 @@ def generate_audio(current_user_id: int):
         "block_ids": "abc" | ["abc", "def"],   (multi-markdown)
         "topic_id": "...",
         "language": "es"|"en",
-        "duration": "complete"|"5"|"10"|"20"   (default "complete")
+        "duration": "complete"|"5"|"10"|"20",  (default "complete")
+        "provider": "notebooklm"|"opencode-acp" (default "notebooklm")
     }
-    NOTE: duration 5/10/20 needs the opencode-acp provider (OpenZEN) —
-    fails with a clear error until its deferred sub-phase. "complete"
-    works now with edge-tts.
+    duration "complete" is verbatim edge-tts (no AI). Duration 5/10/20
+    rewrites the content into a timed script using the given AI provider:
+    "notebooklm" (Gemini, default) works now; "opencode-acp" (OpenZEN)
+    fails with a clear error until its deferred sub-phase.
     Returns: { "task_id": "..." }
     """
     data = request.get_json(silent=True) or {}
@@ -148,9 +150,12 @@ def generate_audio(current_user_id: int):
     topic_id = (data.get("topic_id") or "").strip()
     language = (data.get("language") or "es").strip()
     duration = (data.get("duration") or "complete").strip()
+    provider_name = (data.get("provider") or "notebooklm").strip()
 
     if language not in ("es", "en"):
         language = "es"
+    if provider_name not in ("notebooklm", "opencode-acp"):
+        return jsonify(error="Unsupported provider"), 400
     if not block_ids:
         return jsonify(error="Missing required field: block_ids"), 400
 
@@ -162,6 +167,7 @@ def generate_audio(current_user_id: int):
             user_id=current_user_id,
             language=language,
             duration=duration,
+            provider_name=provider_name,
         )
         return jsonify(result)
     except ValueError as e:

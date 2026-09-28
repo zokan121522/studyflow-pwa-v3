@@ -1,5 +1,5 @@
 """
-Audio generation via edge-tts — verbatim reading or OpenZEN-timed script.
+Audio generation via edge-tts — verbatim reading or AI-timed script.
 
 Pipeline (duration="complete", default):
 1. Fetch block content from DB
@@ -11,8 +11,9 @@ Pipeline (duration="complete", default):
 
 Pipeline (duration="5"|"10"|"20", Issue #130):
 1. Fetch block content from DB
-2. Ask OpenZEN (opencode-acp) to rewrite the content into a script that fits
-   the target minutes (~150 words/min word budget)
+2. Ask the configured AI provider (NotebookLM/Gemini by default; OpenZEN
+   when it lands) to rewrite the content into a script that fits the
+   target minutes (~150 words/min word budget)
 3. Persist the provider-reported token usage to ai_usage_log (source='mp3')
    for cost tracking
 4. Call edge_tts to generate MP3 from the generated script
@@ -139,8 +140,13 @@ def _generate_speech(text: str, voice: str, output_path: str) -> None:
     asyncio.run(_run())
 
 
-def _generate_duration_script(content_text: str, language: str, minutes: str) -> tuple[str, dict | None]:
-    """Ask OpenZEN to rewrite the content into a script fitting ~minutes min.
+def _generate_duration_script(
+    content_text: str,
+    language: str,
+    minutes: str,
+    provider_name: str = "notebooklm",
+) -> tuple[str, dict | None]:
+    """Ask an AI provider to rewrite the content into a script fitting ~minutes min.
 
     Uses the duration-tuned prompt with a word budget (~150 words/min).
     Returns the plain-text script, which is then narrated by edge-tts and
@@ -155,13 +161,16 @@ def _generate_duration_script(content_text: str, language: str, minutes: str) ->
         content_text: The full text content of the source block.
         language: Target language code ('es' or 'en').
         minutes: Target duration key, one of '5'|'10'|'20'.
+        provider_name: AI provider used to write the script.
+            'notebooklm' (default, Gemini) or 'opencode-acp' (OpenZEN,
+            deferred until the OpenCode sidecar exists).
 
     Returns:
         (script, usage) — the plain-text audio script and the usage dict
         {input_tokens, output_tokens, total_tokens, cost, ...} or None.
 
     Raises:
-        RuntimeError: If OpenZEN returns an empty response.
+        RuntimeError: If the provider returns an empty response.
     """
     prompt = (
         AUDIO_SCRIPT_PROMPT_DURATION_EN
@@ -172,7 +181,7 @@ def _generate_duration_script(content_text: str, language: str, minutes: str) ->
         minutes=minutes,
         words=_DURATION_WORD_BUDGET[minutes],
     )
-    provider = get_provider("opencode-acp")
+    provider = get_provider(provider_name)
     result = provider.chat(
         messages=[
             {"role": "system", "content": system_prompt},
@@ -181,7 +190,7 @@ def _generate_duration_script(content_text: str, language: str, minutes: str) ->
     )
     script = (result.get("content") or "").strip()
     if not script:
-        raise RuntimeError("OpenZEN devolvió una respuesta vacía")
+        raise RuntimeError("El proveedor devolvió una respuesta vacía")
     usage = result.get("usage")
     return script, usage
 
@@ -202,12 +211,20 @@ def _log_usage(
     user_id: str,
     duration: str,
     usage: dict | None,
+    task_type: str = "notebooklm_audio",
 ) -> None:
     """Persist provider token usage to ai_usage_log (source='mp3').
 
     Only writes a row when usage data is present (i.e. an AI call
     actually consumed tokens — duration != 'complete').  For verbatim
     audio there is no AI call, so nothing is logged.
+
+    Args:
+        task_id: The ai_tasks row id.
+        user_id: The user owning the task.
+        duration: The target duration key ('5'|'10'|'20').
+        usage: The provider-reported usage dict, or None to skip.
+        task_type: 'notebooklm_audio' (Gemini) or 'opencode_audio' (OpenZEN).
     """
     if not usage:
         return
@@ -217,10 +234,11 @@ def _log_usage(
             model_id, provider_id,
             input_tokens, output_tokens, reasoning_tokens,
             cache_read_tokens, cache_write_tokens, total_tokens, cost)
-           VALUES (%s, %s, 'opencode_audio', 'mp3', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+           VALUES (%s, %s, %s, 'mp3', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (
             user_id,
             task_id,
+            task_type,
             duration,
             usage.get("model_id"),
             usage.get("provider_id"),
@@ -244,23 +262,29 @@ def _run_audio_task(
     content_text: str,
     language: str = "es",
     duration: str = "complete",
+    provider_name: str = "notebooklm",
+    task_type: str = "notebooklm_audio",
 ) -> None:
-    """Background thread: content → (verbatim | OpenZEN script) → edge-tts → MP3.
+    """Background thread: content → (verbatim | AI script) → edge-tts → MP3.
 
     duration="complete" → the MP3 reads the source content verbatim (no AI
         rewrite), and the same content is stored as the transcript — audio
         and transcript coincide by construction (Issue #123).
-    duration="5"|"10"|"20" → OpenZEN rewrites the content into a script that
-        fits the target minutes; that script is both narrated and stored as
-        the transcript — audio and transcript still coincide (Issue #130).
-        The provider token usage is persisted to ai_usage_log (source='mp3').
+    duration="5"|"10"|"20" → the configured AI provider rewrites the content
+        into a script that fits the target minutes; that script is both
+        narrated and stored as the transcript — audio and transcript still
+        coincide (Issue #130). The provider token usage is persisted to
+        ai_usage_log (source='mp3').
 
     Args:
         task_id: The ai_tasks row id to update.
         user_id: The user owning the task (for ai_usage_log).
         content_text: The full text content of the source block.
         language: Target language code ('es' or 'en').
-        duration: 'complete' (verbatim) or '5'|'10'|'20' (OpenZEN-timed).
+        duration: 'complete' (verbatim) or '5'|'10'|'20' (AI-timed).
+        provider_name: AI provider for the timed script — 'notebooklm'
+            (default, Gemini) or 'opencode-acp' (OpenZEN, deferred).
+        task_type: ai_tasks/ai_usage_log task_type to record with.
     """
     _validate_duration(duration)
     _ensure_dirs()
@@ -288,13 +312,16 @@ def _run_audio_task(
                 "⏳ Generando audio con TTS…",
             )
         else:
-            # ── Duration path: OpenZEN rewrites into a timed script ─────
+            # ── Duration path: AI rewrites into a timed script ───────────
+            provider_label = (
+                "NotebookLM" if provider_name == "notebooklm" else "OpenZEN"
+            )
             _update_progress(
                 task_id,
-                f"🤖 Generando guion de {duration} minutos con OpenZEN…",
+                f"🤖 Generando guion de {duration} minutos con {provider_label}…",
             )
             clean_script, usage = _generate_duration_script(
-                content_text, language, duration
+                content_text, language, duration, provider_name
             )
             transcript_md = clean_script
             _update_progress(
@@ -313,7 +340,7 @@ def _run_audio_task(
             raise RuntimeError("TTS produced empty audio file")
 
         # ── Persist token usage for AI-generated scripts ───────────────
-        _log_usage(task_id, user_id, duration, usage)
+        _log_usage(task_id, user_id, duration, usage, task_type)
 
         # ── Result URL for the frontend audio player ───────────────────
         audio_url = f"/api/audio/serve/{audio_filename}"
@@ -349,6 +376,7 @@ def create_audio_task(
     user_id: str,
     language: str = "es",
     duration: str = "complete",
+    provider_name: str = "notebooklm",
 ) -> dict:
     """Create an audio generation background task.
 
@@ -360,6 +388,9 @@ def create_audio_task(
         user_id: The user creating the task.
         language: Target language code ('es' or 'en'). Default 'es'.
         duration: 'complete' (verbatim, default) or '5'|'10'|'20' minutes.
+        provider_name: AI provider used when duration != 'complete':
+            'notebooklm' (Gemini, default) or 'opencode-acp' (OpenZEN,
+            deferred). Verbatim audio ('complete') never uses the provider.
 
     Returns:
         {"task_id": str}
@@ -371,6 +402,13 @@ def create_audio_task(
     if not block_ids:
         raise ValueError("Missing required field: block_ids")
 
+    if provider_name not in ("notebooklm", "opencode-acp"):
+        raise ValueError(f"Unsupported provider: {provider_name}")
+
+    task_type = (
+        "notebooklm_audio" if provider_name == "notebooklm" else "opencode_audio"
+    )
+
     from ai.notebooklm.utils import _coerce_id, _new_task_id, _resolve_blocks_content
 
     content_text, source_type, source_id = _resolve_blocks_content(block_ids, user_id)
@@ -381,15 +419,15 @@ def create_audio_task(
     task_row = execute_returning(
         """INSERT INTO ai_tasks
            (id, user_id, topic_id, task_type, format, source_type, source_id, status)
-           VALUES (%s, %s, %s, 'opencode_audio', 'audio', %s, %s, 'pending')
+           VALUES (%s, %s, %s, %s, 'audio', %s, %s, 'pending')
            RETURNING id""",
-        (_new_task_id(), user_id, topic_id_int, source_type, source_id),
+        (_new_task_id(), user_id, topic_id_int, task_type, source_type, source_id),
     )
     task_id = task_row["id"]
 
     thread = threading.Thread(
         target=_run_audio_task,
-        args=(task_id, user_id, content_text, language, duration),
+        args=(task_id, user_id, content_text, language, duration, provider_name, task_type),
         daemon=True,
     )
     thread.start()
