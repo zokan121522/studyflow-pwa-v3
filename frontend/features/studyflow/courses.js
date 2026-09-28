@@ -198,15 +198,52 @@ window.App.Courses = (function () {
 
     if (s.selectedTopicId && s.currentCourseId) {
       await _renderTopicDetail(centerEl, s.currentCourseId, s.selectedTopicId);
-      return;
-    }
-    if (s.currentCourseId) {
+    } else if (s.currentCourseId) {
       await _renderCourseLanding(centerEl, s.currentCourseId);
-      return;
+    } else {
+      centerEl.innerHTML =
+        '<div class="empty-state"><span class="big">📖</span><br>'
+        + 'Selecciona un curso del panel izquierdo o crea uno nuevo.</div>';
     }
-    centerEl.innerHTML =
-      '<div class="empty-state"><span class="big">📖</span><br>'
-      + 'Selecciona un curso del panel izquierdo o crea uno nuevo.</div>';
+    // Sub-phase SA — defensive addon gate. Lets S5 (quiz), S6
+    // (flashcards) and S9 (playground) plug in their stats panels
+    // by registering App.QuizStats / FlashcardsStats / PlaygroundStats
+    // modules. If App.Addons isn't loaded yet (script order) or the
+    // addon is disabled / module missing, the hook is a no-op — no
+    // console spam, updateCenter never breaks over addons.
+    await _renderAddonSections(centerEl, s.currentCourseId, s.selectedTopicId);
+  }
+
+  // ── _renderAddonSections() — forward-declared hook for S5/S6/S9 ─
+  // Each entry: {slug, render()} → render() is a thin call into the
+  // addon module's optional renderer (`window.App.QuizStats?.render`
+  // and friends). The gate is silent on missing pieces so S5/S6/S9
+  // land without touching this file again.
+  async function _renderAddonSections(centerEl, courseId, topicId) {
+    if (!centerEl) return;
+    const Addons = window.App.Addons;
+    if (!Addons || typeof Addons.isEnabled !== "function") return;
+
+    const hooks = [
+      { slug: "quiz",
+        render: () => window.App.QuizStats
+          && typeof window.App.QuizStats.render === "function"
+          && window.App.QuizStats.render(centerEl, courseId, topicId) },
+      { slug: "flashcards",
+        render: () => window.App.FlashcardsStats
+          && typeof window.App.FlashcardsStats.render === "function"
+          && window.App.FlashcardsStats.render(centerEl, courseId, topicId) },
+      { slug: "jsplayground",
+        render: () => window.App.PlaygroundStats
+          && typeof window.App.PlaygroundStats.render === "function"
+          && window.App.PlaygroundStats.render(centerEl, courseId, topicId) },
+    ];
+
+    for (const h of hooks) {
+      try {
+        if (await Addons.isEnabled(h.slug)) h.render();
+      } catch (_) { /* defensive: never break updateCenter */ }
+    }
   }
 
   // ── _renderCourseLanding(centerEl, courseId) ─────────────────

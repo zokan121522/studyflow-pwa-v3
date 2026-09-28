@@ -39,6 +39,8 @@
   <link rel="stylesheet" href="/features/studyflow/studyflow-editor.css">
   <!-- S7: pdf viewer (App.PdfViewer + App.PdfAnnots) -->
   <link rel="stylesheet" href="/features/studyflow/pdf-viewer.css">
+  <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
+  <link rel="stylesheet" href="/features/addons/addons.css">
   
   <!-- PWA Meta Tags -->
   <meta name="msapplication-TileColor" content="#16213e">
@@ -79,6 +81,10 @@
         <span class="week-nav" id="week-next" aria-label="Semana siguiente">▶</span>
       </div>
       <div class="header-right">
+        <!-- SA: ⚙️ addons manager entry (visible without login — single-user mode).
+             Opens App.AddonsManager.open() which lazy-injects #addons-overlay. -->
+        <button id="btn-addons" class="header-addons-btn"
+                title="Gestionar complementos" aria-label="Complementos">⚙️</button>
         <div id="user-nav" class="user-nav" style="display:none;">
           <div id="user-nav-trigger" class="user-nav-trigger">
             <span id="user-avatar" class="user-avatar"></span>
@@ -389,6 +395,12 @@
   <script src="/features/studyflow/pdf-viewer.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
   <script src="/features/studyflow/courses.js"></script>
+  <!-- SA: Addons Foundation — registry + management UI. Loads AFTER courses.js
+       so the courses module's defensive isEnabled() hooks see App.Addons on
+       first updateCenter(). S5/S6/S9 modules load AFTER this so their manifests
+       register() into App.Addons in time for the marketplace grid. -->
+  <script src="/features/addons/addons-core.js"></script>
+  <script src="/features/addons/addons-manager.js"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
        App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,

@@ -1,15 +1,18 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v3 (S7): bumped ASSET_CACHE so the activate handler evicts the
-// S4.5 cache and the new install pre-caches pdf.js + the pdf viewer
-// module. API_CACHE_PWA keeps its name (no API contract changes here).
-const ASSET_CACHE = 'studyflow-assets-v3';
+// v4 (SA): bumped ASSET_CACHE so the activate handler evicts the
+// S7 cache and the new install pre-caches addons-core.js +
+// addons-manager.js + addons.css. API_CACHE keeps its name
+// (no API contract changes here).
+const ASSET_CACHE = 'studyflow-assets-v4';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v3 (S7): added pdf-viewer.js + pdf-viewer.css + vendored pdf.js
-// (UMD build + worker) so pdf-ref blocks render offline.
+// v4 (SA): added addons-core.js + addons-manager.js + addons.css so
+// the ⚙️ button + management overlay work offline (the management
+// page reads from the cached catalog, which the SW already fetches
+// network-first and falls back to cache).
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -34,6 +37,10 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-viewer.css',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
+  // SA: addons foundation (registry + management overlay)
+  '/features/addons/addons-core.js',
+  '/features/addons/addons-manager.js',
+  '/features/addons/addons.css',
 ];
 
 // Maximum age for cached API responses (5 minutes)

@@ -1,0 +1,114 @@
+/* ─── Addons Management — overlay styles (Sub-phase SA) ─────────
+   Dark-adapted from v2 studyflow-hub/tierra/frontend/features/studyflow/addons.css.
+   Uses the same v3 dark CSS variables that styles.css exposes — every
+   v2 color is already mapped in shared/css/variables.css so no
+   variable renames are needed. Layout follows the v2 grid (auto-fill,
+   min 250px) but lives inside the existing .overlay/.omodal shell
+   (defined in styles.css) instead of a full-page panel. */
+
+.am-view {
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+.am-spacer { height: 60px; pointer-events: none; }
+
+.am-view-header {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 14px;
+}
+.am-view-title { font-size: 15px; font-weight: 700; }
+.am-view-sub { font-size: 11px; color: var(--text-muted); }
+
+.am-loading, .am-empty {
+  padding: 32px 8px; text-align: center;
+  color: var(--text-muted); font-size: 13px;
+}
+
+/* ─── Card grid (auto-fill, mirror v2) ───────────────────────── */
+.am-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.am-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); transition: .15s;
+}
+.am-card:hover { border-color: var(--primary); }
+
+.am-card-head { display: flex; align-items: center; gap: 8px; }
+.am-card-icon { font-size: 18px; line-height: 1; }
+.am-card-name { font-size: 13px; font-weight: 700; flex: 1; }
+.am-card-version {
+  font-size: 10px; color: var(--text-muted);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 2px 6px; border-radius: 8px; white-space: nowrap;
+}
+
+.am-card-desc {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.4;
+  min-height: 32px;
+}
+
+.am-card-state {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+
+.am-state-pill {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 10px; border-radius: 12px;
+}
+.am-state-ok       { color: var(--green); background: var(--green-bg); }
+.am-state-off      {
+  color: var(--text-muted); background: var(--surface);
+  border: 1px solid var(--border);
+}
+.am-state-disabled { color: var(--amber); background: var(--amber-bg); }
+
+.am-hidden-tag {
+  font-size: 10px; color: var(--text-muted);
+  background: var(--surface); border: 1px dashed var(--border);
+  padding: 2px 6px; border-radius: 8px;
+}
+
+.am-card-actions {
+  display: flex; gap: 6px; margin-top: auto; flex-wrap: wrap;
+}
+
+.am-btn {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text-secondary);
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: .15s;
+}
+.am-btn:hover:not(:disabled) {
+  border-color: var(--primary); color: var(--primary);
+}
+.am-btn:disabled { opacity: .5; cursor: default; }
+.am-btn-primary {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.am-btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark); color: #fff;
+}
+.am-btn-danger { border-color: var(--red); color: var(--red); }
+.am-btn-danger:hover:not(:disabled) { background: var(--red-bg); }
+
+/* ─── Header ⚙️ button (matches hamburger styling) ────────────── */
+.header-addons-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); cursor: pointer; font-size: 18px;
+  color: var(--text); transition: background 0.15s, border-color 0.15s;
+  margin-left: 4px;
+}
+.header-addons-btn:hover {
+  background: var(--surface-hover); border-color: var(--primary);
+}
+.header-addons-btn:active { background: var(--border); }
+
+/* ─── Modal sizing for the addons overlay (wider than default 480) */
+#addons-overlay .omodal { max-width: 760px; }
