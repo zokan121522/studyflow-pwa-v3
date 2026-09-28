@@ -5,7 +5,7 @@ const API_URL = (() => {
   // In production, API is on same origin
   // In development, frontend on :3000, backend on :8080
   const isLocalDev = location.port === '3000' || location.hostname === 'localhost';
-  return isLocalDev ? 'http://localhost:8080/api' : '/api';
+  return isLocalDev ? 'http://localhost:8082/api' : '/api';
 })();
 
 
@@ -248,6 +248,10 @@ window.API = API;
 window.Auth = Auth;
 window.API_URL = API_URL;
 
+// ─── Register Feature Modules ──────────────────────────────
+App.registerModule('Agenda', window.AgendaModule || null);
+App.registerModule('Courses', window.CoursesModule || null);
+
 
 // ─── Auth Event Listener ────────────────────────────────────────────
 window.addEventListener('auth:unauthorized', () => {
@@ -330,6 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     weekStart.setDate(today.getDate() - today.getDay() - 7);
     App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
     App.state.currentDay = null;
+    window.AgendaGlobals?.syncStateFromApp();
     renderActiveTab();
   });
   
@@ -339,6 +344,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     weekStart.setDate(today.getDate() - today.getDay() + 7);
     App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
     App.state.currentDay = null;
+    window.AgendaGlobals?.syncStateFromApp();
     renderActiveTab();
   });
   
@@ -347,20 +353,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   weekStart.setDate(today.getDate() - today.getDay());
   App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
   App.state.currentDay = today.toISOString().slice(0, 10);
+  window.AgendaGlobals?.syncStateFromApp();
   
   // Initialize auth
-  await App.initAuth();
-  
+  // Initialize auth
+  try {
+    await App.initAuth();
+  } catch (e) {
+    console.log('[App] initAuth error, continuing:', e);
+    Auth.clearToken();
+  }
+
   renderActiveTab();
   updateOnlineStatus();
-  
+
   const loading = document.getElementById('loading-screen');
   if (loading) loading.classList.add('hidden');
+  
+  // Show the app container
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('hidden');
 });
 
 
 // ─── Render Active Tab ──────────────────────────────────────────────
 function renderActiveTab() {
+  window.AgendaGlobals?.syncStateFromApp();
   const tab = App.state.activeTab;
   if (tab === 'agenda' && App.modules.Agenda) {
     App.modules.Agenda.render();
@@ -369,6 +387,10 @@ function renderActiveTab() {
   }
   updateWeekLabel();
 }
+
+// ─── Agenda global handlers (Escape, focus-mode, category overlay,
+// columns-overlay stub) live in features/agenda/agenda-handlers.js —
+// loaded before app.js by index.html.
 
 
 // ─── Utility Functions ──────────────────────────────────────────────
