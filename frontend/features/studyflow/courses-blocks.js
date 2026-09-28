@@ -1,29 +1,34 @@
 // ─── Courses Blocks — block CRUD/edit UI for the topic detail ─────
 // Namespace: window.App.CoursesBlocks
 // Dependencies: window.App.UI (escHtml), window.App.CoursesAPI,
-//               window.App.ContentBlocks._renderMd, window.STATE.
+//               window.App.ContentBlocks._renderMd, window.STATE,
+//               window.App.MarkdownEditor (S4.5).
 //
 // SCOPE (S3):
 //   • render blocks for a topic (read-only preview by type)
-//   • inline-edit markdown / text blocks
-//   • add block via "+ Añadir bloque" affordance with type menu
-//   • toggle done / delete / reorder (basic move buttons)
+//   • add block via "+ Añadir bloque" affordance (chip menu)
 //
 // SCOPE (S4 — additive, SF-Card visuals):
 //   • _renderBlockCard(b, courseId) — richer card with category color
 //     strip, type icon, title, collapsible body, up/down/done/edit/
-//     delete affordances. Renders same fields as _renderBlock but
-//     wraps them in a more v2-shaped "block-detail" structure so the
-//     notes drawer / future cards can dock underneath.
-//   • _attachCardHandlers(host, courseId, topicId) — extension that
-//     handles up/down reorder (PATCH /courses/<cid>/blocks with
-//     reordered ids) + collapse toggle. Composes on top of
-//     _attachBlockHandlers (which still owns edit/save/cancel/done/
-//     delete/add).
+//     delete affordances.
+//   • _attachCardHandlers(host, courseId, topicId) — collapse (with
+//     backend persistence via PUT {collapsed}) + up/down reorder.
+//
+// SCOPE (S4.5 — full v2 markdown editor):
+//   • Edit form is now delegated to App.MarkdownEditor.editForm(block):
+//     title input + toolbar (13 buttons + 🎨 color panel) + SPLIT
+//     editor (textarea | live preview) wired by attachLivePreview().
+//   • "+ Añadir bloque" bar becomes the v2 chip menu: 📝 Markdown,
+//     📄 Texto, 📕 PDF, ▶️ YouTube, 🖼 Imagen, 🌐 Web, ❓ Ejercicio,
+//     ➖ Separador. Types backed by v3 backend (markdown/content/
+//     pdf-ref/youtube) create real blocks; types whose viewers land
+//     in S7/S9 (exercise/interactive) create a markdown placeholder
+//     with the right title so the block renders.
 //
 // Block types supported: markdown, content (plain text), separator,
-// pdf-ref (url only), youtube (url only). Other types fall back to a
-// generic read-only card.
+// pdf-ref (url only), youtube (url only), image, exercise,
+// interactive. Unknown types fall back to a generic read-only card.
 
 window.App = window.App || {};
 window.App.CoursesBlocks = (function () {
@@ -35,16 +40,29 @@ window.App.CoursesBlocks = (function () {
     toggleBlockDone, reorderBlocks, listTopicBlocks,
   } = window.App.CoursesAPI;
   const { _renderMd } = window.App.ContentBlocks;
+  const MdEditor = window.App.MarkdownEditor;
 
-  // ── Block-type → icon + label + color strip (UI affordances) ──
-  // color maps each type to a thin gradient strip on the left edge of
-  // the card (S4 SF-Card look).
+  // ── Block-type → icon + label + strip + per-type create defaults ──
+  // defaults drive the create-block payload (content/url/title seed).
   const TYPE_META = {
-    markdown: { icon: "📝", label: "Markdown", strip: "var(--primary)" },
-    content:  { icon: "📄", label: "Texto",    strip: "#3b82f6" },
-    separator:{ icon: "➖", label: "Separador",strip: "var(--border-light)" },
-    "pdf-ref":{ icon: "📕", label: "PDF-link", strip: "#ef4444" },
-    youtube:  { icon: "▶️", label: "YouTube",  strip: "#f59e0b" },
+    markdown:    { icon: "📝", label: "Markdown",  strip: "var(--primary)",
+      defaults: { content: "",  url: "", title: "" } },
+    content:     { icon: "📄", label: "Texto",     strip: "#3b82f6",
+      defaults: { content: "",  url: "", title: "" } },
+    separator:   { icon: "➖", label: "Separador", strip: "var(--border-light)",
+      defaults: { content: "",  url: "", title: "Separador" } },
+    "pdf-ref":   { icon: "📕", label: "PDF",       strip: "#ef4444",
+      defaults: { content: "",  url: "", title: "Nuevo PDF" } },
+    youtube:     { icon: "▶️", label: "YouTube",   strip: "#f59e0b",
+      defaults: { content: "",  url: "", title: "Nuevo YouTube" } },
+    image:       { icon: "🖼", label: "Imagen",    strip: "#10b981",
+      defaults: { content: "",  url: "", title: "Nueva imagen" } },
+    exercise:    { icon: "❓", label: "Ejercicio", strip: "#a855f7",
+      defaults: { content: "## Ejercicio\n\nEnunciado…",
+                  url: "", title: "Nuevo ejercicio" } },
+    interactive: { icon: "🌐", label: "Página web",strip: "#06b6d4",
+      defaults: { content: "<h1>Hola</h1>",
+                  url: "", title: "Nueva página web" } },
   };
 
   function meta(type) {
@@ -109,55 +127,39 @@ window.App.CoursesBlocks = (function () {
   }
 
   // ── _renderAddBar(courseId, topicId) → HTML ──────────────────
-  // "+ Añadir bloque" affordance: a single button that reveals a
-  // dropdown of supported block types.
+  // v2-style "+ Añadir bloque" bar. The toggle reveals a horizontal
+  // row of type-specific chips (markdown / content / pdf / youtube /
+  // image / exercise / interactive / separator). Each chip posts a
+  // new block via App.CoursesAPI.addBlock using the type's defaults
+  // (see TYPE_META.defaults) so the new block renders immediately.
   function _renderAddBar(courseId, topicId) {
     const topicAttr = topicId ? ` data-topic-id="${topicId}"` : "";
-    let html = `<div class="sf-td-add-bar" data-course-id="${courseId}"${topicAttr}>`;
-    html += `<button class="sf-td-add-toggle ht-btn">`
-      + `➕ Añadir bloque</button>`;
-    html += `<div class="sf-td-add-menu">`;
+    let chips = "";
     for (const [type, m] of Object.entries(TYPE_META)) {
-      html += `<div class="sf-td-add-item" data-type="${escHtml(type)}">`
-        + `<span class="sf-td-add-icon">${m.icon}</span>`
-        + `<span>${escHtml(m.label)}</span></div>`;
+      chips += `<button type="button" class="sf-td-add-chip"`
+        + ` data-type="${escHtml(type)}"`
+        + ` title="${escHtml(m.label)}">`
+        + `<span class="sf-td-add-chip-icon">${m.icon}</span>`
+        + `<span>${escHtml(m.label)}</span></button>`;
     }
-    html += `</div></div>`;
-    return html;
+    return `<div class="sf-td-add-bar" data-course-id="${courseId}"${topicAttr}>
+      <button type="button" class="sf-td-add-toggle ht-btn">
+        <span class="sf-td-add-toggle-icon">➕</span>Añadir bloque
+      </button>
+      <div class="sf-td-add-chips">${chips}</div>
+    </div>`;
   }
 
   // ── _renderEditForm(block, courseId) → HTML ──────────────────
-  // Inline edit form. Markdown + content get a textarea; pdf-ref and
-  // youtube get a URL input; separator gets a label input only.
+  // S4.5: delegate to App.MarkdownEditor.editForm. That module owns the
+  // toolbar + 🎨 + split live preview markup. After injecting the form
+  // we call attachLivePreview() to wire the textarea → preview sync.
   function _renderEditForm(b, courseId) {
-    const type = b.type || "markdown";
-    const title = escHtml(b.title || "");
-    let bodyField = "";
-    if (type === "markdown") {
-      bodyField = `<textarea class="sf-td-editor" rows="8" placeholder="Markdown…">${
-        escHtml(b.content || "")
-      }</textarea>`;
-    } else if (type === "content") {
-      bodyField = `<textarea class="sf-td-editor" rows="6" placeholder="Texto…">${
-        escHtml(b.content || "")
-      }</textarea>`;
-    } else if (type === "pdf-ref" || type === "youtube") {
-      bodyField = `<input class="sf-td-url" type="text" value="${
-        escHtml(b.url || "")
-      }" placeholder="${
-        type === "pdf-ref" ? "Ruta o URL del PDF" : "URL de YouTube"
-      }" />`;
-    } else if (type === "separator") {
-      bodyField = `<div class="sf-empty">Los separadores solo tienen etiqueta</div>`;
-    }
-    return `<div class="sf-td-edit-inner">
-      <input class="sf-td-title-input" type="text" value="${title}" placeholder="Título" />
-      ${bodyField}
-      <div class="sf-td-edit-actions">
-        <button class="sf-td-save ht-btn">💾 Guardar</button>
-        <button class="sf-td-cancel ht-btn ht-btn-ghost">Cancelar</button>
-      </div>
-    </div>`;
+    const html = MdEditor.editForm(b);
+    // Reset any pending color selection from a previous form so the
+    // 🎨 button in the new form captures the right selection.
+    MdEditor.resetPending();
+    return html;
   }
 
   // ── _attachBlockHandlers(centerEl, courseId, topicId) ─────────
@@ -204,10 +206,17 @@ window.App.CoursesBlocks = (function () {
           if (!form) return;
           form.innerHTML = _renderEditForm(block, courseId);
           form.style.display = "block";
+          // Wire the live preview (input → .md-preview) and the
+          // editor↔preview scroll sync. attachLivePreview is idempotent
+          // (safe to call again if the form is re-rendered).
+          MdEditor.attachLivePreview(form);
           // Hide read-only body
           const body = blockEl.querySelector(".sf-td-block-body");
           if (body) body.style.display = "none";
           blockEl.classList.add("is-editing");
+          // Focus the title input for keyboard-driven editing.
+          const titleEl = form.querySelector(".sf-td-md-title");
+          if (titleEl) titleEl.focus();
         } catch (err) {
           alert("❌ Error: " + (err.message || err));
         }
@@ -221,11 +230,15 @@ window.App.CoursesBlocks = (function () {
         const blockEl = saveBtn.closest(".sf-td-block");
         if (!blockEl) return;
         const bid = Number(blockEl.dataset.blockId);
-        const titleInput = blockEl.querySelector(".sf-td-title-input");
-        const editor = blockEl.querySelector(".sf-td-editor");
-        const urlInput = blockEl.querySelector(".sf-td-url");
-        const payload = { title: (titleInput && titleInput.value || "").trim() };
+        const titleInput = blockEl.querySelector(".sf-td-md-title");
+        const editor = blockEl.querySelector(".md-editor");
+        const plain = blockEl.querySelector(".sf-td-md-plain");
+        const urlInput = blockEl.querySelector(".sf-td-md-url");
+        const payload = {
+          title: (titleInput && titleInput.value || "").trim(),
+        };
         if (editor) payload.content = editor.value;
+        if (plain) payload.content = plain.value;
         if (urlInput) payload.url = urlInput.value.trim();
         try {
           await updateBlock(courseId, bid, payload);
@@ -251,6 +264,7 @@ window.App.CoursesBlocks = (function () {
           form.style.display = "none";
           form.innerHTML = "";
         }
+        MdEditor.resetPending();
         const body = blockEl.querySelector(".sf-td-block-body");
         if (body) body.style.display = "";
         blockEl.classList.remove("is-editing");
@@ -277,35 +291,34 @@ window.App.CoursesBlocks = (function () {
         return;
       }
 
-      // "+ Añadir bloque" toggle (open menu)
+      // "+ Añadir bloque" toggle (open chip row)
       const toggle = e.target.closest(".sf-td-add-toggle");
       if (toggle) {
         e.stopPropagation();
         const bar = toggle.closest(".sf-td-add-bar");
-        const menu = bar && bar.querySelector(".sf-td-add-menu");
-        if (menu) menu.classList.toggle("open");
+        if (bar) bar.classList.toggle("is-open");
         return;
       }
 
-      // "+ Añadir bloque" item (create block)
-      const item = e.target.closest(".sf-td-add-item");
-      if (item) {
+      // "+ Añadir bloque" chip (create block of the matching type)
+      const chip = e.target.closest(".sf-td-add-chip");
+      if (chip) {
         e.stopPropagation();
-        const bar = item.closest(".sf-td-add-bar");
+        const bar = chip.closest(".sf-td-add-bar");
         if (!bar) return;
         const cid = Number(bar.dataset.courseId);
         const tid = bar.dataset.topicId
           ? Number(bar.dataset.topicId) : null;
-        const type = item.dataset.type;
+        const type = chip.dataset.type;
+        const meta = TYPE_META[type] || TYPE_META.markdown;
+        const def = meta.defaults || { content: "", url: "", title: "" };
         try {
           await addBlock(cid, {
             topic_id: tid, type,
-            title: type === "separator" ? "Separador" : "",
-            content: "",
-            url: "",
+            title: def.title || meta.label,
+            content: def.content || "",
+            url: def.url || "",
           });
-          const menu = bar.querySelector(".sf-td-add-menu");
-          if (menu) menu.classList.remove("open");
           const evt = new CustomEvent("studyflow:blocks-changed", {
             detail: { courseId: cid, topicId: tid }
           });
@@ -317,13 +330,13 @@ window.App.CoursesBlocks = (function () {
       }
     });
 
-    // Close add-menu when clicking outside (one-time binding per element).
-    if (!centerEl.dataset._sfAddMenuClose) {
-      centerEl.dataset._sfAddMenuClose = "1";
-      document.addEventListener("click", () => {
-        centerEl.querySelectorAll(".sf-td-add-menu.open").forEach((m) =>
-          m.classList.remove("open")
-        );
+    // Close chip row when clicking outside (one-time binding per element).
+    if (!centerEl.dataset._sfAddChipsClose) {
+      centerEl.dataset._sfAddChipsClose = "1";
+      document.addEventListener("click", (ev) => {
+        centerEl.querySelectorAll(".sf-td-add-bar.is-open").forEach((b) => {
+          if (!b.contains(ev.target)) b.classList.remove("is-open");
+        });
       });
     }
   }
@@ -386,12 +399,21 @@ window.App.CoursesBlocks = (function () {
         e.stopPropagation();
         const card = collapseBtn.closest(".sf-block-card");
         if (!card) return;
+        const bid = Number(card.dataset.blockId);
         const isCollapsed = card.classList.toggle("is-collapsed");
         collapseBtn.textContent = isCollapsed ? "▶" : "▼";
         // The visual body in .sf-bc-body contains the inner block, which
         // already has its own .sf-td-block-body. Hide it on collapse.
         const body = card.querySelector(".sf-bc-body");
         if (body) body.style.display = isCollapsed ? "none" : "";
+        // S4.5 — persist the collapsed state on the server. Silent
+        // failure: the local visual state already updated, so a network
+        // hiccup just means the next re-render shows the old state.
+        if (Number.isFinite(bid)) {
+          try {
+            await updateBlock(courseId, bid, { collapsed: isCollapsed });
+          } catch (_) { /* best-effort */ }
+        }
         return;
       }
 

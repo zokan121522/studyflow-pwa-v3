@@ -1,10 +1,12 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
-const CACHE_NAME = 'studyflow-pwa-v1';
-const ASSET_CACHE = 'studyflow-assets-v1';
+const CACHE_NAME = 'studyflow-pwa-v2';
+const ASSET_CACHE = 'studyflow-assets-v2';
 const API_CACHE = 'studyflow-api-v1';
 
-// Assets to cache on install (cache-first strategy)
+// Assets to cache on install (cache-first strategy).
+// v2 (S4.5): added markdown-editor.js + studyflow-editor.css so
+// refresh-after-deploy no longer serves stale block editor code.
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -17,9 +19,12 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses.js',
   '/features/studyflow/courses-api.js',
   '/features/studyflow/courses-blocks.js',
+  '/features/studyflow/courses-notes.js',
   '/features/studyflow/courses-sidebar.js',
+  '/features/studyflow/markdown-editor.js',
   '/features/studyflow/courses.css',
   '/features/studyflow/studyflow-blocks.css',
+  '/features/studyflow/studyflow-editor.css',
 ];
 
 // Maximum age for cached API responses (5 minutes)
