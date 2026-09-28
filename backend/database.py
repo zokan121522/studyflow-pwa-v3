@@ -326,28 +326,22 @@ _TABLE_DDL = [
     )
     """,
     """
-    -- Sub-phase S3: content blocks within topics.
-    -- A block is an ordered, typed unit (markdown | content | separator |
-    -- pdf-ref | youtube | audio). Always belongs to a course; may belong
-    -- to a topic (nullable for course-level blocks). v2-compatible field
-    -- names kept (type, title, content, done) plus v3-friendly url/color
-    -- /collapsed. CASCADE from topics/courses so block deletion follows
-    -- the parent lifecycle.
+    -- Sub-phase S3: content blocks within topics (v2-shaped fields + url/color/collapsed).
     CREATE TABLE IF NOT EXISTS blocks (
-        id          SERIAL PRIMARY KEY,
-        user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        course_id   INTEGER REFERENCES courses(id) ON DELETE CASCADE,
-        topic_id    INTEGER REFERENCES topics(id) ON DELETE CASCADE,
-        type        TEXT NOT NULL DEFAULT 'markdown',
-        title       TEXT DEFAULT '',
-        content     TEXT DEFAULT '',
-        url         TEXT DEFAULT '',
-        done        BOOLEAN NOT NULL DEFAULT FALSE,
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'markdown',
+        title TEXT DEFAULT '',
+        content TEXT DEFAULT '',
+        url TEXT DEFAULT '',
+        done BOOLEAN NOT NULL DEFAULT FALSE,
         order_index INTEGER NOT NULL DEFAULT 0,
-        color       TEXT DEFAULT '',
-        collapsed   BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        color TEXT DEFAULT '',
+        collapsed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
 ]

@@ -1,13 +1,13 @@
-// ─── Courses API — fetch calls + course cache (S1 slice) ──────────
+// ─── Courses API — fetch calls + course cache (S1+S3 slice) ──────────
 // Namespace: window.App.CoursesAPI
 // Dependencies: global API (app.js), window.STATE
 //
-// SCOPE (this slice): courses list/detail + course/topic CRUD basics.
+// SCOPE:
 //   • list / detail / cache + invalidation
 //   • create / rename / updateDescription / delete course
 //   • add / rename / delete topic
-//
-// Block CRUD/edit/add/favorite/share are deferred to S3/S4.
+//   • block CRUD (S3): addBlock, updateBlock, deleteBlock,
+//     toggleBlockDone, reorderBlocks, moveBlock, listTopicBlocks
 
 window.App = window.App || {};
 window.App.CoursesAPI = (function () {
@@ -30,13 +30,13 @@ window.App.CoursesAPI = (function () {
   }
 
   // ── fetchCourseDetail(courseId, force) ───────────────────────
-  // Returns { id, title, …, topics: [{ id, title, …, blocks: [] }] }
-  // `blocks: []` is empty in this slice (S3 will hydrate blocks).
+  // Returns { id, title, …, topics: [{ id, title, …, blocks: [...] }] }
+  // Topics are hydrated with their ordered blocks (S3+).
   async function fetchCourseDetail(courseId, force) {
     if (!force && _detailCache[courseId]) return _detailCache[courseId];
     try {
       const data = await API.get(`/courses/${courseId}`);
-      const course = (data && data.course) || { topics: [] };
+      const course = (data && data.course) || { topics: [], blocks: [] };
       // Normalise: every topic gets a blocks:[] even if backend forgot.
       course.topics = (course.topics || []).map((t) => ({
         blocks: [], ...t,
@@ -130,6 +130,79 @@ window.App.CoursesAPI = (function () {
     }
   }
 
+  // ============================== Blocks (S3) ==============================
+  // ── listTopicBlocks(courseId, topicId) ───────────────────────
+  async function listTopicBlocks(courseId, topicId) {
+    const data = await API.get(
+      `/courses/${courseId}/topics/${topicId}/blocks`
+    );
+    return (data && data.blocks) || [];
+  }
+
+  // ── addBlock(courseId, opts) ─────────────────────────────────
+  // opts: { topic_id?, type, title?, content?, url? }
+  // When topic_id omitted, posts to the course-level endpoint.
+  async function addBlock(courseId, opts) {
+    const topicId = opts && opts.topic_id;
+    const path = topicId
+      ? `/courses/${courseId}/topics/${topicId}/blocks`
+      : `/courses/${courseId}/blocks`;
+    const data = await API.post(path, opts || {});
+    clearDetailCache(courseId);
+    return data && data.block;
+  }
+
+  // ── updateBlock(courseId, blockId, fields) ───────────────────
+  async function updateBlock(courseId, blockId, fields) {
+    const data = await API.put(
+      `/courses/${courseId}/blocks/${blockId}`,
+      fields || {}
+    );
+    clearDetailCache(courseId);
+    return data && data.block;
+  }
+
+  // ── deleteBlock(courseId, blockId) ───────────────────────────
+  async function deleteBlock(courseId, blockId) {
+    await API.del(`/courses/${courseId}/blocks/${blockId}`);
+    clearDetailCache(courseId);
+    if (typeof STATE !== "undefined"
+        && STATE.selectedBlockId === blockId) {
+      STATE.selectedBlockId = null;
+    }
+  }
+
+  // ── toggleBlockDone(courseId, blockId) ───────────────────────
+  // Returns the new done boolean.
+  async function toggleBlockDone(courseId, blockId) {
+    const data = await API.patch(
+      `/courses/${courseId}/blocks/${blockId}/done`
+    );
+    clearDetailCache(courseId);
+    return !!(data && data.done);
+  }
+
+  // ── reorderBlocks(courseId, ids) ─────────────────────────────
+  // ids: array of block ids in the desired order.
+  async function reorderBlocks(courseId, ids) {
+    await API.patch(
+      `/courses/${courseId}/blocks`,
+      { blocks: ids || [] }
+    );
+    clearDetailCache(courseId);
+  }
+
+  // ── moveBlock(blockId, {target_topic_id, index}) ─────────────
+  async function moveBlock(blockId, opts) {
+    const data = await API.post(
+      `/courses/blocks/${blockId}/move`,
+      opts || {}
+    );
+    // Move crosses course → drop ALL detail caches.
+    clearDetailCache();
+    return data && data.block;
+  }
+
   // ── Helper: in-place list-cache patch ────────────────────────
   function _patchListCache(courseId, mutator) {
     if (!_listCache) return;
@@ -149,6 +222,14 @@ window.App.CoursesAPI = (function () {
     addTopic,
     renameTopic,
     deleteTopic,
+    // Blocks (S3)
+    listTopicBlocks,
+    addBlock,
+    updateBlock,
+    deleteBlock,
+    toggleBlockDone,
+    reorderBlocks,
+    moveBlock,
   };
 })();
 

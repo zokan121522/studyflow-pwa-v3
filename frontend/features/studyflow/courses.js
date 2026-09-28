@@ -1,18 +1,19 @@
-// ─── Courses module — S1 slice (sidebar tree + course/topic landing) ─
+// ─── Courses module — S1+S3 slice (sidebar tree + landing + blocks) ─
 // Namespace: window.App.Courses + window.CoursesModule (tab router).
 // Dependencies: window.STATE, API (global), window.App.UI (escHtml,
 // getWeekId, todayStr, formatDateShort, getDaysOfWeek),
 // window.App.CoursesAPI, window.App.CoursesSidebar,
-// window.App.ContentBlocks._renderMd.
+// window.App.CoursesBlocks, window.App.ContentBlocks._renderMd.
 //
-// SCOPE (this slice): read-only shell.
+// SCOPE:
 //   • renderStudyflow(): rebuild sidebar + center
-//   • updateCenter(): course landing OR topic detail (read-only)
+//   • updateCenter(): course landing OR topic detail (read + block CRUD)
 //   • create/rename/delete course + topic via prompt dialogs
 //   • renderFavorites(): safe no-op (favorites ship with S4+)
 //
-// Block CRUD/edit/add/drag/share/export/quiz/flashcards/AI are
-// deferred to S3/S4.
+// S3 wires the topic-detail page into the new blocks backend
+// (CoursesBlocks module). Drag/drop, share/export/AI/quiz/flashcards
+// are deferred.
 
 window.App = window.App || {};
 window.App.Courses = (function () {
@@ -28,6 +29,7 @@ window.App.Courses = (function () {
     renderCourseTree, attachSidebarEvents, updateSelection,
   } = window.App.CoursesSidebar;
   const { _renderMd } = window.App.ContentBlocks;
+  const Blocks = window.App.CoursesBlocks;
 
   function STATE() { return window.STATE; }
 
@@ -240,6 +242,9 @@ window.App.Courses = (function () {
   }
 
   // ── _renderTopicDetail(centerEl, courseId, topicId) ──────────
+  // S3: each block is rendered via App.CoursesBlocks._renderBlock and the
+  // "+ Añadir bloque" bar is appended. Edit / save / cancel / done /
+  // delete actions are delegated by CoursesBlocks._attachBlockHandlers.
   async function _renderTopicDetail(centerEl, courseId, topicId) {
     const detail = await fetchCourseDetail(courseId);
     const topic = (detail.topics || []).find((t) => t.id === topicId);
@@ -252,12 +257,12 @@ window.App.Courses = (function () {
       return;
     }
     const blocks = topic.blocks || [];
-    const blocksHtml = blocks.map((b) => `
-      <div class="sf-td-block">
-        <div class="sf-td-block-title">${escHtml(b.title || "Bloque")}</div>
-        <div class="sf-td-block-content md-view">${_renderMd(b.content || "")}</div>
-      </div>
-    `).join("");
+    const blocksHtml = blocks.length
+      ? blocks.map((b) => Blocks._renderBlock(b, courseId)).join("")
+      : '<div class="empty-state"><span class="big">📝</span><br>'
+        + 'Este tema no tiene bloques aún.<br>'
+        + 'Crea uno con “+ Añadir bloque”.</div>';
+    const addBar = Blocks._renderAddBar(courseId, topicId);
 
     centerEl.innerHTML = `
       <div class="sf-topic-detail">
@@ -268,10 +273,12 @@ window.App.Courses = (function () {
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
-        <div class="sf-td-blocks">${blocksHtml
-          || '<div class="empty-state">Sin bloques — El CRUD de bloques se implementa en S3/S4.</div>'}</div>
+        <div class="sf-td-blocks">${blocksHtml}</div>
+        ${addBar}
       </div>
     `;
+
+    Blocks._attachBlockHandlers(centerEl, courseId, topicId);
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {
@@ -285,6 +292,25 @@ window.App.Courses = (function () {
   // ── renderFavorites() — used by dashboard (S4+ lands it for real)
   function renderFavorites() {
     // Safe no-op: favorites are not modelled in this slice.
+  }
+
+  // ── S3: re-render topic panel after any block mutation ──────
+  // CoursesBlocks dispatches `studyflow:blocks-changed` after every
+  // add / update / delete so we just need to refresh the center when
+  // we're currently showing that topic.
+  function _onBlocksChanged(e) {
+    const detail = (e && e.detail) || {};
+    const s = STATE();
+    if (s.currentCourseId !== detail.courseId) return;
+    if (detail.topicId != null
+        && s.selectedTopicId !== detail.topicId) return;
+    // Fire-and-forget: don't block the event handler.
+    updateCenter().catch((err) => console.error("[blocks-changed]", err));
+  }
+  if (typeof window !== "undefined"
+      && !window.__studyflowBlocksListenerMounted) {
+    window.__studyflowBlocksListenerMounted = true;
+    window.addEventListener("studyflow:blocks-changed", _onBlocksChanged);
   }
 
   // ── Public API ──────────────────────────────────────────────

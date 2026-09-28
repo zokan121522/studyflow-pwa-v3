@@ -229,9 +229,10 @@ class Topic:
 
 @dataclass
 class Block:
-    """Content block nested inside a topic (markdown | content | separator |
-    pdf-ref | youtube | audio). v2-compatible field set + v3-friendly
-    url/color/collapsed. topic_id is optional for course-level blocks.
+    """Content block (markdown | content | separator | pdf-ref | youtube | audio).
+
+    v2-compatible fields + v3-friendly url/color/collapsed. topic_id
+    is optional for course-level blocks.
     """
     id: int
     user_id: int
@@ -250,18 +251,12 @@ class Block:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'course_id': self.course_id,
-            'topic_id': self.topic_id,
-            'type': self.type,
-            'title': self.title,
-            'content': self.content,
-            'url': self.url,
-            'done': self.done,
-            'order_index': self.order_index,
-            'color': self.color,
-            'collapsed': self.collapsed,
+            'id': self.id, 'user_id': self.user_id,
+            'course_id': self.course_id, 'topic_id': self.topic_id,
+            'type': self.type, 'title': self.title,
+            'content': self.content, 'url': self.url,
+            'done': self.done, 'order_index': self.order_index,
+            'color': self.color, 'collapsed': self.collapsed,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -269,9 +264,7 @@ class Block:
     @classmethod
     def from_row(cls, row: Dict[str, Any]) -> 'Block':
         return cls(
-            id=row['id'],
-            user_id=row['user_id'],
-            course_id=row['course_id'],
+            id=row['id'], user_id=row['user_id'], course_id=row['course_id'],
             topic_id=row.get('topic_id'),
             type=row.get('type', 'markdown'),
             title=row.get('title') or '',

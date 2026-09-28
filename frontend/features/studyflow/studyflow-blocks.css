@@ -1,0 +1,200 @@
+/* ─── Studyflow Blocks — block CRUD UI styles (S3) ──────────────
+   Split from courses.css to keep both files <500 LOC. Loaded after
+   courses.css. Dark-theme adapted to v3 tokens (variables.css). */
+
+/* ─── Topic detail — block CRUD (S3) ─────────────────────────── */
+.sf-td-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Each block card */
+.sf-td-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: border-color .12s;
+}
+.sf-td-block.is-done {
+  opacity: 0.7;
+  border-color: var(--border-light);
+}
+.sf-td-block.is-done .sf-td-block-title,
+.sf-td-block.is-done .sf-text-body,
+.sf-td-block.is-done .md-view {
+  text-decoration: line-through;
+}
+.sf-td-block:hover { border-color: var(--border-light); }
+.sf-td-block.is-editing { border-color: var(--primary); }
+
+.sf-td-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sf-td-done {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sf-td-done-cb {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+.sf-td-block-icon { font-size: 16px; flex-shrink: 0; }
+.sf-td-block-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-td-block-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sf-td-block-body {
+  font-size: 13px;
+  color: var(--text);
+}
+.sf-td-block-body .sf-text-body {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+}
+.sf-td-block-body .sf-link-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.sf-td-block-body .sf-link-body a {
+  color: var(--primary);
+}
+.sf-td-block-body .sf-sep-line {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
+.sf-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* Edit form */
+.sf-td-edit-form {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.sf-td-edit-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sf-td-title-input,
+.sf-td-editor,
+.sf-td-url {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.sf-td-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  min-height: 120px;
+  resize: vertical;
+}
+.sf-td-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Small buttons used in block headers */
+.ht-btn-mini {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ht-btn-mini:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+.ht-btn {
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ht-btn:hover { filter: brightness(1.1); }
+.ht-btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* "+ Añadir bloque" bar */
+.sf-td-add-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+.sf-td-add-toggle {
+  align-self: flex-start;
+}
+.sf-td-add-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+}
+.sf-td-add-menu.open { display: block; }
+.sf-td-add-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+.sf-td-add-item:hover { background: var(--surface-hover); }
+.sf-td-add-icon { font-size: 14px; }

@@ -11,7 +11,15 @@ const PRECACHE_ASSETS = [
   '/styles.css',
   '/app.js',
   '/shared/ui-common.js',
-  '/shared/load-partial.js'
+  '/shared/load-partial.js',
+  '/features/studyflow/content-blocks.js',
+  '/features/studyflow/content-blocks.css',
+  '/features/studyflow/courses.js',
+  '/features/studyflow/courses-api.js',
+  '/features/studyflow/courses-blocks.js',
+  '/features/studyflow/courses-sidebar.js',
+  '/features/studyflow/courses.css',
+  '/features/studyflow/studyflow-blocks.css',
 ];
 
 // Maximum age for cached API responses (5 minutes)
