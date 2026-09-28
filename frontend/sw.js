@@ -1,12 +1,15 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-const ASSET_CACHE = 'studyflow-assets-v2';
+// v3 (S7): bumped ASSET_CACHE so the activate handler evicts the
+// S4.5 cache and the new install pre-caches pdf.js + the pdf viewer
+// module. API_CACHE_PWA keeps its name (no API contract changes here).
+const ASSET_CACHE = 'studyflow-assets-v3';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v2 (S4.5): added markdown-editor.js + studyflow-editor.css so
-// refresh-after-deploy no longer serves stale block editor code.
+// v3 (S7): added pdf-viewer.js + pdf-viewer.css + vendored pdf.js
+// (UMD build + worker) so pdf-ref blocks render offline.
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -25,6 +28,12 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses.css',
   '/features/studyflow/studyflow-blocks.css',
   '/features/studyflow/studyflow-editor.css',
+  // S7: pdf viewer
+  '/features/studyflow/pdf-viewer.js',
+  '/features/studyflow/pdf-viewer-annots.js',
+  '/features/studyflow/pdf-viewer.css',
+  '/vendor/pdfjs/pdf.min.js',
+  '/vendor/pdfjs/pdf.worker.min.js',
 ];
 
 // Maximum age for cached API responses (5 minutes)
