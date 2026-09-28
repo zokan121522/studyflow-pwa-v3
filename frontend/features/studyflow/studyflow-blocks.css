@@ -421,3 +421,109 @@
 .sf-focus-mode .sf-block-card .sf-bc-actions {
   display: none !important;
 }
+
+/* ─── S7b: unified PDF + SCORM import popover ──────────────────
+   Fixed-position popover opened by the 📥 Importar button injected
+   into the pdf-ref edit form (App.PdfImport.open). Dark theme to
+   match studyflow-blocks; uses CSS variables defined elsewhere. */
+.sf-pdf-import-popover {
+  width: 360px;
+  max-width: 95vw;
+  background: var(--bg, #1a1f2e);
+  color: var(--text, #e5e7eb);
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 10px 12px 12px;
+  font-size: 12px;
+  font-family: var(--font, system-ui, sans-serif);
+}
+.sf-pdf-import-popover .sf-pdfi-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border, #2d3748);
+  padding-bottom: 6px;
+}
+.sf-pdf-import-popover .sf-pdfi-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted, #9ca3af);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sf-pdf-import-popover .sf-pdfi-tab.is-active {
+  background: var(--surface, #232938);
+  border-color: var(--border, #2d3748);
+  color: var(--text, #e5e7eb);
+}
+.sf-pdf-import-popover .sf-pdfi-tab:hover {
+  color: var(--text, #e5e7eb);
+}
+.sf-pdf-import-popover .sf-pdfi-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sf-pdf-import-popover .sf-pdfi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sf-pdf-import-popover .sf-pdfi-label {
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  min-width: 80px;
+}
+.sf-pdf-import-popover input[type="text"],
+.sf-pdf-import-popover input[type="file"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 4px;
+  background: var(--surface, #232938);
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.sf-pdf-import-popover input[type="text"]:focus,
+.sf-pdf-import-popover input[type="file"]:focus {
+  border-color: var(--primary, #4f46e5);
+}
+.sf-pdf-import-popover .sf-pdfi-status {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  min-height: 14px;
+}
+.sf-pdf-import-popover .sf-pdfi-hint {
+  font-size: 10px;
+  color: var(--text-muted, #9ca3af);
+  background: var(--surface, #232938);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px dashed var(--border, #2d3748);
+}
+.sf-pdf-import-popover .sf-pdfi-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sf-pdf-import-popover .sf-pdfi-close:hover {
+  background: var(--surface, #232938);
+  color: var(--text, #e5e7eb);
+}

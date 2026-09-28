@@ -2,7 +2,8 @@
 // Namespace: window.App.CoursesBlocks
 // Dependencies: window.App.UI (escHtml), window.App.CoursesAPI,
 //               window.App.ContentBlocks._renderMd, window.STATE,
-//               window.App.MarkdownEditor (S4.5).
+//               window.App.MarkdownEditor (S4.5),
+//               window.App.PdfImport (S7b — unified PDF + SCORM import).
 //
 // SCOPE (S3):
 //   • render blocks for a topic (read-only preview by type)
@@ -220,6 +221,15 @@ window.App.CoursesBlocks = (function () {
           // editor↔preview scroll sync. attachLivePreview is idempotent
           // (safe to call again if the form is re-rendered).
           MdEditor.attachLivePreview(form);
+          // S7b: for pdf-ref blocks, inject the unified Importar button
+          // so users get one place to either upload a PDF or import a
+          // SCORM package / Moodle URL.
+          if (block.type === "pdf-ref" && window.App.PdfImport) {
+            window.App.PdfImport.injectIntoEditForm(
+              form, block,
+              { courseId, topicId, anchor: blockEl }
+            );
+          }
           // Hide read-only body
           const body = blockEl.querySelector(".sf-td-block-body");
           if (body) body.style.display = "none";
@@ -323,7 +333,7 @@ window.App.CoursesBlocks = (function () {
         const meta = TYPE_META[type] || TYPE_META.markdown;
         const def = meta.defaults || { content: "", url: "", title: "" };
         try {
-          await addBlock(cid, {
+          const created = await addBlock(cid, {
             topic_id: tid, type,
             title: def.title || meta.label,
             content: def.content || "",
@@ -333,6 +343,16 @@ window.App.CoursesBlocks = (function () {
             detail: { courseId: cid, topicId: tid }
           });
           window.dispatchEvent(evt);
+          // S7b: for the 📕 PDF chip, open the unified import popover
+          // IMMEDIATELY so the user can drop a file or paste a SCORM
+          // URL without a second click. The popover PATCHes the block
+          // on success so the viewer mounts the freshly-imported PDF.
+          if (type === "pdf-ref" && window.App.PdfImport
+              && created && created.id) {
+            window.App.PdfImport.open(created, {
+              courseId: cid, topicId: tid, anchor: chip,
+            });
+          }
         } catch (err) {
           alert("❌ Error al crear bloque: " + (err.message || err));
         }

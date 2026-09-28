@@ -395,6 +395,10 @@
        after courses.js mounts them into the center panel. -->
   <script src="/features/studyflow/pdf-viewer-annots.js"></script>
   <script src="/features/studyflow/pdf-viewer.js"></script>
+  <!-- S7b: unified PDF + SCORM import popover (App.PdfImport). Loads
+       before courses-blocks.js so the chip-create handler can open the
+       popover the moment a pdf-ref block is created. -->
+  <script src="/features/studyflow/pdf-import.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
   <!-- S4.7 — sticky floating block toolbar (Phase 59 v2 port).
        Loads AFTER courses-blocks.js so its mount() can read the

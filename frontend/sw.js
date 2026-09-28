@@ -1,20 +1,16 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v5 (SA.2 + S4.7): bumped ASSET_CACHE so the activate handler evicts
-// the v4 cache. The pre-cached list adds studyflow-float.js (Phase 59
-// sticky floating toolbar from v2) so it survives offline. The addons
-// overlay still works offline via the cached catalog; the marketplace
-// is now reached from the Studyflow left column nav (qs-nav-item
-// [data-am-nav]) instead of the header gear. API_CACHE keeps its
-// name (no API contract changes here).
-const ASSET_CACHE = 'studyflow-assets-v5';
+// v6 (S7b): bumped ASSET_CACHE so the activate handler evicts the v5
+// cache. The pre-cached list adds studyflow/pdf-import.js (unified PDF
+// + SCORM import popover) so it survives offline. PDF + SCORM zip
+// import paths keep working offline against the cached /api/pdf/import
+// endpoints (api cache unchanged).
+const ASSET_CACHE = 'studyflow-assets-v6';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v5 (SA.2 + S4.7): added studyflow-float.js for the sticky floating
-// block toolbar (Phase 59 v2 port). Removed no files — addons foundation
-// still pre-cached so the marketplace nav + catalog work offline.
+// v6 (S7b): added pdf-import.js (unified PDF + SCORM import popover).
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -37,6 +33,8 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-viewer.js',
   '/features/studyflow/pdf-viewer-annots.js',
   '/features/studyflow/pdf-viewer.css',
+  // S7b: unified PDF + SCORM import popover
+  '/features/studyflow/pdf-import.js',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
   // SA.2 + S4.7: addons foundation (registry + marketplace) and the
