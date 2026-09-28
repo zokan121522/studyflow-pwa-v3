@@ -91,10 +91,17 @@ window.App.CoursesBlocks = (function () {
     } else if (type === "separator") {
       bodyHtml = `<div class="sf-sep-line"></div>`;
     } else if (type === "pdf-ref") {
-      const url = escHtml(b.url || "");
-      bodyHtml = url
-        ? `<div class="sf-link-body">📕 <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></div>`
-        : `<div class="sf-empty">Sin URL</div>`;
+      // S7: mount a real PDF viewer (App.PdfViewer.init reads
+      // data-url + data-pdf-id from the container). Falls back to a
+      // bare link if the viewer module hasn't loaded yet.
+      const url = b.url || "";
+      const pdfIdMatch = url.match(/\/api\/pdf\/(\d+)/);
+      const pdfId = pdfIdMatch ? pdfIdMatch[1] : "";
+      if (url) {
+        bodyHtml = `<div class="pdf-container" data-url="${escHtml(url)}" data-pdf-id="${escHtml(pdfId)}"></div>`;
+      } else {
+        bodyHtml = `<div class="sf-empty">Sin URL</div>`;
+      }
     } else if (type === "youtube") {
       const url = escHtml(b.url || "");
       bodyHtml = url

@@ -167,6 +167,30 @@ window.App.Courses = (function () {
     await updateCenter();
   }
 
+  // ── _mountPdfViewers(centerEl) — S7 pdf viewer hook ───────────
+  // Iterates .pdf-container elements inside the center panel and
+  // hands each to App.PdfViewer.init. The viewer fetches its own
+  // bytes asynchronously and is idempotent (safe to call twice on
+  // re-renders). Containers without a `data-url` are left untouched.
+  function _mountPdfViewers(centerEl) {
+    if (!centerEl) return;
+    const PV = window.App && window.App.PdfViewer;
+    if (!PV || typeof PV.init !== "function") {
+      // Viewer module hasn't loaded yet — render a thin placeholder so
+      // the block still looks like a PDF slot.
+      centerEl.querySelectorAll(".pdf-container").forEach((c) => {
+        if (!c.dataset.url) return;
+        c.innerHTML = `<div class="pdf-box"><span>📕</span>`
+          + `<span>Visor PDF cargando…</span></div>`;
+      });
+      return;
+    }
+    centerEl.querySelectorAll(".pdf-container[data-url]").forEach((c) => {
+      try { PV.init(c); }
+      catch (err) { console.warn("[PdfViewer.init]", err); }
+    });
+  }
+
   // ── updateCenter() — lightweight: only the center panel ──────
   async function updateCenter() {
     const centerEl = document.getElementById("studyflow-center");
@@ -290,6 +314,10 @@ window.App.Courses = (function () {
     Blocks._attachCardHandlers(centerEl, courseId, topicId);
     // S4 — per-topic notes drawer.
     Notes.render(centerEl, courseId, topicId);
+    // S7 — pdf-ref blocks mount a real pdf.js viewer. Iterate every
+    // .pdf-container and hand it to App.PdfViewer.init; the viewer
+    // fetches its own PDF bytes and renders the first page.
+    _mountPdfViewers(centerEl);
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {
