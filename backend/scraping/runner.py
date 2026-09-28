@@ -12,6 +12,8 @@ users without the scraping stack.
 """
 
 import os
+import shutil
+import tempfile
 import time
 import logging
 from pathlib import Path
@@ -91,6 +93,31 @@ _OVERLAY_TEXT_HINTS = (
 
 # Bounded budget for the dismissal loop — never stall the import.
 OVERLAY_BUDGET_S = 6
+
+# Slide-deck navigation (ported from studyflow-hub v2 scan.py). SCORM
+# content is a slide deck, so the scraper walks it with the "avanzar /
+# siguiente / next" button and assembles every captured page. The XPath
+# text probe comes first so branded players are recognized even when the
+# CSS selectors don't match.
+_NEXT_BUTTON_XPATH = (
+    "//button[contains(translate(normalize-space(.),"
+    "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'avanzar')"
+    " or contains(translate(normalize-space(.),"
+    "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'siguiente')"
+    " or contains(translate(normalize-space(.),"
+    "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'next')]"
+)
+_NEXT_BUTTON_SELECTORS = (
+    ("xpath", _NEXT_BUTTON_XPATH),
+    ("css selector", "button[data-testid='next-button']"),
+    ("css selector", "button.next"),
+    ("css selector", "button[aria-label='Next']"),
+    ("xpath", "//button[contains(@class,'next')]"),
+)
+# Bounded budget for locating the next button — never stall a slide.
+SLIDES_BUDGET_S = 4.0
+# Seconds to wait for a slide to render after clicking "avanzar".
+SLIDE_RENDER_PAUSE_S = 1.0
 
 
 def _emit(progress_cb: ProgressCb, msg: str) -> None:
@@ -211,7 +238,8 @@ def run_scrape(
     username, password = _resolve_credentials(username, password)
     try:
         return _scrape(
-            driver, url, course_title, output_dir, progress_cb, username, password
+            driver, url, course_title, output_dir, progress_cb, username, password,
+            max_pages, timeout,
         )
     except WebDriverException as exc:
         logger.error("[scraper] WebDriver error: %s", exc)
@@ -233,6 +261,8 @@ def _scrape(
     progress_cb: ProgressCb,
     username: str = None,
     password: str = None,
+    max_pages: int = 200,
+    timeout: int = 120,
 ) -> str:
     """Navigate, enter the SCORM frame and produce the PDF file."""
     _emit(progress_cb, f"Navegando a {url}")
@@ -250,7 +280,7 @@ def _scrape(
     # The player can raise the same prompt again once the frame is active.
     _dismiss_overlays(driver, progress_cb)
     pdf_path = _find_and_download_pdf(
-        driver, output_dir, course_title, progress_cb
+        driver, output_dir, course_title, progress_cb, max_pages, timeout
     )
     if not (pdf_path and os.path.isfile(pdf_path)):
         raise RuntimeError("No PDF found in SCORM package")
@@ -354,7 +384,7 @@ while (el.parentElement && covers(el.parentElement)
   el = el.parentElement;
 }
 if (el === document.body || el === document.documentElement) return null;
-return el;
+return covers(el) ? el : null;
 """
 
 # JS: what sits at a given point — used to assert the content is clickable.
@@ -475,31 +505,33 @@ def _dismiss_overlays(driver, progress_cb: ProgressCb = None) -> bool:
             break
         time.sleep(0.4)
 
-    # 4. Anything still standing is hidden outright. Target the covering
-    #    element found geometrically — removing only a nested dialog would
-    #    leave its mask in place, still swallowing every click.
-    covering = _covering_element(driver)
-    if covering:
-        try:
-            driver.execute_script(
-                """
-                const el = arguments[0];
-                if (el) { el.remove(); }
-                document.querySelectorAll(
-                  ".modal-backdrop, .block_overlay, [role='dialog']"
-                ).forEach((n) => n.remove());
-                document.body.classList.remove('modal-open', 'overflow-hidden');
-                document.body.style.overflow = 'auto';
-                """,
-                covering,
-            )
-        except Exception:
-            logger.debug("[scraper] Could not force-hide the overlay")
+    # 4. Anything still standing is hidden outright, BUT only when we
+    #    actually saw an overlay this round — otherwise a normal slide
+    #    (#Main) or any large content div would be mistaken for one and
+    #    removed.
+    if dismissed:
+        covering = _covering_element(driver)
+        if covering:
+            try:
+                driver.execute_script(
+                    """
+                    const el = arguments[0];
+                    if (el) { el.remove(); }
+                    document.querySelectorAll(
+                      ".modal-backdrop, .block_overlay, [role='dialog']"
+                    ).forEach((n) => n.remove());
+                    document.body.classList.remove('modal-open', 'overflow-hidden');
+                    document.body.style.overflow = 'auto';
+                    """,
+                    covering,
+                )
+            except Exception:
+                logger.debug("[scraper] Could not force-hide the overlay")
 
     # Only claim success once the page is provably free. Trusting the click
     # alone produced a green log while the prompt kept blocking the import.
     time.sleep(0.2)
-    if _covering_element(driver) is not None:
+    if dismissed and _covering_element(driver) is not None:
         logger.warning("[scraper] Overlay still blocking after dismissal")
         _emit(progress_cb, "⚠ El aviso del campus sigue bloqueando la pantalla")
         return False
@@ -525,10 +557,221 @@ def _switch_to_scorm_frame(driver, progress_cb: ProgressCb = None) -> bool:
         return False
 
 
-def _find_and_download_pdf(
-    driver, output_dir: str, course_title: str, progress_cb: ProgressCb = None
+# ─── Slide-deck capture (ported from studyflow-hub v2) ───────────────
+# studyflow-hub v2 produces a real multi-page PDF by walking the SCORM
+# player slide by slide: it captures the #Main element, clicks
+# "avanzar/siguiente" until the button disables, and assembles every shot
+# with Pillow. studyflow-hub v3 only had print-to-PDF, which captures the
+# visible viewport — one image — hence this port.
+
+
+def _capture_slide(driver, path: str) -> None:
+    """Capture only the slide content (#Main) or fall back to full-page."""
+    try:
+        driver.find_element("id", "Main").screenshot(path)
+        return
+    except Exception:
+        pass
+    try:
+        driver.save_screenshot(path)
+    except Exception:
+        logger.debug("[scraper] slide capture failed")
+
+
+def _images_to_pdf(image_folder: str, output_file: str) -> str:
+    """Convert every captured PNG into a single multi-page PDF (Pillow)."""
+    try:
+        from PIL import Image
+    except ImportError as exc:  # pragma: no cover — Pillow is in the image
+        raise RuntimeError("Pillow is required for the slide engine") from exc
+    names = sorted(f for f in os.listdir(image_folder) if f.endswith(".png"))
+    if not names:
+        raise RuntimeError("No images captured to convert to PDF")
+    pages = [
+        Image.open(os.path.join(image_folder, n)).convert("RGB") for n in names
+    ]
+    pages[0].save(output_file, save_all=True, append_images=pages[1:])
+    logger.info("[scraper] Slide PDF assembled: %d pages", len(pages))
+    return output_file
+
+
+def _find_next_button(driver, budget_s: float = SLIDES_BUDGET_S):
+    """First visible 'avanzar / siguiente / next' button, or None.
+
+    SCORM decks expose their controls as buttons whose label or class
+    matches one of those words. Bounded by `budget_s` so a page without
+    slides never stalls the scrape.
+    """
+    deadline = time.time() + budget_s
+    while time.time() < deadline:
+        for how, sel in _NEXT_BUTTON_SELECTORS:
+            try:
+                els = driver.find_elements(how, sel)
+            except Exception:
+                continue
+            for el in els:
+                try:
+                    if el.is_displayed():
+                        return el
+                except Exception:
+                    continue
+        time.sleep(0.4)
+    return None
+
+
+def _is_button_disabled(btn) -> bool:
+    """Robust disabled check — a disabled next button means the deck ended."""
+    try:
+        if btn.get_attribute("disabled") is not None:
+            return True
+        if (btn.get_attribute("aria-disabled") or "").lower() in ("true", "disabled"):
+            return True
+        class_attr = (btn.get_attribute("class") or "").lower()
+        if "disabled" in class_attr or "cursor-not-allowed" in class_attr:
+            return True
+        if not btn.is_enabled():
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _ensure_slides_frame(driver) -> bool:
+    """Be inside the frame hosting the slide controls, if any.
+
+    Returns True when the current context (or one of its iframes) shows a
+    next button, so slide capture can proceed. Re-runs every iteration
+    because player navigation can reset Chrome's frame context.
+    """
+    if _find_next_button(driver, budget_s=1.0):
+        return True
+    try:
+        driver.switch_to.default_content()
+        iframes = driver.find_elements("tag name", "iframe")
+    except Exception:
+        return False
+    for fr in iframes:
+        try:
+            driver.switch_to.frame(fr)
+            if _find_next_button(driver, budget_s=0.8):
+                return True
+            driver.switch_to.default_content()
+        except Exception:
+            try:
+                driver.switch_to.default_content()
+            except Exception:
+                pass
+    return False
+
+
+def _validate_pdf_page_count(path: str) -> int:
+    """Open with PyMuPDF and return the page count (0 when broken)."""
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        try:
+            import fitz  # type: ignore  (older alias)
+        except ImportError:
+            logger.warning("[scraper] PyMuPDF unavailable — skipping validation")
+            return 0
+    try:
+        doc = fitz.open(path)
+        try:
+            return doc.page_count
+        finally:
+            doc.close()
+    except Exception:
+        return 0
+
+
+def _scrape_slides_deck(
+    driver,
+    output_dir: str,
+    course_title: str,
+    max_pages: int,
+    timeout: int,
+    progress_cb: ProgressCb = None,
 ) -> Optional[str]:
-    """Locate a PDF in the page/iframe and trigger its download."""
+    """Capture every slide of the SCORM deck into one multi-page PDF.
+
+    Returns the PDF path, or None when no deck is present so the caller
+    can fall through to the remaining strategies. This is the engine
+    studyflow-hub v2 runs by default — it was the missing piece that
+    previously left v3 with a single print-to-PDF image.
+    """
+    _emit(progress_cb, "Motor de diapositivas: capturando el reproductor…")
+    shot_dir = tempfile.mkdtemp(prefix="scorm_slides_")
+    start_ts = time.time()
+    slide = 1
+    try:
+        while time.time() - start_ts < timeout:
+            if slide > max_pages:
+                _emit(progress_cb, f"Límite de {max_pages} diapositivas alcanzado")
+                break
+            if not _ensure_slides_frame(driver):
+                if slide > 1:
+                    break  # already captured something — deck finished
+                return None  # no deck at all — let other strategies try
+            # The resume prompt can recur per slide; clear it like the user.
+            _dismiss_overlays(driver, progress_cb)
+            shot = os.path.join(shot_dir, f"slide_{slide:04d}.png")
+            _capture_slide(driver, shot)
+            _emit(progress_cb, f"Diapositiva {slide} capturada")
+            slide += 1
+
+            btn = _find_next_button(driver)
+            if btn is None:
+                break
+            if _is_button_disabled(btn):
+                break
+            try:
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});", btn
+                )
+            except Exception:
+                pass
+            try:
+                btn.click()
+            except Exception:
+                # A click that raises (stale element, JS guard) usually
+                # means the deck ended under us — treat it as the last.
+                break
+            time.sleep(SLIDE_RENDER_PAUSE_S)
+
+        captured = slide - 1
+        if captured <= 0:
+            return None
+        pdf_path = os.path.join(output_dir, _safe_filename(course_title))
+        _images_to_pdf(shot_dir, pdf_path)
+        pages = _validate_pdf_page_count(pdf_path)
+        if pages > 0:
+            _emit(
+                progress_cb,
+                f"PDF multipágina listo: {pages} diapositivas → "
+                f"{os.path.basename(pdf_path)}",
+            )
+        return pdf_path
+    finally:
+        try:
+            shutil.rmtree(shot_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
+def _find_and_download_pdf(
+    driver,
+    output_dir: str,
+    course_title: str,
+    progress_cb: ProgressCb = None,
+    max_pages: int = 200,
+    timeout: int = 120,
+) -> Optional[str]:
+    """Locate a PDF in the page/iframe and trigger its download.
+
+    Strategy order: direct links, embedded viewers, then slide-deck
+    capture (multi-page PDF assembled from every slide), and only as a
+    last resort Chrome's print-to-PDF — which captures a single viewport.
+    """
     _emit(progress_cb, "Buscando enlaces PDF en la página…")
     link = _find_pdf_link(driver)
     if link:
@@ -539,7 +782,14 @@ def _find_and_download_pdf(
     if embed:
         return _download_via_link(driver, embed, output_dir, progress_cb)
 
-    _emit(progress_cb, "Sin visores embebidos — usando print-to-PDF (CDP)")
+    _emit(progress_cb, "Sin PDF enlazado — capturando diapositivas SCORM…")
+    slides_pdf = _scrape_slides_deck(
+        driver, output_dir, course_title, max_pages, timeout, progress_cb
+    )
+    if slides_pdf:
+        return slides_pdf
+
+    _emit(progress_cb, "Sin reproductor de diapositivas — usando print-to-PDF (CDP)")
     try:
         return _print_page_to_pdf(driver, output_dir, course_title, progress_cb)
     except Exception as exc:
