@@ -1,0 +1,361 @@
+/* ─── Studyflow Courses — sidebar tree + course/topic landing ─────
+   Dark-theme adapted to v3 tokens (variables.css).
+   Loaded after content-blocks.css. */
+
+/* ─── Left sidebar: course tree ──────────────────────────────── */
+#studyflow-left {
+  padding: 10px 8px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+#studyflow-left .col-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin: 6px 4px 10px;
+}
+
+.course-item {
+  padding: 8px 6px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--surface);
+  transition: background .12s, border-color .12s;
+}
+.course-item:hover { background: var(--surface-hover); }
+.course-item.active {
+  border-color: var(--primary);
+  background: var(--surface-hover);
+}
+.course-item.expanded { border-color: var(--border-light); }
+
+.ci-body { display: block; }
+.ci-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ci-title-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ci-block-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.course-arrow {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.ci-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0 18px;
+  line-height: 1.4;
+}
+
+/* ─── Topic menu (3-dots per item) ───────────────────────────── */
+.topic-menu-wrap { position: relative; display: inline-block; }
+.topic-menu-toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+.topic-menu-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+.topic-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 1000;
+  min-width: 170px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  font-size: 12px;
+}
+.topic-menu.open { display: block; }
+.topic-menu-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+.topic-menu-item:hover { background: var(--surface-hover); }
+.topic-menu-item.danger { color: var(--red); }
+.topic-menu-item.danger:hover { background: rgba(239,68,68,.1); }
+.topic-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ─── Course children (expanded topics) ──────────────────────── */
+.course-children {
+  margin: 6px 0 4px 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topic-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.topic-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.topic-item.active {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--text);
+}
+.topic-arrow {
+  display: inline-block;
+  width: 10px;
+  color: var(--text-muted);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.topic-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.add-topic-btn {
+  padding: 6px 8px;
+  margin: 4px 0 0;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+}
+.add-topic-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.empty-blocks {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+  font-style: italic;
+}
+
+/* ─── "+ Nuevo curso" header button ───────────────────────────── */
+.cs-new-row {
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.cs-new-btn {
+  width: 100%;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px dashed var(--border-light);
+}
+.cs-new-btn:hover {
+  border-style: solid;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ─── Center: course landing ─────────────────────────────────── */
+#studyflow-center {
+  padding: 16px 20px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.sf-course-landing {
+  max-width: 920px;
+  margin: 0 auto;
+}
+.sf-cl-header {
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.sf-cl-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--text);
+}
+.sf-cl-desc { font-size: 13px; color: var(--text-secondary); }
+.sf-cl-empty { color: var(--text-muted); font-style: italic; font-size: 12px; }
+
+.sf-cl-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin: 14px 4px 10px;
+}
+.sf-cl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.sf-cl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.sf-cl-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.sf-cl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sf-cl-card-icon { font-size: 18px; }
+.sf-cl-card-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-cl-card-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.sf-cl-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 26px;
+}
+.sf-cl-tblock {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.sf-cl-tblock-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.sf-cl-tblock-content {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+/* ─── Center: topic detail ───────────────────────────────────── */
+.sf-topic-detail {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.sf-td-back {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  margin-bottom: 6px;
+  padding: 4px 0;
+}
+.sf-td-back:hover { text-decoration: underline; }
+.sf-td-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: var(--text);
+}
+.sf-td-desc {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sf-td-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sf-td-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.sf-td-block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+/* ─── Empty-state (Studyflow variant) ────────────────────────── */
+#studyflow-center .empty-state {
+  padding: 32px 12px;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+#studyflow-center .empty-state .big {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 4px;
+}

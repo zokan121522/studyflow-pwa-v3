@@ -68,10 +68,43 @@ def _create_tables(cur) -> None:
     """Create all tables if they don't exist."""
     for ddl in _TABLE_DDL:
         cur.execute(ddl)
+    _create_ai_tasks(cur)
     _migrate_sessions(cur)
     _migrate_habits(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
+
+
+def _create_ai_tasks(cur) -> None:
+    """Lightweight async-task table for the agenda Mind ritual (and any
+    future async jobs the frontend polls via /api/ai/tasks/<id>).
+
+    Replaces the v2 NotebookLM-backed pipeline with a tiny contract:
+    coverage_data holds JSON like ``{"date":"...","step":"..."}`` and
+    the frontend polls status until it's done|error|cancelled.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_tasks (
+            id              TEXT PRIMARY KEY,
+            user_id         INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            task_type       TEXT NOT NULL DEFAULT 'morning_mind',
+            status          TEXT NOT NULL DEFAULT 'pending',
+            coverage_data   TEXT DEFAULT '',
+            error_message   TEXT DEFAULT '',
+            result_content  TEXT DEFAULT '',
+            created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            completed_at    TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_tasks_user_type "
+        "ON ai_tasks(user_id, task_type)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_tasks_user_status "
+        "ON ai_tasks(user_id, status)"
+    )
 
 
 def _migrate_habits(cur) -> None:

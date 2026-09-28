@@ -61,13 +61,28 @@ if (!window.App.UI.displayTitle) {
   };
 }
 
-// ─── App.ContentBlocks._renderMd (minimal safe markdown→html) ─────
-// v2 modules call this on every session-card note + overlay preview. We
-// don't ship the full marked/dompurify pipeline in v3 sub-phase B, so this
-// is a deliberately small safe subset that handles headings, bold, italic,
-// code, lists, links, blockquotes, hr. Output is HTML-escaped first so
-// user input can't inject scripts.
+// ─── App.ContentBlocks._renderMd (fallback only) ────────────────
+// v2 agenda modules call App.ContentBlocks._renderMd on every session-card
+// note + overlay preview. The real, full-featured engine (headings, bold/
+// italic, code, lists, blockquotes, hr, links, fenced code blocks, tables,
+// Obsidian callouts, YouTube cards) ships in
+// `features/studyflow/content-blocks.js` and is loaded BEFORE this file.
+//
+// Load order in index.html:
+//   ... content-blocks.js → courses-api.js → courses-sidebar.js → courses.js
+//   → agenda-glue.js (this file) → agenda-timer.js → ... → agenda-core.js
+//
+// This stub fires ONLY if content-blocks.js failed to load (network error,
+// blocked CDN, dev-only-without-relative.js). It is a deliberately small safe
+// markdown subset (headings, bold, italic, code, lists, links, blockquotes,
+// hr) — enough to keep the Agenda usable when the real engine is missing.
+// Output is HTML-escaped first so user input can't inject scripts.
 (function () {
+  // If the real engine has already populated _renderMd, do NOT clobber it.
+  if (window.App && window.App.ContentBlocks
+      && typeof window.App.ContentBlocks._renderMd === "function") {
+    return;
+  }
   function _escMd(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;")
@@ -155,6 +170,8 @@ if (!window.App.UI.displayTitle) {
   }
   window.App.ContentBlocks = window.App.ContentBlocks || {};
   window.App.ContentBlocks._renderMd = _renderMd;
+  console.warn("[Studyflow] content-blocks.js missing — using agenda-glue "
+    + "fallback _renderMd (no tables / fenced code / callouts / YouTube).");
 })();
 
 // ─── App.Courses.applyMarkdown (md toolbar in session overlay) ────

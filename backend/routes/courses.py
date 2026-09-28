@@ -1,5 +1,10 @@
 # backend/routes/courses.py
-"""Courses routes for StudyFlow PWA v3."""
+"""Courses routes for StudyFlow PWA v3.
+
+v3 core routes (list/create/get/update/delete courses & topics) live here.
+v2-shaped alias routes (rename / description / topic under courses / etc.)
+live in courses_aliases.py to keep each file <500 lines.
+"""
 
 from flask import Blueprint, request, jsonify
 
@@ -11,25 +16,33 @@ from backend.models import Course, Topic
 bp = Blueprint('courses', __name__)
 
 
+def _hydrate_course(course_row):
+    """Attach topics[] (each with empty blocks[]) to a course row dict."""
+    course = Course.from_row(course_row).to_dict()
+    topics_rows = fetchall(
+        'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
+        (course_row['id'],)
+    )
+    course['topics'] = []
+    for t in topics_rows:
+        td = Topic.from_row(t).to_dict()
+        # Blocks are NOT yet modelled in v3 (S3/S4). Surface an empty list so
+        # the v2-shaped frontend tree code can render predictably.
+        td['blocks'] = []
+        course['topics'].append(td)
+    return course
+
+
+# ============================== Courses ==============================
 @bp.get('/courses')
 @token_required
 def list_courses(current_user_id: int):
-    """Get all courses (with topics) for the current user."""
+    """Get all courses (with topics[]) for the current user."""
     courses_rows = fetchall(
         'SELECT * FROM courses WHERE user_id = %s ORDER BY created_at DESC',
         (current_user_id,)
     )
-
-    courses = []
-    for c in courses_rows:
-        course = Course.from_row(c).to_dict()
-        topics_rows = fetchall(
-            'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
-            (c['id'],)
-        )
-        course['topics'] = [Topic.from_row(t).to_dict() for t in topics_rows]
-        courses.append(course)
-
+    courses = [_hydrate_course(c) for c in courses_rows]
     return jsonify({'courses': courses})
 
 
@@ -38,55 +51,47 @@ def list_courses(current_user_id: int):
 def create_course(current_user_id: int):
     """Create a new course."""
     data = request.get_json() or {}
-
     if not data.get('title'):
         return jsonify({'error': 'title is required'}), 400
 
     execute(
         '''INSERT INTO courses (user_id, title, description, color)
            VALUES (%s, %s, %s, %s)''',
-        (
-            current_user_id,
-            data['title'],
-            data.get('description'),
-            data.get('color')
-        )
+        (current_user_id, data['title'],
+         data.get('description'), data.get('color'))
     )
 
     row = fetchone(
         'SELECT * FROM courses WHERE user_id = %s ORDER BY created_at DESC LIMIT 1',
         (current_user_id,)
     )
-    course = Course.from_row(row).to_dict()
-    course['topics'] = []
-
+    course = _hydrate_course(row)
     return jsonify({'course': course}), 201
 
 
 @bp.get('/courses/<int:course_id>')
 @token_required
 def get_course(current_user_id: int, course_id: int):
-    """Get a specific course with its topics."""
-    row = fetchone('SELECT * FROM courses WHERE id = %s AND user_id = %s', (course_id, current_user_id))
+    """Get a specific course with its topics (and empty blocks per topic)."""
+    row = fetchone(
+        'SELECT * FROM courses WHERE id = %s AND user_id = %s',
+        (course_id, current_user_id)
+    )
     if not row:
         return jsonify({'error': 'Course not found'}), 404
 
-    course = Course.from_row(row).to_dict()
-
-    topics_rows = fetchall(
-        'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
-        (course_id,)
-    )
-    course['topics'] = [Topic.from_row(t).to_dict() for t in topics_rows]
-
+    course = _hydrate_course(row)
     return jsonify({'course': course})
 
 
 @bp.patch('/courses/<int:course_id>')
 @token_required
 def update_course(current_user_id: int, course_id: int):
-    """Update a course."""
-    row = fetchone('SELECT * FROM courses WHERE id = %s AND user_id = %s', (course_id, current_user_id))
+    """Update a course (title / description / color / progress)."""
+    row = fetchone(
+        'SELECT * FROM courses WHERE id = %s AND user_id = %s',
+        (course_id, current_user_id)
+    )
     if not row:
         return jsonify({'error': 'Course not found'}), 404
 
@@ -94,8 +99,7 @@ def update_course(current_user_id: int, course_id: int):
     updates = []
     params = []
 
-    allowed_fields = ['title', 'description', 'color', 'progress']
-    for field in allowed_fields:
+    for field in ('title', 'description', 'color', 'progress'):
         if field in data:
             updates.append(f'{field} = %s')
             params.append(data[field])
@@ -109,25 +113,19 @@ def update_course(current_user_id: int, course_id: int):
     execute(f'UPDATE courses SET {", ".join(updates)} WHERE id = %s', tuple(params))
 
     row = fetchone('SELECT * FROM courses WHERE id = %s', (course_id,))
-    course = Course.from_row(row).to_dict()
-
-    topics_rows = fetchall(
-        'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
-        (course_id,)
-    )
-    course['topics'] = [Topic.from_row(t).to_dict() for t in topics_rows]
-
-    return jsonify({'course': course})
+    return jsonify({'course': _hydrate_course(row)})
 
 
 @bp.delete('/courses/<int:course_id>')
 @token_required
 def delete_course(current_user_id: int, course_id: int):
     """Delete a course."""
-    result = execute('DELETE FROM courses WHERE id = %s AND user_id = %s', (course_id, current_user_id))
+    result = execute(
+        'DELETE FROM courses WHERE id = %s AND user_id = %s',
+        (course_id, current_user_id)
+    )
     if result == 0:
         return jsonify({'error': 'Course not found'}), 404
-
     return jsonify({'message': 'Course deleted successfully'})
 
 
@@ -136,49 +134,51 @@ def delete_course(current_user_id: int, course_id: int):
 @token_required
 def create_topic(current_user_id: int, course_id: int):
     """Create a new topic in a course."""
-    # Verify course ownership
-    row = fetchone('SELECT * FROM courses WHERE id = %s AND user_id = %s', (course_id, current_user_id))
+    row = fetchone(
+        'SELECT * FROM courses WHERE id = %s AND user_id = %s',
+        (course_id, current_user_id)
+    )
     if not row:
         return jsonify({'error': 'Course not found'}), 404
 
     data = request.get_json() or {}
-
     if not data.get('title'):
         return jsonify({'error': 'title is required'}), 400
 
-    # Get max order_index
     max_order = fetchone(
-        'SELECT COALESCE(MAX(order_index), -1) as max_order FROM topics WHERE course_id = %s',
+        'SELECT COALESCE(MAX(order_index), -1) AS max_order '
+        'FROM topics WHERE course_id = %s',
         (course_id,)
     )
     order_index = (max_order['max_order'] if max_order else -1) + 1
 
     execute(
-        '''INSERT INTO topics (course_id, user_id, title, description, order_index, status, estimated_minutes)
+        '''INSERT INTO topics
+             (course_id, user_id, title, description, order_index,
+              status, estimated_minutes)
            VALUES (%s, %s, %s, %s, %s, %s, %s)''',
-        (
-            course_id,
-            current_user_id,
-            data['title'],
-            data.get('description'),
-            order_index,
-            data.get('status', 'pending'),
-            data.get('estimated_minutes')
-        )
+        (course_id, current_user_id, data['title'],
+         data.get('description'), order_index,
+         data.get('status', 'pending'), data.get('estimated_minutes'))
     )
 
     row = fetchone(
         'SELECT * FROM topics WHERE course_id = %s ORDER BY created_at DESC LIMIT 1',
         (course_id,)
     )
-    return jsonify({'topic': Topic.from_row(row).to_dict()}), 201
+    topic = Topic.from_row(row).to_dict()
+    topic['blocks'] = []
+    return jsonify({'topic': topic}), 201
 
 
 @bp.patch('/topics/<int:topic_id>')
 @token_required
 def update_topic(current_user_id: int, topic_id: int):
-    """Update a topic."""
-    row = fetchone('SELECT * FROM topics WHERE id = %s AND user_id = %s', (topic_id, current_user_id))
+    """Update a topic (by topic_id)."""
+    row = fetchone(
+        'SELECT * FROM topics WHERE id = %s AND user_id = %s',
+        (topic_id, current_user_id)
+    )
     if not row:
         return jsonify({'error': 'Topic not found'}), 404
 
@@ -186,8 +186,8 @@ def update_topic(current_user_id: int, topic_id: int):
     updates = []
     params = []
 
-    allowed_fields = ['title', 'description', 'order_index', 'status', 'estimated_minutes', 'actual_minutes']
-    for field in allowed_fields:
+    for field in ('title', 'description', 'order_index',
+                  'status', 'estimated_minutes', 'actual_minutes'):
         if field in data:
             updates.append(f'{field} = %s')
             params.append(data[field])
@@ -201,17 +201,21 @@ def update_topic(current_user_id: int, topic_id: int):
     execute(f'UPDATE topics SET {", ".join(updates)} WHERE id = %s', tuple(params))
 
     row = fetchone('SELECT * FROM topics WHERE id = %s', (topic_id,))
-    return jsonify({'topic': Topic.from_row(row).to_dict()})
+    topic = Topic.from_row(row).to_dict()
+    topic['blocks'] = []
+    return jsonify({'topic': topic})
 
 
 @bp.delete('/topics/<int:topic_id>')
 @token_required
 def delete_topic(current_user_id: int, topic_id: int):
-    """Delete a topic."""
-    result = execute('DELETE FROM topics WHERE id = %s AND user_id = %s', (topic_id, current_user_id))
+    """Delete a topic (by topic_id)."""
+    result = execute(
+        'DELETE FROM topics WHERE id = %s AND user_id = %s',
+        (topic_id, current_user_id)
+    )
     if result == 0:
         return jsonify({'error': 'Topic not found'}), 404
-
     return jsonify({'message': 'Topic deleted successfully'})
 
 
@@ -221,11 +225,9 @@ def reorder_topics(current_user_id: int):
     """Reorder topics within a course."""
     data = request.get_json() or {}
     topic_ids = data.get('topic_ids', [])
-
     if not topic_ids:
         return jsonify({'error': 'topic_ids array is required'}), 400
 
-    # Verify all topics belong to user
     placeholders = ','.join(['%s'] * len(topic_ids))
     rows = fetchall(
         f'SELECT id FROM topics WHERE id IN ({placeholders}) AND user_id = %s',
@@ -234,11 +236,9 @@ def reorder_topics(current_user_id: int):
     if len(rows) != len(topic_ids):
         return jsonify({'error': 'Some topics not found or unauthorized'}), 404
 
-    # Update order_index for each topic
     for index, topic_id in enumerate(topic_ids):
         execute(
             'UPDATE topics SET order_index = %s, updated_at = NOW() WHERE id = %s',
             (index, topic_id)
         )
-
     return jsonify({'message': 'Topics reordered successfully'})

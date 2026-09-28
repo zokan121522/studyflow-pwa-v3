@@ -33,6 +33,8 @@
   <link rel="stylesheet" href="/features/agenda/agenda-overlays.css">
   <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
   <link rel="stylesheet" href="/features/habits/habits.css">
+  <link rel="stylesheet" href="/features/studyflow/content-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/courses.css">
   
   <!-- PWA Meta Tags -->
   <meta name="msapplication-TileColor" content="#16213e">
@@ -358,10 +360,24 @@
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
   <script src="/shared/load-partial.js"></script>
+  <!-- Studyflow (S1 S2 sub-phase port):
+       content-blocks.js — self-contained safe markdown engine
+         (replaces the agenda-glue.js fallback; loads BEFORE agenda-glue
+          so App.ContentBlocks._renderMd is the FULL one).
+       courses-api.js / courses-sidebar.js / courses.js — sidebar tree +
+         course/topic landing (read-only shell, S1).
+       agenda-glue.js — defines STATE, App.Auth.authHeaders,
+         App.UI.displayTitle, App.Courses.applyMarkdown; uses the content-
+         blocks _renderMd if already present, otherwise its fallback
+         small-subset renderer. -->
+  <script src="/features/studyflow/content-blocks.js"></script>
+  <script src="/features/studyflow/courses-api.js"></script>
+  <script src="/features/studyflow/courses-sidebar.js"></script>
+  <script src="/features/studyflow/courses.js"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
-       App.ContentBlocks._renderMd, App.Courses.applyMarkdown, plus stubs for
-       deferred sub-phases (Habits, AgendaTimeline, AgendaMind). -->
+       App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,
+       plus stubs for deferred sub-phases (Habits, AgendaTimeline, AgendaMind). -->
   <script src="/features/agenda/agenda-glue.js"></script>
   <script src="/features/agenda/agenda-timer.js"></script>
   <script src="/features/agenda/agenda-quicknote.js"></script>
@@ -386,7 +402,6 @@
   <script src="/features/agenda/agenda-calendars.js"></script>
   <script src="/features/agenda/agenda.js"></script>
   <script src="/features/agenda/agenda-handlers.js"></script>
-  <script src="/features/courses/courses.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
