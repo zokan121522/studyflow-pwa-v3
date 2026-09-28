@@ -1,19 +1,21 @@
-// ─── Courses module — S1+S3 slice (sidebar tree + landing + blocks) ─
+// ─── Courses module — S1+S3+S4 slice (sidebar tree + landing + blocks + notes) ─
 // Namespace: window.App.Courses + window.CoursesModule (tab router).
 // Dependencies: window.STATE, API (global), window.App.UI (escHtml,
 // getWeekId, todayStr, formatDateShort, getDaysOfWeek),
 // window.App.CoursesAPI, window.App.CoursesSidebar,
-// window.App.CoursesBlocks, window.App.ContentBlocks._renderMd.
+// window.App.CoursesBlocks, window.App.CoursesNotes,
+// window.App.ContentBlocks._renderMd.
 //
 // SCOPE:
 //   • renderStudyflow(): rebuild sidebar + center
-//   • updateCenter(): course landing OR topic detail (read + block CRUD)
+//   • updateCenter(): course landing OR topic detail (read + block CRUD + notes)
 //   • create/rename/delete course + topic via prompt dialogs
 //   • renderFavorites(): safe no-op (favorites ship with S4+)
 //
 // S3 wires the topic-detail page into the new blocks backend
-// (CoursesBlocks module). Drag/drop, share/export/AI/quiz/flashcards
-// are deferred.
+// (CoursesBlocks module). S4 swaps in the SF-Card block visuals and
+// adds the per-topic notes drawer (App.CoursesNotes). Drag/drop,
+// share/export/AI/quiz/flashcards are deferred.
 
 window.App = window.App || {};
 window.App.Courses = (function () {
@@ -30,6 +32,7 @@ window.App.Courses = (function () {
   } = window.App.CoursesSidebar;
   const { _renderMd } = window.App.ContentBlocks;
   const Blocks = window.App.CoursesBlocks;
+  const Notes = window.App.CoursesNotes;
 
   function STATE() { return window.STATE; }
 
@@ -242,9 +245,12 @@ window.App.Courses = (function () {
   }
 
   // ── _renderTopicDetail(centerEl, courseId, topicId) ──────────
-  // S3: each block is rendered via App.CoursesBlocks._renderBlock and the
-  // "+ Añadir bloque" bar is appended. Edit / save / cancel / done /
-  // delete actions are delegated by CoursesBlocks._attachBlockHandlers.
+  // S4: each block is rendered via App.CoursesBlocks._renderBlockCard (the
+  // SF-Card wrapper around the S3 block markup) and the "+ Añadir bloque"
+  // bar is appended. Edit / save / cancel / done / delete actions are
+  // delegated by CoursesBlocks._attachBlockHandlers. Up / down reorder +
+  // collapse are delegated by CoursesBlocks._attachCardHandlers. The
+  // per-topic notes drawer is mounted via App.CoursesNotes.render().
   async function _renderTopicDetail(centerEl, courseId, topicId) {
     const detail = await fetchCourseDetail(courseId);
     const topic = (detail.topics || []).find((t) => t.id === topicId);
@@ -258,7 +264,7 @@ window.App.Courses = (function () {
     }
     const blocks = topic.blocks || [];
     const blocksHtml = blocks.length
-      ? blocks.map((b) => Blocks._renderBlock(b, courseId)).join("")
+      ? blocks.map((b) => Blocks._renderBlockCard(b, courseId)).join("")
       : '<div class="empty-state"><span class="big">📝</span><br>'
         + 'Este tema no tiene bloques aún.<br>'
         + 'Crea uno con “+ Añadir bloque”.</div>';
@@ -278,7 +284,12 @@ window.App.Courses = (function () {
       </div>
     `;
 
+    // S3 handlers — edit / save / cancel / done / delete / add.
     Blocks._attachBlockHandlers(centerEl, courseId, topicId);
+    // S4 handlers — collapse / up / down reorder.
+    Blocks._attachCardHandlers(centerEl, courseId, topicId);
+    // S4 — per-topic notes drawer.
+    Notes.render(centerEl, courseId, topicId);
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {

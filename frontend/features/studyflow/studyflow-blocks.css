@@ -198,3 +198,140 @@
 }
 .sf-td-add-item:hover { background: var(--surface-hover); }
 .sf-td-add-icon { font-size: 14px; }
+
+/* ─── S4: SF-Card block visuals + reorder ─────────────────────── */
+.sf-block-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 6px 1fr;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .12s, box-shadow .12s;
+}
+.sf-block-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow);
+}
+.sf-block-card.is-done { opacity: 0.75; }
+.sf-block-card.is-collapsed .sf-bc-body { display: none; }
+
+.sf-bc-strip {
+  background: var(--primary);
+  /* Fallback colour is set inline per type via the inline style attribute
+     so CSS variables / dark-theme tokens stay consistent. */
+}
+
+.sf-bc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sf-bc-collapse {
+  width: 22px;
+  padding: 0;
+  text-align: center;
+  font-size: 10px;
+  opacity: 0.6;
+}
+.sf-bc-collapse:hover { opacity: 1; }
+.sf-bc-icon { font-size: 14px; flex-shrink: 0; }
+.sf-bc-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-bc-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sf-bc-body {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+/* Inside the SF-Card we wrap the S3 .sf-td-block — strip its redundant
+   padding/border so it nests cleanly. */
+.sf-bc-body > .sf-td-block {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.sf-bc-body > .sf-td-block .sf-td-block-head { margin-bottom: 4px; }
+
+/* Hover affordance for reorder buttons */
+.sf-bc-up:hover, .sf-bc-down:hover { background: var(--border); color: var(--text); }
+
+/* ─── S4: per-topic notes drawer ───────────────────────────────── */
+.sf-notes-panel {
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sf-notes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sf-notes-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.sf-notes-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.sf-notes-preview {
+  padding: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.sf-notes-preview.sf-empty { color: var(--text-muted); font-style: italic; }
+
+.sf-notes-textarea {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 120px;
+  resize: vertical;
+}
+.sf-notes-panel.is-editing .sf-notes-textarea { display: block; }
+.sf-notes-panel.is-editing .sf-notes-preview { display: none; }
+
+.sf-notes-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}

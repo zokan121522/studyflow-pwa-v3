@@ -203,6 +203,32 @@ window.App.CoursesAPI = (function () {
     return data && data.block;
   }
 
+  // ── getTopicNotes(courseId, topicId) ──────────────────────────
+  // S4: returns the freeform notes string for a topic.
+  async function getTopicNotes(courseId, topicId) {
+    const data = await API.get(
+      `/courses/${courseId}/topics/${topicId}/notes`
+    );
+    const notes = (data && data.notes) || {};
+    return notes.content || "";
+  }
+
+  // ── saveTopicNotes(courseId, topicId, content) ───────────────
+  async function saveTopicNotes(courseId, topicId, content) {
+    const data = await API.put(
+      `/courses/${courseId}/topics/${topicId}/notes`,
+      { content: content || "" }
+    );
+    const notes = (data && data.notes) || {};
+    // Patch cached detail so the next re-render is consistent.
+    if (_detailCache[courseId]) {
+      const t = (_detailCache[courseId].topics || [])
+        .find((tt) => tt.id === topicId);
+      if (t) t.notes = notes.content || "";
+    }
+    return notes.content || "";
+  }
+
   // ── Helper: in-place list-cache patch ────────────────────────
   function _patchListCache(courseId, mutator) {
     if (!_listCache) return;
@@ -230,6 +256,9 @@ window.App.CoursesAPI = (function () {
     toggleBlockDone,
     reorderBlocks,
     moveBlock,
+    // Topic notes (S4)
+    getTopicNotes,
+    saveTopicNotes,
   };
 })();
 

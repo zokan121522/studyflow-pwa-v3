@@ -9,6 +9,18 @@
 //   • add block via "+ Añadir bloque" affordance with type menu
 //   • toggle done / delete / reorder (basic move buttons)
 //
+// SCOPE (S4 — additive, SF-Card visuals):
+//   • _renderBlockCard(b, courseId) — richer card with category color
+//     strip, type icon, title, collapsible body, up/down/done/edit/
+//     delete affordances. Renders same fields as _renderBlock but
+//     wraps them in a more v2-shaped "block-detail" structure so the
+//     notes drawer / future cards can dock underneath.
+//   • _attachCardHandlers(host, courseId, topicId) — extension that
+//     handles up/down reorder (PATCH /courses/<cid>/blocks with
+//     reordered ids) + collapse toggle. Composes on top of
+//     _attachBlockHandlers (which still owns edit/save/cancel/done/
+//     delete/add).
+//
 // Block types supported: markdown, content (plain text), separator,
 // pdf-ref (url only), youtube (url only). Other types fall back to a
 // generic read-only card.
@@ -24,17 +36,20 @@ window.App.CoursesBlocks = (function () {
   } = window.App.CoursesAPI;
   const { _renderMd } = window.App.ContentBlocks;
 
-  // ── Block-type → icon + label (UI affordances) ────────────────
+  // ── Block-type → icon + label + color strip (UI affordances) ──
+  // color maps each type to a thin gradient strip on the left edge of
+  // the card (S4 SF-Card look).
   const TYPE_META = {
-    markdown: { icon: "📝", label: "Markdown" },
-    content:  { icon: "📄", label: "Texto" },
-    separator:{ icon: "➖", label: "Separador" },
-    "pdf-ref":{ icon: "📕", label: "PDF-link" },
-    youtube:  { icon: "▶️", label: "YouTube" },
+    markdown: { icon: "📝", label: "Markdown", strip: "var(--primary)" },
+    content:  { icon: "📄", label: "Texto",    strip: "#3b82f6" },
+    separator:{ icon: "➖", label: "Separador",strip: "var(--border-light)" },
+    "pdf-ref":{ icon: "📕", label: "PDF-link", strip: "#ef4444" },
+    youtube:  { icon: "▶️", label: "YouTube",  strip: "#f59e0b" },
   };
 
   function meta(type) {
-    return TYPE_META[type] || { icon: "📌", label: type || "Bloque" };
+    return TYPE_META[type]
+      || { icon: "📌", label: type || "Bloque", strip: "var(--border-light)" };
   }
 
   // ── _renderBlock(block, courseId) → HTML string ──────────────
@@ -313,12 +328,115 @@ window.App.CoursesBlocks = (function () {
     }
   }
 
+  // ============================== S4 (SF-Card) ==============================
+  // ── _renderBlockCard(b, courseId) ─────────────────────────────
+  // v2-style "block-detail" wrapper around the S3 block body. Adds:
+  //   • a left-edge color strip derived from the block type
+  //   • a collapsed/expanded toggle on the header (▼ / ▶)
+  //   • up / down reorder buttons in the header
+  //   • keeps the existing done / edit / delete affordances
+  // The body is the same S3 markup so edit/save handlers wired by
+  // _attachBlockHandlers keep working without changes.
+  function _renderBlockCard(b, courseId) {
+    const type = b.type || "markdown";
+    const title = escHtml(b.title || "Bloque");
+    const done = !!b.done;
+    const collapsed = !!b.collapsed;
+    const m = meta(type);
+    // SF-Card inner body — reuse the S3 block markup but inside the new
+    // card chrome so we get color-strip / collapse / reorder.
+    const innerBody = _renderBlock(b, courseId);
+    return `<div class="sf-block-card sf-block-card-type-${escHtml(type)} ${
+      done ? "is-done" : ""
+    } ${collapsed ? "is-collapsed" : ""}"
+        data-block-id="${b.id}" data-block-type="${escHtml(type)}"
+        data-course-id="${courseId}">
+      <div class="sf-bc-strip" style="background:${m.strip};"></div>
+      <header class="sf-bc-head">
+        <button class="sf-bc-collapse ht-btn-mini" title="Plegar / desplegar">${
+          collapsed ? "▶" : "▼"
+        }</button>
+        <span class="sf-bc-icon">${m.icon}</span>
+        <span class="sf-bc-title">${title}</span>
+        <span class="sf-bc-actions">
+          <button class="sf-bc-up ht-btn-mini" title="Subir">⬆️</button>
+          <button class="sf-bc-down ht-btn-mini" title="Bajar">⬇️</button>
+          <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
+          <button class="sf-td-del ht-btn-mini" title="Borrar">🗑️</button>
+        </span>
+      </header>
+      <div class="sf-bc-body">${innerBody}</div>
+    </div>`;
+  }
+
+  // ── _attachCardHandlers(host, courseId, topicId) ──────────────
+  // Idempotent: delegates collapse / up / down clicks on .sf-block-card.
+  // Reorder: reads the current DOM order of block ids and calls the
+  // existing reorderBlocks API, then dispatches studyflow:blocks-changed
+  // so updateCenter re-renders.
+  function _attachCardHandlers(host, courseId, topicId) {
+    if (!host) return;
+    if (host.dataset._sfCardHandlers === "1") return;
+    host.dataset._sfCardHandlers = "1";
+
+    host.addEventListener("click", async (e) => {
+      // Collapse toggle
+      const collapseBtn = e.target.closest(".sf-bc-collapse");
+      if (collapseBtn) {
+        e.stopPropagation();
+        const card = collapseBtn.closest(".sf-block-card");
+        if (!card) return;
+        const isCollapsed = card.classList.toggle("is-collapsed");
+        collapseBtn.textContent = isCollapsed ? "▶" : "▼";
+        // The visual body in .sf-bc-body contains the inner block, which
+        // already has its own .sf-td-block-body. Hide it on collapse.
+        const body = card.querySelector(".sf-bc-body");
+        if (body) body.style.display = isCollapsed ? "none" : "";
+        return;
+      }
+
+      // Up / Down reorder
+      const bump = e.target.closest(".sf-bc-up, .sf-bc-down");
+      if (bump) {
+        e.stopPropagation();
+        const card = bump.closest(".sf-block-card");
+        if (!card) return;
+        const direction = bump.classList.contains("sf-bc-up") ? -1 : 1;
+        const sibling = direction === -1
+          ? card.previousElementSibling
+          : card.nextElementSibling;
+        if (!sibling
+            || !sibling.classList.contains("sf-block-card")) return;
+        const parent = card.parentElement;
+        if (direction === -1) parent.insertBefore(card, sibling);
+        else parent.insertBefore(sibling, card);
+        // Collect the new order from the DOM and PATCH.
+        const ids = Array.from(
+          parent.querySelectorAll(".sf-block-card")
+        ).map((el) => Number(el.dataset.blockId));
+        try {
+          await reorderBlocks(courseId, ids);
+          const evt = new CustomEvent("studyflow:blocks-changed", {
+            detail: { courseId, topicId }
+          });
+          window.dispatchEvent(evt);
+        } catch (err) {
+          alert("❌ Error al reordenar: " + (err.message || err));
+        }
+        return;
+      }
+    });
+  }
+
   // ── Public API ───────────────────────────────────────────────
   return {
     _renderBlock,
     _renderAddBar,
     _renderEditForm,
     _attachBlockHandlers,
+    // S4 (SF-Card visuals + reorder)
+    _renderBlockCard,
+    _attachCardHandlers,
     TYPE_META,
   };
 })();
