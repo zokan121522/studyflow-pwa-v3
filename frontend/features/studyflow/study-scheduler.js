@@ -26,6 +26,12 @@ window.App.StudyScheduler = (function () {
         label: "Configuración (Moodle)",
         run: () => window.App.ScormSettings.open(),
       },
+      {
+        id: "notebooklm-settings",
+        icon: "🧠",
+        label: "NotebookLM",
+        run: () => window.App.NotebookLmSettings.open(),
+      },
     ];
   }
 

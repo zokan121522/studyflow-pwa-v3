@@ -35,6 +35,7 @@ from routes.audio import bp as audio_bp
 from routes.health import bp as health_bp
 from routes.tts import bp as tts_bp
 from routes.settings import bp as settings_bp
+from routes.notebooklm_settings import bp as notebooklm_settings_bp
 
 
 def create_app() -> Flask:
@@ -70,6 +71,7 @@ def _register_blueprints(app: Flask) -> None:
         habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
         pdf_bp, quiz_bp, addons_bp,
         todos_bp, audio_bp, tts_bp, settings_bp,
+        notebooklm_settings_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp, url_prefix='/api')

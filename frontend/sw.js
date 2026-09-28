@@ -1,10 +1,9 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v9 (S7b-B): bumped ASSET_CACHE so the activate handler evicts the v8
-// cache. Adds the floating study menu (study-scheduler.js/.css) and the
-// SCORM credentials settings panel (scorm-settings.js).
-const ASSET_CACHE = 'studyflow-assets-v9';
+// v10 (7.2): bumped ASSET_CACHE so the activate handler evicts v9.
+// Adds the NotebookLM settings panel (notebooklm-settings.js).
+const ASSET_CACHE = 'studyflow-assets-v10';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -40,6 +39,8 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/study-scheduler.js',
   '/features/studyflow/study-scheduler.css',
   '/features/studyflow/scorm-settings.js',
+  // 7.2: NotebookLM settings panel
+  '/features/studyflow/notebooklm-settings.js',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
   // SA.2 + S4.7: addons foundation (registry + marketplace) and the

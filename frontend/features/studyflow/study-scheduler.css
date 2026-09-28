@@ -165,3 +165,67 @@
 .ss-settings-status.ok   { color: #16a34a; }
 .ss-settings-status.err  { color: #dc2626; }
 .ss-settings-status.info { color: var(--text-muted, #6b7280); }
+
+/* ── NotebookLM settings panel (7.2) ────────────────────────────── */
+.nb-body { margin-top: 8px; }
+.nb-conn-badge {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.nb-conn-ok  { background: rgba(22, 163, 74, 0.12); color: #16a34a; }
+.nb-conn-off { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+.nb-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+.nb-profile-email {
+  flex: 1;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+.nb-profile-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.nb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.nb-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.nb-collapse { display: none; }
+.nb-collapse h4 { margin: 8px 0 4px 0; font-size: 14px; }
+.nb-collapse .ss-settings-field { margin-top: 8px; }
+.nb-chrome-command {
+  display: block;
+  padding: 10px 12px;
+  background: var(--surface-2, #f3f4f6);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  margin: 8px 0;
+  user-select: all;
+}
+.nb-chrome-status { font-size: 12px; margin-top: 6px; }

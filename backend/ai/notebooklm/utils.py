@@ -24,11 +24,11 @@ from database import query
 
 logger = logging.getLogger(__name__)
 
-_COOKIE_DIR = os.environ.get(
+COOKIE_DIR = os.environ.get(
     "NOTEBOOKLM_DIR",
     os.path.join(os.path.expanduser("~"), ".notebooklm"),
 )
-_ACTIVE_FILE = os.path.join(_COOKIE_DIR, "active.txt")
+ACTIVE_FILE = os.path.join(COOKIE_DIR, "active.txt")
 
 
 def get_active_profile() -> str | None:
@@ -39,14 +39,14 @@ def get_active_profile() -> str | None:
         (→ falls back to global cookie file).
     """
     try:
-        raw = Path(_ACTIVE_FILE).read_text().strip()
+        raw = Path(ACTIVE_FILE).read_text().strip()
         if raw:
             logger.info("[NotebookLM] Active profile: %s", raw)
         else:
             logger.warning("[NotebookLM] active.txt is empty — falling back to global cookies")
         return raw if raw else None
     except (FileNotFoundError, OSError):
-        logger.warning("[NotebookLM] active.txt not found at %s — falling back to global cookies", _ACTIVE_FILE)
+        logger.warning("[NotebookLM] active.txt not found at %s — falling back to global cookies", ACTIVE_FILE)
         return None
 
 
