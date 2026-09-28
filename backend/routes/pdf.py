@@ -1,8 +1,9 @@
 # backend/routes/pdf.py
-"""PDF upload/serve routes for StudyFlow PWA v3."""
+"""PDF upload/serve/annotate routes for StudyFlow PWA v3 (S7)."""
 
 import os
 import uuid
+import json
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
@@ -23,6 +24,14 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _own_pdf(pdf_id: int, user_id: int):
+    """Return the row for a PDF that belongs to the user, or None."""
+    return fetchone(
+        'SELECT * FROM pdfs WHERE id = %s AND user_id = %s',
+        (pdf_id, user_id)
+    )
 
 
 @bp.post('/pdf/upload')
@@ -142,3 +151,87 @@ def list_pdfs(current_user_id: int):
 
     rows = fetchall(query, tuple(params))
     return jsonify({'pdfs': [PDF.from_row(r).to_dict() for r in rows]})
+
+
+# ─── S7: annotations ────────────────────────────────────────────────
+# Persist lightweight per-page annotations (text notes, free-form JSON
+# blobs the viewer chooses to round-trip). The viewer is responsible for
+# any geometry; we just store what it sends keyed by (pdf_id, page).
+
+
+@bp.post('/pdf/annotate')
+@token_required
+def annotate_pdf(current_user_id: int):
+    """Save (upsert) an annotation for (pdf_id, page).
+
+    Body JSON: { pdf_id: int, page: int (>=1), data: {...} }
+    Returns:   { annotation: { id, pdf_id, page, data, created_at, updated_at } }
+    """
+    payload = request.get_json(silent=True) or {}
+    pdf_id = payload.get('pdf_id')
+    page = payload.get('page')
+    data = payload.get('data')
+    if not isinstance(pdf_id, int) or pdf_id <= 0:
+        return jsonify({'error': 'pdf_id must be a positive int'}), 400
+    if not isinstance(page, int) or page < 1:
+        return jsonify({'error': 'page must be a positive int'}), 400
+    if not isinstance(data, (dict, list)):
+        return jsonify({'error': 'data must be a JSON object or array'}), 400
+
+    if not _own_pdf(pdf_id, current_user_id):
+        return jsonify({'error': 'PDF not found'}), 404
+
+    data_json = json.dumps(data)
+    # Upsert: one annotation row per (pdf_id, page); the viewer replaces
+    # the whole payload each time (no fine-grained merge).
+    execute(
+        """
+        INSERT INTO pdf_annotations (user_id, pdf_id, page, data, updated_at)
+        VALUES (%s, %s, %s, %s::jsonb, NOW())
+        ON CONFLICT (pdf_id, page) DO UPDATE
+          SET data = EXCLUDED.data, updated_at = NOW()
+        """,
+        (current_user_id, pdf_id, page, data_json),
+    )
+    row = fetchone(
+        'SELECT * FROM pdf_annotations '
+        'WHERE pdf_id = %s AND page = %s AND user_id = %s',
+        (pdf_id, page, current_user_id),
+    )
+    return jsonify({'annotation': _annotation_to_dict(row)}), 201
+
+
+@bp.get('/pdf/<int:pdf_id>/annotations')
+@token_required
+def list_pdf_annotations(current_user_id: int, pdf_id: int):
+    """List every annotation row for a PDF (one per page)."""
+    if not _own_pdf(pdf_id, current_user_id):
+        return jsonify({'error': 'PDF not found'}), 404
+    rows = fetchall(
+        'SELECT * FROM pdf_annotations '
+        'WHERE pdf_id = %s AND user_id = %s ORDER BY page ASC',
+        (pdf_id, current_user_id),
+    )
+    return jsonify({'annotations': [_annotation_to_dict(r) for r in rows]})
+
+
+def _annotation_to_dict(row) -> dict:
+    """Convert a pdf_annotations row → JSON-safe dict.
+
+    The `data` JSONB column comes back as already-parsed Python objects
+    via RealDictCursor — only re-parse when psycopg2 returned a str.
+    """
+    data = row['data']
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            data = {'raw': data}
+    return {
+        'id': row['id'],
+        'pdf_id': row['pdf_id'],
+        'page': row['page'],
+        'data': data,
+        'created_at': row['created_at'].isoformat() if row['created_at'] else None,
+        'updated_at': row['updated_at'].isoformat() if row['updated_at'] else None,
+    }

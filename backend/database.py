@@ -285,6 +285,18 @@ _TABLE_DDL = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS pdf_annotations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        pdf_id INTEGER REFERENCES pdfs(id) ON DELETE CASCADE,
+        page INTEGER NOT NULL,
+        data JSONB NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE (pdf_id, page)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS quiz_questions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
