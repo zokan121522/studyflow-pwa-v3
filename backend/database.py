@@ -37,6 +37,10 @@ def init_db() -> None:
     # Seed local user (id=1) for single-user mode
     _seed_local_user()
 
+    # Sub-phase SA — seed the addon catalog (idempotent upsert).
+    from backend.addons_seed import seed_addon_catalog
+    seed_addon_catalog()
+
 
 def _seed_local_user() -> None:
     """Ensure the implicit local user (id=1) exists so single-user mode works.
@@ -366,6 +370,25 @@ _TABLE_DDL = [
         collapsed BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    # Sub-phase SA — Addons Foundation. Catalog + per-row installed/enabled/
+    # hidden state (single-user v3: one row per slug). `installed`/`hidden`
+    # are seeded by INSERT (so hidden-by-default rows aren't visible until the
+    # IA phase ships); ON CONFLICT updates only name/description/version
+    # so user choices survive re-seeding (mirrors v2 addons_seed.py).
+    """
+    CREATE TABLE IF NOT EXISTS addons (
+        slug        TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        version     TEXT DEFAULT '0.0.0',
+        installed   BOOLEAN NOT NULL DEFAULT FALSE,
+        enabled     BOOLEAN NOT NULL DEFAULT FALSE,
+        hidden      BOOLEAN NOT NULL DEFAULT FALSE,
+        url_prefix  TEXT,
+        created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
 ]
