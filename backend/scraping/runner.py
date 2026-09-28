@@ -76,6 +76,91 @@ def _emit(progress_cb: ProgressCb, msg: str) -> None:
         logger.debug("runner progress_cb raised (ignored): %s", exc)
 
 
+# ─── Moodle login ────────────────────────────────────────────────────
+# Selectors for the standard Moodle login form (login/index.php).
+_LOGIN_USER_SELECTORS = (
+    ("css selector", "input[name='username']"),
+    ("css selector", "#loginusername"),
+    ("css selector", "input[type='text']"),
+)
+_LOGIN_PASS_SELECTOR = ("css selector", "input[type='password']")
+_LOGIN_SUBMIT_SELECTORS = (
+    ("css selector", "button[type='submit']"),
+    ("css selector", "input[type='submit']"),
+    ("css selector", "form.mform button"),
+)
+LOGIN_BUDGET_S = 20
+
+
+def _login_field(driver, selectors):
+    """First element matching any selector, or None."""
+    for by, sel in selectors:
+        try:
+            found = _poll_locate(driver, ((by, sel),), 2.0, _first)
+        except Exception:
+            continue
+        if found:
+            return found
+    return None
+
+
+def _is_login_page(driver) -> bool:
+    """True if the browser is sitting on a login form."""
+    if "/login" in (driver.current_url or "").lower():
+        return True
+    try:
+        return bool(driver.find_elements(*_LOGIN_PASS_SELECTOR))
+    except Exception:
+        return False
+
+
+def _attempt_login(driver, username, password, progress_cb) -> bool:
+    """Fill and submit the Moodle login form. Returns True on success."""
+    _emit(progress_cb, "Formulario de login detectado — iniciando sesión…")
+    user_el = _login_field(driver, _LOGIN_USER_SELECTORS)
+    pass_el = _login_field(driver, (_LOGIN_PASS_SELECTOR,))
+    if not (user_el and pass_el):
+        _emit(progress_cb, "⚠ No se pudo rellenar el login (formulario raro)")
+        return False
+    try:
+        user_el.clear()
+        user_el.send_keys(username)
+        pass_el.clear()
+        pass_el.send_keys(password)
+        pass_el.submit()
+    except Exception as exc:
+        logger.warning("[scraper] login fill failed: %s", exc)
+        _emit(progress_cb, f"⚠ Login falló al escribir: {exc}")
+        return False
+    # Wait (bounded) for the URL to leave /login.
+    deadline = time.time() + LOGIN_BUDGET_S
+    while time.time() < deadline:
+        if "/login" not in (driver.current_url or "").lower():
+            _emit(progress_cb, "Sesión iniciada correctamente ✓")
+            return True
+        time.sleep(0.5)
+    _emit(progress_cb, "⚠ El login no redirigió (¿credenciales incorrectas?)")
+    return False
+
+
+def _maybe_login(driver, username, password, progress_cb) -> None:
+    """Log into Moodle when a login form is present and creds are available."""
+    if not (username and password):
+        return
+    if not _is_login_page(driver):
+        return
+    if _attempt_login(driver, username, password, progress_cb):
+        return
+    # After a failed login the browser stays on the form; nothing else to do.
+
+
+def _resolve_credentials(username, password):
+    """Credentials priority: explicit args > SCRAPING_* env vars."""
+    user = (username or "").strip() or (os.environ.get("SCRAPING_USERNAME") or "").strip()
+    pwd = password or os.environ.get("SCRAPING_PASSWORD") or ""
+    return (user or None, pwd or None)
+
+
 def run_scrape(
     url: str,
     course_title: str,
@@ -83,6 +168,8 @@ def run_scrape(
     max_pages: int = 200,
     timeout: int = 120,
     progress_cb: ProgressCb = None,
+    username: str = None,
+    password: str = None,
 ) -> str:
     """Open Chrome headless, scrape `url` and return the local PDF path.
 
@@ -94,8 +181,11 @@ def run_scrape(
     os.makedirs(output_dir, exist_ok=True)
     _emit(progress_cb, "Iniciando Chrome headless…")
     driver = _open_driver(timeout, output_dir, progress_cb)
+    username, password = _resolve_credentials(username, password)
     try:
-        return _scrape(driver, url, course_title, output_dir, progress_cb)
+        return _scrape(
+            driver, url, course_title, output_dir, progress_cb, username, password
+        )
     except WebDriverException as exc:
         logger.error("[scraper] WebDriver error: %s", exc)
         _emit(progress_cb, f"❌ Chrome/Selenium falló: {exc}")
@@ -114,11 +204,14 @@ def _scrape(
     course_title: str,
     output_dir: str,
     progress_cb: ProgressCb,
+    username: str = None,
+    password: str = None,
 ) -> str:
     """Navigate, enter the SCORM frame and produce the PDF file."""
     _emit(progress_cb, f"Navegando a {url}")
     driver.get(url)
     _emit(progress_cb, "Página cargada — buscando el reproductor SCORM")
+    _maybe_login(driver, username, password, progress_cb)
     _warn_if_login_wall(driver, progress_cb)
     if _switch_to_scorm_frame(driver, progress_cb):
         _emit(progress_cb, "Dentro del iframe SCORM")
