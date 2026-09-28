@@ -65,6 +65,33 @@ _EMBED_SELECTORS = (
     ("xpath", "//iframe[contains(@src, '.pdf')]"),
 )
 
+# Blocking overlays. Moodle's SCORM player asks "¿Volver a la última vista?"
+# on resume, and the prompt is a full-viewport mask that swallows every
+# interaction: without dismissing it the scraper never reaches the frame that
+# holds the PDF and just stalls until the budget expires. The user closes it
+# by clicking anywhere, so a click on the mask is the primary strategy.
+_OVERLAY_SELECTORS = (
+    ("css selector", ".modal.show .modal-backdrop"),
+    ("css selector", ".modal-backdrop.show"),
+    ("css selector", "[role='dialog']"),
+    ("css selector", ".modal-dialog"),
+    ("css selector", "#cmiz-0, #cmiz-1"),
+    ("css selector", ".block_overlay"),
+    ("css selector", ".yuimenu"),
+    ("css selector", "#pn-tryagain, .pn-tryagain"),
+)
+
+# Text of the resume prompt, matched case/accent-insensitively in JS.
+_OVERLAY_TEXT_HINTS = (
+    "volver a la última vista",
+    "volver a la ultima vista",
+    "return to last view",
+    "resume",
+)
+
+# Bounded budget for the dismissal loop — never stall the import.
+OVERLAY_BUDGET_S = 6
+
 
 def _emit(progress_cb: ProgressCb, msg: str) -> None:
     """Safely invoke the optional progress callback. Never raises."""
@@ -213,10 +240,15 @@ def _scrape(
     _emit(progress_cb, "Página cargada — buscando el reproductor SCORM")
     _maybe_login(driver, username, password, progress_cb)
     _warn_if_login_wall(driver, progress_cb)
+    # The "¿Volver a la última vista?" mask appears right after the player
+    # loads and blocks the frame switch, so it has to go first.
+    _dismiss_overlays(driver, progress_cb)
     if _switch_to_scorm_frame(driver, progress_cb):
         _emit(progress_cb, "Dentro del iframe SCORM")
     else:
         _emit(progress_cb, "Sin iframe SCORM — documento principal")
+    # The player can raise the same prompt again once the frame is active.
+    _dismiss_overlays(driver, progress_cb)
     pdf_path = _find_and_download_pdf(
         driver, output_dir, course_title, progress_cb
     )
@@ -301,6 +333,182 @@ def _poll_locate(driver, selectors, budget_s: float, pick):
 def _first(elements):
     """pick() helper: first element of the match list, or None."""
     return elements[0] if elements else None
+
+
+# JS: walk up from the viewport centre to the OUTERMOST element that still
+# covers (nearly) the whole viewport, and return it. That is the mask — not
+# the dialog nested inside it. Returns null when nothing but <body> is on top,
+# i.e. the content is reachable.
+_COVERING_ELEMENT_JS = """
+const thresh = window.innerWidth * 0.9;
+const vthresh = window.innerHeight * 0.9;
+const covers = (el) => {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.width >= thresh && r.height >= vthresh;
+};
+let el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+if (!el) return null;
+while (el.parentElement && covers(el.parentElement)
+       && el.parentElement !== document.documentElement) {
+  el = el.parentElement;
+}
+if (el === document.body || el === document.documentElement) return null;
+return el;
+"""
+
+# JS: what sits at a given point — used to assert the content is clickable.
+_TOP_ELEMENT_AT_JS = """
+const el = document.elementFromPoint(arguments[0], arguments[1]);
+return el ? (el.id || el.className || el.tagName) : 'nada';
+"""
+
+
+def _covering_element(driver):
+    """Return the topmost full-viewport element, or None if content is free."""
+    from selenium.webdriver.common.by import By  # noqa: F401  (kept for parity)
+
+    try:
+        return driver.execute_script(_COVERING_ELEMENT_JS)
+    except Exception:
+        logger.debug("[scraper] Could not probe for a covering element")
+        return None
+
+
+def _dismiss_overlays(driver, progress_cb: ProgressCb = None) -> bool:
+    """Close blocking overlays, the way a user would: click anywhere.
+
+    Moodle's SCORM player raises a "¿Volver a la última vista?" mask on
+    resume. It is viewport-sized and sits above the content, so the frame
+    switch and the PDF lookup both stall behind it. Dismissal is attempted
+    in decreasing order of politeness:
+
+      1. press Escape — lets the page's own handler run;
+      2. click an explicit "No"/"Cancelar" button when one exists;
+      3. click the mask itself (what actually works on that prompt);
+      4. force-hide leftovers as a last resort, so one stubborn overlay
+         cannot consume the whole overlay budget.
+
+    Returns True if something was dismissed.
+    """
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+
+    deadline = time.monotonic() + OVERLAY_BUDGET_S
+    dismissed = False
+
+    def _visible_overlay():
+        """Return the first on-screen overlay element, or None."""
+        for how, sel in _OVERLAY_SELECTORS:
+            try:
+                for el in driver.find_elements(By.CSS_SELECTOR, sel) if how == "css selector" else []:
+                    if el.is_displayed():
+                        return el
+            except Exception:
+                continue
+        # Text-based fallback: any dialog whose text matches the prompt.
+        try:
+            return driver.execute_script(
+                """
+                const hints = arguments[0];
+                const visible = (el) => {
+                  const r = el.getBoundingClientRect();
+                  const s = getComputedStyle(el);
+                  return r.width > 0 && r.height > 0 &&
+                         s.display !== 'none' && s.visibility !== 'hidden' &&
+                         Number(s.opacity) > 0.05;
+                };
+                const norm = (s) => (s || '')
+                  .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+                for (const el of document.querySelectorAll(
+                      "div,section,dialog,form")) {
+                  if (!visible(el)) continue;
+                  const t = norm(el.innerText);
+                  if (t.length > 400) continue;              // not a dialog
+                  if (hints.some((h) => t.includes(h))) return el;
+                }
+                return null;
+                """,
+                list(_OVERLAY_TEXT_HINTS),
+            )
+        except Exception:
+            return None
+
+    while time.monotonic() < deadline:
+        overlay = _visible_overlay()
+        if not overlay:
+            break
+
+        # 1. Escape — the page's own handler may close it cleanly.
+        try:
+            ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+        except Exception:
+            logger.debug("[scraper] Escape did not dismiss the overlay")
+
+        # 2. An explicit negative button, when the dialog offers one.
+        try:
+            for el in driver.find_elements(
+                By.CSS_SELECTOR,
+                ".modal.show button, [role='dialog'] button",
+            ):
+                label = (el.text or "").strip().lower()
+                if label in {"no", "cancelar", "cerrar", "continuar", "saltar"}:
+                    el.click()
+                    dismissed = True
+                    break
+        except Exception:
+            logger.debug("[scraper] No explicit dismiss button")
+
+        # 3. Click the mask — what a user actually does on that prompt.
+        try:
+            ActionChains(driver).move_to_element_with_offset(overlay, 5, 5).click()
+            dismissed = True
+        except Exception:
+            try:
+                driver.execute_script("arguments[0].click();", overlay)
+                dismissed = True
+            except Exception:
+                logger.debug("[scraper] Click on overlay failed")
+
+        if not _visible_overlay():
+            break
+        time.sleep(0.4)
+
+    # 4. Anything still standing is hidden outright. Target the covering
+    #    element found geometrically — removing only a nested dialog would
+    #    leave its mask in place, still swallowing every click.
+    covering = _covering_element(driver)
+    if covering:
+        try:
+            driver.execute_script(
+                """
+                const el = arguments[0];
+                if (el) { el.remove(); }
+                document.querySelectorAll(
+                  ".modal-backdrop, .block_overlay, [role='dialog']"
+                ).forEach((n) => n.remove());
+                document.body.classList.remove('modal-open', 'overflow-hidden');
+                document.body.style.overflow = 'auto';
+                """,
+                covering,
+            )
+        except Exception:
+            logger.debug("[scraper] Could not force-hide the overlay")
+
+    # Only claim success once the page is provably free. Trusting the click
+    # alone produced a green log while the prompt kept blocking the import.
+    time.sleep(0.2)
+    if _covering_element(driver) is not None:
+        logger.warning("[scraper] Overlay still blocking after dismissal")
+        _emit(progress_cb, "⚠ El aviso del campus sigue bloqueando la pantalla")
+        return False
+    if dismissed:
+        _emit(progress_cb, "Cerrado el aviso «Volver a la última vista»")
+        return True
+    # Nothing was ever there: free page, so no dismissal happened. Returning
+    # True here would make every import look like it had hit the prompt.
+    return False
 
 
 def _switch_to_scorm_frame(driver, progress_cb: ProgressCb = None) -> bool:
