@@ -60,11 +60,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sf-td-block-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
+/* S4.7 — actions row is hidden when the block is nested inside a
+   .sf-block-card because the card head (sf-bc-head) already owns
+   the ✏️ / 🗑️ actions. This keeps ONE tidy button row per block. */
+.sf-td-block-head-inner .sf-td-block-actions { display: none; }
+.sf-td-block-head-inner .sf-td-done { margin-right: 2px; }
 
 .sf-td-block-body {
   font-size: 13px;
@@ -129,21 +129,34 @@
   gap: 8px;
 }
 
-/* Small buttons used in block headers */
+/* ─── S4.7 — tidy mini button (port of v2 ht-btn-mini pattern) ─────
+   Replaces the old "raw browser button" look that v3 had by default
+   (4px radius, no padding control, no hover surface). Now 28×28,
+   transparent bg, surface-hover on hover, subtle border-radius,
+   emoji glyph sized at 14px so it doesn't crowd the card head. */
 .ht-btn-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
 }
 .ht-btn-mini:hover {
   background: var(--surface-hover);
   color: var(--text);
   border-color: var(--border);
 }
+.ht-btn-mini:active { background: var(--border); }
+.ht-btn-mini:disabled { opacity: .5; cursor: default; }
 .ht-btn {
   background: var(--primary);
   color: #fff;
@@ -337,3 +350,74 @@
 }
 /* Fix: head+body viven en la columna 1fr (grid de 2 col, 3 hijos) */
 .sf-bc-head, .sf-bc-body { grid-column: 2; min-width: 0; }
+
+/* ─── S4.7 — sticky floating block toolbar (Phase 59 v2 port) ────
+   Slot prepended to #studyflow-center by App.StudyflowFloat.
+   position: sticky pegs it to the top of the scroll container
+   without depending on each .sf-block-card's own overflow. The
+   slot content is cloned from the active card's .sf-bc-actions
+   (by delegating .click() to the matching original button — no
+   event rebinding). [hidden] hides it by default and when the
+   active block has no actions (separator, etc). The sibling
+   rule hides the inner .sf-bc-actions inside every card while
+   the float is visible so we don't render two copies. */
+.block-toolbar-float {
+  position: sticky;
+  top: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--text);
+}
+.block-toolbar-float[hidden] { display: none; }
+.block-toolbar-float .btf-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.block-toolbar-float .btf-btn {
+  /* Mirrors .ht-btn-mini but lives in the floating slot; clone of
+     the card-head action keeps the same emoji button styling. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.block-toolbar-float .btf-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+/* Sibling rule — when the float is visible, hide the inner card-head
+   actions so we never render two copies of the same toolbar. */
+.sf-topic-detail > .block-toolbar-float:not([hidden]) ~ .sf-td-blocks .sf-block-card .sf-bc-actions {
+  display: none;
+}
+/* Focus-mode hides both the float and every inner card-head toolbar
+   (matches v2 courses.css:460-462). The escape exit button stays. */
+.sf-focus-mode .block-toolbar-float,
+.sf-focus-mode .sf-block-card .sf-bc-actions {
+  display: none !important;
+}

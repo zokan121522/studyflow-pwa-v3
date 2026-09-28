@@ -396,6 +396,11 @@
   <script src="/features/studyflow/pdf-viewer-annots.js"></script>
   <script src="/features/studyflow/pdf-viewer.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
+  <!-- S4.7 — sticky floating block toolbar (Phase 59 v2 port).
+       Loads AFTER courses-blocks.js so its mount() can read the
+       .sf-block-card structure, and BEFORE courses.js so the
+       courses.js _renderTopicDetail hook sees App.StudyflowFloat.mount. -->
+  <script src="/features/studyflow/studyflow-float.js"></script>
   <script src="/features/studyflow/courses.js"></script>
   <!-- SA: Addons Foundation — registry + management UI. Loads AFTER courses.js
        so the courses module's defensive isEnabled() hooks see App.Addons on

@@ -74,6 +74,13 @@ window.App.CoursesBlocks = (function () {
   // Renders ONE block in read mode. Markdown uses _renderMd; content
   // is plain text; separator is a thin rule; pdf-ref/youtube show the
   // url as a clickable link.
+  //
+  // S4.7 — when wrapped in a .sf-block-card (see _renderBlockCard),
+  // the inner .sf-td-block-head must NOT render its own ✏️ / 🗑️
+  // buttons — those live in the card header (sf-bc-head) along with
+  // ⬆️ / ⬇️ / ▼. The duplication produced two ugly button rows per
+  // block. We keep the checkbox (the only done affordance) + icon
+  // + title in the inner head; actions are owned by the card head.
   function _renderBlock(b, courseId) {
     const type = b.type || "markdown";
     const title = escHtml(b.title || "Bloque");
@@ -115,7 +122,7 @@ window.App.CoursesBlocks = (function () {
       done ? "is-done" : ""
     }" data-block-id="${b.id}" data-block-type="${escHtml(type)}"
        data-course-id="${courseId}">
-      <div class="sf-td-block-head">
+      <div class="sf-td-block-head sf-td-block-head-inner">
         <label class="sf-td-done" title="Marcar como hecho">
           <input type="checkbox" class="sf-td-done-cb" ${
             done ? "checked" : ""
@@ -123,10 +130,6 @@ window.App.CoursesBlocks = (function () {
         </label>
         <span class="sf-td-block-icon">${m.icon}</span>
         <span class="sf-td-block-title">${title}</span>
-        <span class="sf-td-block-actions">
-          <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
-          <button class="sf-td-del ht-btn-mini" title="Borrar">🗑️</button>
-        </span>
       </div>
       <div class="sf-td-block-body">${bodyHtml}</div>
       <div class="sf-td-edit-form" style="display:none;"></div>

@@ -41,31 +41,36 @@ window.App.AddonsManager = (function () {
     if (!statsEl) return;
     let navEl = statsEl.querySelector("[data-am-nav]");
     if (!navEl) {
-      const html = `<div class="sf-stats-section">
-        <div class="col-title">🧩 Addons</div>
-        <div class="qs-nav-item" data-am-nav data-am-view="addons">
-          <span class="qs-nav-icon">🛍️</span>
-          <span class="qs-nav-title">Marketplace</span>
-        </div>
-      </div>`;
-      statsEl.insertAdjacentHTML("beforeend", html);
-      navEl = statsEl.querySelector("[data-am-nav]");
-      navEl.addEventListener("click", async () => {
-        try {
-          window.STATE = window.STATE || {};
-          window.STATE._view = "addons";
-        } catch (_) { /* STATE may be frozen in tests */ }
-        if (window.App && window.App.Courses
-            && typeof window.App.Courses.updateCenter === "function") {
-          await window.App.Courses.updateCenter();
-        }
-      });
+      navEl = _injectMarketplaceNav(statsEl);
     }
     // Refresh active state (idempotent on re-renders).
     try {
       const active = window.STATE && window.STATE._view === "addons";
       navEl.classList.toggle("active", !!active);
     } catch (_) { /* ignore */ }
+  }
+
+  // _injectMarketplaceNav(statsEl) — append the nav block once. Kept
+  // separate from renderMarketplaceNav so the public function stays
+  // small (<30L) per the senior-architecture rule.
+  function _injectMarketplaceNav(statsEl) {
+    const html = `<div class="sf-stats-section">
+      <div class="col-title">🧩 Addons</div>
+      <div class="qs-nav-item" data-am-nav data-am-view="addons">
+        <span class="qs-nav-icon">🛍️</span>
+        <span class="qs-nav-title">Marketplace</span>
+      </div>
+    </div>`;
+    statsEl.insertAdjacentHTML("beforeend", html);
+    const navEl = statsEl.querySelector("[data-am-nav]");
+    navEl.addEventListener("click", async () => {
+      try { window.STATE._view = "addons"; } catch (_) {}
+      if (window.App && window.App.Courses
+          && typeof window.App.Courses.updateCenter === "function") {
+        await window.App.Courses.updateCenter();
+      }
+    });
+    return navEl;
   }
 
   // renderView(centerEl) — render the catalog as a CENTER VIEW

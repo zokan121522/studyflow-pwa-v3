@@ -216,14 +216,35 @@ window.App.Courses = (function () {
     if (s._view === "addons" && window.App.AddonsManager
         && typeof window.App.AddonsManager.renderView === "function") {
       await window.App.AddonsManager.renderView(centerEl);
+      // S4.7 — hide the sticky floating toolbar while the marketplace
+      // owns the center (no .sf-block-card there).
+      try {
+        if (window.App.StudyflowFloat
+            && typeof window.App.StudyflowFloat.unmount === "function") {
+          window.App.StudyflowFloat.unmount();
+        }
+      } catch (_) { /* safe to skip */ }
     } else if (s.selectedTopicId && s.currentCourseId) {
       await _renderTopicDetail(centerEl, s.currentCourseId, s.selectedTopicId);
     } else if (s.currentCourseId) {
       await _renderCourseLanding(centerEl, s.currentCourseId);
+      // S4.7 — hide the float on the course landing (no block cards yet).
+      try {
+        if (window.App.StudyflowFloat
+            && typeof window.App.StudyflowFloat.unmount === "function") {
+          window.App.StudyflowFloat.unmount();
+        }
+      } catch (_) { /* safe to skip */ }
     } else {
       centerEl.innerHTML =
         '<div class="empty-state"><span class="big">📖</span><br>'
         + 'Selecciona un curso del panel izquierdo o crea uno nuevo.</div>';
+      try {
+        if (window.App.StudyflowFloat
+            && typeof window.App.StudyflowFloat.unmount === "function") {
+          window.App.StudyflowFloat.unmount();
+        }
+      } catch (_) { /* safe to skip */ }
     }
     // Sub-phase SA — defensive addon gate. Lets S5 (quiz), S6
     // (flashcards) and S9 (playground) plug in their stats panels
@@ -373,6 +394,17 @@ window.App.Courses = (function () {
     // .pdf-container and hand it to App.PdfViewer.init; the viewer
     // fetches its own PDF bytes and renders the first page.
     _mountPdfViewers(centerEl);
+    // S4.7 — Phase 59 sticky floating toolbar (v2 port). After the
+    // topic is in the DOM, mount the float which sets up a scroll-spy
+    // and clones the active card's actions into the slot. The slot
+    // hides itself on marketplaces / landings because mount() checks
+    // for at least one .sf-block-card.
+    try {
+      if (window.App.StudyflowFloat
+          && typeof window.App.StudyflowFloat.mount === "function") {
+        window.App.StudyflowFloat.mount();
+      }
+    } catch (_) { /* float is optional progressive enhancement */ }
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {
