@@ -2,29 +2,39 @@
 """Flask API-first application factory for StudyFlow PWA v3."""
 
 import os
+import sys
+
+# The backend modules use flat, first-level imports (`from database import ...`,
+# `from routes.courses import bp`), so this package's own directory must be on
+# sys.path for those names to resolve. Bootstrap it here instead of relying on
+# the caller's working directory, so `python3 -m backend.server` works from
+# anywhere (repo root, a subdirectory, an IDE, or a service manager).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, jsonify
 from flask_cors import CORS
 
-from backend.static_serve import init_static
+from static_serve import init_static
 
-from backend.routes.auth import bp as auth_bp
-from backend.routes.agenda import bp as agenda_bp
-from backend.routes.agenda_sessions import bp as agenda_sessions_bp
-from backend.routes.agenda_state import bp as agenda_state_bp
-from backend.routes.agenda_categories import bp as agenda_categories_bp
-from backend.routes.quick_notes import bp as quick_notes_bp
-from backend.routes.calendar import bp as calendar_bp
-from backend.routes.habits import bp as habits_bp
-from backend.routes.courses import bp as courses_bp
-from backend.routes.courses_aliases import bp as courses_aliases_bp
-from backend.routes.blocks import bp as blocks_bp
-from backend.routes.pdf import bp as pdf_bp
-from backend.routes.quiz import bp as quiz_bp
-from backend.routes.addons import bp as addons_bp
-from backend.routes.todos import bp as todos_bp
-from backend.routes.audio import bp as audio_bp
-from backend.routes.health import bp as health_bp
-from backend.routes.tts import bp as tts_bp
+from routes.auth import bp as auth_bp
+from routes.agenda import bp as agenda_bp
+from routes.agenda_sessions import bp as agenda_sessions_bp
+from routes.agenda_state import bp as agenda_state_bp
+from routes.agenda_categories import bp as agenda_categories_bp
+from routes.quick_notes import bp as quick_notes_bp
+from routes.calendar import bp as calendar_bp
+from routes.habits import bp as habits_bp
+from routes.courses import bp as courses_bp
+from routes.courses_aliases import bp as courses_aliases_bp
+from routes.blocks import bp as blocks_bp
+from routes.pdf import bp as pdf_bp
+from routes.quiz import bp as quiz_bp
+from routes.addons import bp as addons_bp
+from routes.todos import bp as todos_bp
+from routes.audio import bp as audio_bp
+from routes.health import bp as health_bp
+from routes.tts import bp as tts_bp
+from routes.settings import bp as settings_bp
 
 
 def create_app() -> Flask:
@@ -59,7 +69,7 @@ def _register_blueprints(app: Flask) -> None:
         quick_notes_bp, calendar_bp,
         habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
         pdf_bp, quiz_bp, addons_bp,
-        todos_bp, audio_bp, tts_bp,
+        todos_bp, audio_bp, tts_bp, settings_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp, url_prefix='/api')

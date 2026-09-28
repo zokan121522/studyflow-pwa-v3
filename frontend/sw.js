@@ -1,14 +1,14 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v7 (S1.5): bumped ASSET_CACHE so the activate handler evicts the v6
-// cache. The pre-cached list adds courses-sidebar-blocks.css (sidebar
-// block tree styles: topic blocks, checkboxes, progress bar, menus).
-const ASSET_CACHE = 'studyflow-assets-v7';
+// v9 (S7b-B): bumped ASSET_CACHE so the activate handler evicts the v8
+// cache. Adds the floating study menu (study-scheduler.js/.css) and the
+// SCORM credentials settings panel (scorm-settings.js).
+const ASSET_CACHE = 'studyflow-assets-v9';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v7 (S1.5): added courses-sidebar-blocks.css (sidebar block tree styles).
+// v8 (S7b-A): added features/studyflow/pdf-import-stream.js.
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -34,6 +34,12 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-viewer.css',
   // S7b: unified PDF + SCORM import popover
   '/features/studyflow/pdf-import.js',
+  // S7b-A: SSE pseudo-terminal for the SCORM import
+  '/features/studyflow/pdf-import-stream.js',
+  // S7b-B: floating study menu + SCORM credentials settings
+  '/features/studyflow/study-scheduler.js',
+  '/features/studyflow/study-scheduler.css',
+  '/features/studyflow/scorm-settings.js',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
   // SA.2 + S4.7: addons foundation (registry + marketplace) and the
@@ -87,8 +93,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network-first strategy
+  // API calls: Network-first strategy.
+  //
+  // Two requests must reach the origin untouched (S7b-A):
+  //  - Accept: text/event-stream (SCORM import progress). The SW's
+  //    networkFirstApi awaits response.blob(), which buffers the whole
+  //    body and turns the stream into a single late chunk — the 524 story
+  //    all over again.
+  //  - non-GET. Cache writes are only meaningful for GETs anyway.
   if (url.pathname.startsWith('/api/')) {
+    const accept = (request.headers.get('accept') || '').toLowerCase();
+    if (request.method !== 'GET' || accept.includes('text/event-stream')) {
+      return;
+    }
     event.respondWith(networkFirstApi(request));
     return;
   }

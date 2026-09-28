@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="/features/studyflow/studyflow-editor.css">
   <!-- S7: pdf viewer (App.PdfViewer + App.PdfAnnots) -->
   <link rel="stylesheet" href="/features/studyflow/pdf-viewer.css">
+  <link rel="stylesheet" href="/features/studyflow/study-scheduler.css">
   <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
   <link rel="stylesheet" href="/features/addons/addons.css">
   
@@ -399,6 +400,7 @@
   <!-- S7b: unified PDF + SCORM import popover (App.PdfImport). Loads
        before courses-blocks.js so the chip-create handler can open the
        popover the moment a pdf-ref block is created. -->
+  <script src="/features/studyflow/pdf-import-stream.js"></script>
   <script src="/features/studyflow/pdf-import.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
   <!-- S4.7 — sticky floating block toolbar (Phase 59 v2 port).
@@ -407,6 +409,11 @@
        courses.js _renderTopicDetail hook sees App.StudyflowFloat.mount. -->
   <script src="/features/studyflow/studyflow-float.js"></script>
   <script src="/features/studyflow/courses.js"></script>
+  <!-- S7b-B — floating study menu (⋯ FAB) + SCORM/Moodle credentials
+       settings panel. study-scheduler.js self-mounts on DOMContentLoaded
+       and its menu item calls App.ScormSettings.open(). -->
+  <script src="/features/studyflow/scorm-settings.js"></script>
+  <script src="/features/studyflow/study-scheduler.js"></script>
   <!-- SA: Addons Foundation — registry + management UI. Loads AFTER courses.js
        so the courses module's defensive isEnabled() hooks see App.Addons on
        first updateCenter(). S5/S6/S9 modules load AFTER this so their manifests

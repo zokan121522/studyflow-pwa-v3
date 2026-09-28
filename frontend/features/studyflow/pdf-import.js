@@ -73,18 +73,6 @@ window.App.PdfImport = (function () {
     }
     return r.json();
   }
-  async function _postJson(path, body) {
-    const h = _authHeaders();
-    h["Content-Type"] = "application/json";
-    const r = await fetch(_apiBase() + path, {
-      method: "POST", headers: h, credentials: "include",
-      body: JSON.stringify(body),
-    });
-    if (!r.ok && r.status !== 400) {
-      throw new Error(`HTTP ${r.status} al importar SCORM`);
-    }
-    return r.json();
-  }
   async function _patchBlock(courseId, blockId, payload) {
     const h = _authHeaders();
     h["Content-Type"] = "application/json";
@@ -205,7 +193,7 @@ window.App.PdfImport = (function () {
     return panel;
   }
 
-  // ── SCORM tab: URL or zip path → JSON POST ─────────────────────
+  // ── SCORM tab: URL or zip path → SSE stream + pseudo-terminal ──
   function _renderScormPanel(popover, ctx) {
     const cap = _cap || { moodle_scraping: false, scorm_zip: true };
     const urlInput = _el("input", {
@@ -215,42 +203,8 @@ window.App.PdfImport = (function () {
       type: "text", placeholder: "/ruta/al/paquete.zip",
     });
     const status = _el("div", { class: "sf-pdfi-status" });
-    const submit = _el("button", {
-      type: "button", class: "ht-btn p",
-      onclick: async () => {
-        const urlVal = urlInput.value.trim();
-        const zipVal = zipInput.value.trim();
-        if (!urlVal && !zipVal) {
-          status.textContent = "⚠ Indica URL o ruta al ZIP.";
-          return;
-        }
-        submit.disabled = true;
-        status.textContent = "Importando…";
-        try {
-          const body = {
-            mode: "scorm",
-            url: urlVal,
-            path: zipVal,
-            title: "",
-          };
-          if (ctx.courseId) body.course_id = ctx.courseId;
-          if (ctx.topicId)  body.topic_id  = ctx.topicId;
-          const data = await _postJson("/pdf/import", body);
-          if (!data || !data.ok) {
-            status.textContent = "❌ " + ((data && data.reason) || "Error");
-          } else if (data.count === 0) {
-            status.textContent = "ℹ " + (data.note || "Importado sin bloques.");
-          } else {
-            status.textContent = `✅ ${data.count} bloque(s) importado(s)`;
-            _onScormImported(ctx, data);
-          }
-        } catch (err) {
-          status.textContent = "❌ " + (err.message || err);
-        } finally {
-          submit.disabled = false;
-        }
-      },
-    }, ["📥 Importar SCORM"]);
+    const term = App.PdfImportStream.createTerm();
+    const submit = _scormSubmit(ctx, urlInput, zipInput, status, term);
 
     const rows = [
       _el("div", { class: "sf-pdfi-row" }, [
@@ -264,23 +218,115 @@ window.App.PdfImport = (function () {
         zipInput,
       ]));
     }
-    if (!cap.moodle_scraping && cap.scorm_zip) {
-      rows.push(_el("div", {
-        class: "sf-pdfi-hint",
-      }, [
+    rows.push(..._scormCapHint(cap));
+    rows.push(_el("div", { class: "sf-pdfi-row" }, [submit, status]), term);
+    return _el("div", { class: "sf-pdfi-panel", "data-panel": "scorm" }, rows);
+  }
+
+  function _scormSubmit(ctx, urlInput, zipInput, status, term) {
+    const submit = _el("button", {
+      type: "button", class: "ht-btn p",
+      onclick: () => _submitScorm(ctx, urlInput, zipInput, submit, status, term),
+    }, ["📥 Importar SCORM"]);
+    return submit;
+  }
+
+  function _scormCapHint(cap) {
+    if (cap.moodle_scraping) return [];
+    if (cap.scorm_zip) {
+      return [_el("div", { class: "sf-pdfi-hint" }, [
         "ℹ Scraping Moodle no disponible en este equipo "
         + "(instalar selenium/Chrome o activar SCRAPING_ENABLED). "
         + "El importador por ZIP sí funciona.",
-      ]));
-    } else if (!cap.moodle_scraping && !cap.scorm_zip) {
-      rows.push(_el("div", { class: "sf-pdfi-hint" }, [
-        "⚠ Ningún importador SCORM está disponible.",
-      ]));
+      ])];
     }
-    rows.push(_el("div", { class: "sf-pdfi-row" }, [submit, status]));
-    return _el("div", {
-      class: "sf-pdfi-panel", "data-panel": "scorm",
-    }, rows);
+    return [_el("div", { class: "sf-pdfi-hint" }, [
+      "⚠ Ningún importador SCORM está disponible.",
+    ])];
+  }
+
+  // Streams the SCORM import (POST ?stream=1) into the pseudo-terminal.
+  // The old blocking POST died at the Cloudflare 100s cap with HTTP 524.
+  async function _submitScorm(ctx, urlInput, zipInput, submit, status, term) {
+    const urlVal = urlInput.value.trim();
+    const zipVal = zipInput.value.trim();
+    if (!urlVal && !zipVal) {
+      status.textContent = "⚠ Indica URL o ruta al ZIP.";
+      return;
+    }
+    submit.disabled = true;
+    status.textContent = "Conectando…";
+    App.PdfImportStream.append(
+      term, "POST /api/pdf/import?stream=1", "sf-pdfi-term-dim"
+    );
+    try {
+      await App.PdfImportStream.stream(
+        _apiBase() + "/pdf/import?stream=1",
+        _scormStreamOpts(ctx, urlVal, zipVal, status, term)
+      );
+    } catch (err) {
+      const msg = (err && err.message) || String(err);
+      App.PdfImportStream.append(term, "❌ " + msg, "sf-pdfi-term-err");
+      status.textContent = "❌ " + msg;
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  function _scormStreamOpts(ctx, urlVal, zipVal, status, term) {
+    const headers = _authHeaders();
+    headers["Content-Type"] = "application/json";
+    headers["Accept"] = "text/event-stream";
+    const S = App.PdfImportStream;
+    return {
+      method: "POST",
+      headers,
+      body: JSON.stringify(_scormBody(ctx, urlVal, zipVal)),
+      onStep: (msg) => {
+        S.append(term, msg);
+        status.textContent = "⏳ " + msg;
+      },
+      onDone: (evt) => _onScormDone(ctx, evt, status, term),
+    };
+  }
+
+  function _scormBody(ctx, urlVal, zipVal) {
+    const body = {
+      mode: "scorm", url: urlVal, path: zipVal,
+      // Block named after its topic instead of the archive filename.
+      title: _topicTitle(ctx),
+    };
+    if (ctx.courseId) body.course_id = ctx.courseId;
+    if (ctx.topicId) body.topic_id = ctx.topicId;
+    return body;
+  }
+
+  function _topicTitle(ctx) {
+    if (!ctx.topicId) return "";
+    const topics = (window.STATE && window.STATE._expandedCourseTopics) || [];
+    const topic = topics.find((t) => t.id === Number(ctx.topicId));
+    return ((topic && topic.title) || "").trim();
+  }
+
+  // Terminal/status rendering of the single {done} frame.
+  function _onScormDone(ctx, evt, status, term) {
+    const S = App.PdfImportStream;
+    const data = evt && evt.result;
+    const reason = (evt && evt.error) || (data && !data.ok && data.reason);
+    if (reason) {
+      S.append(term, "❌ " + reason, "sf-pdfi-term-err");
+      status.textContent = "❌ " + reason;
+      return;
+    }
+    if (!data || data.count === 0) {
+      const note = (data && data.note) || "Importado sin bloques.";
+      S.append(term, "ℹ " + note, "sf-pdfi-term-info");
+      status.textContent = "ℹ " + note;
+      return;
+    }
+    S.append(term, `✅ ${data.count} bloque(s) importado(s)`, "sf-pdfi-term-ok");
+    status.textContent = `✅ ${data.count} bloque(s) importado(s)`;
+    _onScormImported(ctx, data);
   }
 
   // ── Success handlers ───────────────────────────────────────────

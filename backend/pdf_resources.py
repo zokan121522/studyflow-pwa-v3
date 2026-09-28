@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 from flask import current_app
 
-from backend.database import execute, fetchone
+from database import execute, fetchone
 
 
 def save_pdf_and_block(

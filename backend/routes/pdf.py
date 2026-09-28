@@ -15,20 +15,34 @@ import logging
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
-from backend.models import PDF
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from models import PDF
 
 
 bp = Blueprint('pdf', __name__)
 logger = logging.getLogger(__name__)
 
 # Configuration
-UPLOAD_FOLDER = os.environ.get('PDF_UPLOAD_FOLDER', '/app/uploads/pdfs')
+# Default to a repo-local folder rather than the container path '/app/...':
+# this module is imported by the bare-metal dev server too, where '/app' does
+# not exist and is not writable. In Docker, PDF_UPLOAD_FOLDER is set explicitly.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_FOLDER = os.environ.get(
+    'PDF_UPLOAD_FOLDER', os.path.join(_REPO_ROOT, 'uploads', 'pdfs')
+)
 MAX_FILE_SIZE = int(os.environ.get('MAX_FILE_SIZE', 50 * 1024 * 1024))  # 50MB
 ALLOWED_EXTENSIONS = {'pdf'}
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Create the folder, but never let an unwritable path kill the whole app at
+# import time — uploads then fail with a clear 5xx instead of a dead server.
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+except OSError as exc:  # pragma: no cover — depends on host permissions
+    logger.warning(
+        'PDF upload folder %s is not writable (%s); PDF uploads will fail',
+        UPLOAD_FOLDER, exc,
+    )
 
 
 def allowed_file(filename: str) -> bool:
@@ -280,7 +294,7 @@ def _annotation_to_dict(row) -> dict:
 def _import_status() -> dict:
     """Capability snapshot for the unified import popover."""
     # Local import is always available (just the upload helper + stdlib zip)
-    from backend.scorm_import import (
+    from scorm_import import (
         is_scorm_zip_available, is_moodle_scraping_available,
     )
     return {
@@ -343,7 +357,7 @@ def _import_via_upload(current_user_id: int):
 
 def _import_via_scorm(current_user_id: int, payload: dict):
     """Handle JSON SCORM branch → zip import or Moodle scrape."""
-    from backend.scorm_import import import_scorm
+    from scorm_import import import_scorm
     result = import_scorm(
         current_user_id,
         url=(payload.get('url') or '').strip(),
@@ -365,8 +379,8 @@ def _stream_scorm_import(current_user_id: int, payload: dict):
     outlive any proxy timeout (Cloudflare → HTTP 524 after 100s silence).
     """
     from flask import current_app
-    from backend.scorm_import import import_scorm
-    from backend.scorm_stream import stream_import
+    from scorm_import import import_scorm
+    from scorm_stream import stream_import
 
     app = current_app._get_current_object()  # real app, not a LocalProxy
     args = {

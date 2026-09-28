@@ -38,7 +38,7 @@ def init_db() -> None:
     _seed_local_user()
 
     # Sub-phase SA — seed the addon catalog (idempotent upsert).
-    from backend.addons_seed import seed_addon_catalog
+    from addons_seed import seed_addon_catalog
     seed_addon_catalog()
 
 
@@ -244,6 +244,16 @@ _TABLE_DDL = [
         user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         calendars_json TEXT DEFAULT '[]',
         updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    # S7b-B: Moodle credentials for the SCORM scraper. password_enc is a
+    # Fernet token produced by backend/secret_box.py — never stored in clear.
+    """
+    CREATE TABLE IF NOT EXISTS scorm_credentials (
+        user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        username     VARCHAR(255) NOT NULL,
+        password_enc TEXT NOT NULL,
+        updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
     """

@@ -13,13 +13,16 @@ selenium is NEVER imported at module top — boot stays clean for users
 without the heavy scraping stack.
 """
 
+import logging
 import os
 import zipfile
 from typing import Any, Dict, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
-from backend.database import fetchone
-from backend.pdf_resources import save_pdf_and_block
+from database import fetchone
+from pdf_resources import save_pdf_and_block
+
+logger = logging.getLogger(__name__)
 
 
 MAX_ZIP_SIZE = 200 * 1024 * 1024
@@ -294,7 +297,7 @@ def _import_scorm_url(
     if not _own_course(user_id, course_id):
         _emit(progress_cb, "❌ Curso no encontrado.")
         return {"ok": False, "reason": "Curso no encontrado."}
-    pdf_path = _run_scraper(url, title, progress_cb)
+    pdf_path = _run_scraper(url, title, progress_cb, user_id=user_id)
     if isinstance(pdf_path, str) and pdf_path.startswith("error: "):
         reason = pdf_path[len("error: "):] or "Scraping falló."
         _emit(progress_cb, f"❌ {reason}")
@@ -317,25 +320,49 @@ def _scraping_gate_error() -> Optional[Dict[str, Any]]:
                        "(instalar selenium/Chrome o activar SCRAPING_ENABLED)."),
         }
     try:
-        from backend.scraping.runner import run_scrape  # noqa: F401
+        from scraping.runner import run_scrape  # noqa: F401
     except ImportError:
         return {"ok": False, "reason": "Falta backend.scraping.runner."}
     return None
 
 
-def _run_scraper(url: str, title: str, progress_cb: Any = None) -> Optional[str]:
-    """Run the Selenium scraper, returning the PDF path or "error: …"."""
-    from backend.scraping.runner import run_scrape  # type: ignore
+def _run_scraper(
+    url: str, title: str, progress_cb: Any = None, user_id: int = None
+) -> Optional[str]:
+    """Run the Selenium scraper, returning the PDF path or "error: …".
+
+    Loads the user's stored Moodle credentials (S7b-B) so the scraper can
+    log in; without them the campus bounces to /login and we scrape the
+    login form instead of the course.
+    """
+    from scraping.runner import run_scrape  # type: ignore
     scrape_dir = os.environ.get("SCRAPED_DIR", "/tmp/scraped_pdfs")
     os.makedirs(scrape_dir, exist_ok=True)
+    username, password = _load_scrape_credentials(user_id, progress_cb)
     try:
         return run_scrape(
             url=url, course_title=title or "scorm_export",
             output_dir=scrape_dir, max_pages=200, timeout=120,
             progress_cb=progress_cb,
+            username=username, password=password,
         )
     except Exception as exc:
         return f"error: {exc}"
+
+
+def _load_scrape_credentials(user_id: Optional[int], progress_cb: Any = None):
+    """Read Moodle credentials for `user_id`; announce whether we'll log in."""
+    from scorm_credentials import load_credentials
+    try:
+        username, password = load_credentials(user_id) if user_id else (None, None)
+    except Exception as exc:  # DB down → degrade to anonymous, don't 500
+        logger.warning("Could not load SCORM credentials: %s", exc)
+        return None, None
+    if username and password:
+        _emit(progress_cb, f"Usando credenciales de Moodle de {username}")
+    else:
+        _emit(progress_cb, "ℹ Sin credenciales de Moodle: el campus exigirá login")
+    return username, password
 
 
 def _import_scrape_result(
