@@ -15,6 +15,7 @@ from backend.routes.calendar import bp as calendar_bp
 from backend.routes.habits import bp as habits_bp
 from backend.routes.courses import bp as courses_bp
 from backend.routes.courses_aliases import bp as courses_aliases_bp
+from backend.routes.blocks import bp as blocks_bp
 from backend.routes.pdf import bp as pdf_bp
 from backend.routes.quiz import bp as quiz_bp
 from backend.routes.todos import bp as todos_bp
@@ -52,7 +53,7 @@ def _register_blueprints(app: Flask) -> None:
         health_bp, auth_bp, agenda_bp, agenda_sessions_bp,
         agenda_state_bp, agenda_categories_bp,
         quick_notes_bp, calendar_bp,
-        habits_bp, courses_bp, courses_aliases_bp,
+        habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
         pdf_bp, quiz_bp,
         todos_bp, audio_bp, tts_bp,
     ]

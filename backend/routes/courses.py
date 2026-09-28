@@ -10,26 +10,39 @@ from flask import Blueprint, request, jsonify
 
 from backend.database import execute, fetchone, fetchall
 from backend.routes.auth import token_required
-from backend.models import Course, Topic
+from backend.models import Course, Topic, Block
 
 
 bp = Blueprint('courses', __name__)
 
 
 def _hydrate_course(course_row):
-    """Attach topics[] (each with empty blocks[]) to a course row dict."""
+    """Attach topics[] (each with its blocks[]) to a course row dict."""
     course = Course.from_row(course_row).to_dict()
     topics_rows = fetchall(
         'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
         (course_row['id'],)
     )
+    # Sub-phase S3: load all blocks for this course in one query, then
+    # bucket them by topic_id so each topic gets its ordered list.
+    blocks_rows = fetchall(
+        'SELECT * FROM blocks WHERE course_id = %s '
+        'ORDER BY topic_id NULLS FIRST, order_index ASC',
+        (course_row['id'],)
+    )
+    by_topic = {}
+    for b in blocks_rows:
+        by_topic.setdefault(b.get('topic_id'), []).append(b)
     course['topics'] = []
     for t in topics_rows:
         td = Topic.from_row(t).to_dict()
-        # Blocks are NOT yet modelled in v3 (S3/S4). Surface an empty list so
-        # the v2-shaped frontend tree code can render predictably.
-        td['blocks'] = []
+        td['blocks'] = [
+            Block.from_row(b).to_dict() for b in by_topic.get(t['id'], [])
+        ]
         course['topics'].append(td)
+    # Also expose a flat blocks[] so the v2 "course.blocks" view keeps
+    # working without an extra fetch.
+    course['blocks'] = [Block.from_row(b).to_dict() for b in blocks_rows]
     return course
 
 

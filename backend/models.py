@@ -228,6 +228,65 @@ class Topic:
 
 
 @dataclass
+class Block:
+    """Content block nested inside a topic (markdown | content | separator |
+    pdf-ref | youtube | audio). v2-compatible field set + v3-friendly
+    url/color/collapsed. topic_id is optional for course-level blocks.
+    """
+    id: int
+    user_id: int
+    course_id: int
+    topic_id: Optional[int] = None
+    type: str = 'markdown'
+    title: str = ''
+    content: str = ''
+    url: str = ''
+    done: bool = False
+    order_index: int = 0
+    color: str = ''
+    collapsed: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'course_id': self.course_id,
+            'topic_id': self.topic_id,
+            'type': self.type,
+            'title': self.title,
+            'content': self.content,
+            'url': self.url,
+            'done': self.done,
+            'order_index': self.order_index,
+            'color': self.color,
+            'collapsed': self.collapsed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> 'Block':
+        return cls(
+            id=row['id'],
+            user_id=row['user_id'],
+            course_id=row['course_id'],
+            topic_id=row.get('topic_id'),
+            type=row.get('type', 'markdown'),
+            title=row.get('title') or '',
+            content=row.get('content') or '',
+            url=row.get('url') or '',
+            done=bool(row.get('done', False)),
+            order_index=row.get('order_index', 0) or 0,
+            color=row.get('color') or '',
+            collapsed=bool(row.get('collapsed', False)),
+            created_at=row.get('created_at'),
+            updated_at=row.get('updated_at'),
+        )
+
+
+@dataclass
 class PDF:
     id: int
     user_id: int
@@ -448,6 +507,7 @@ TABLES = {
     'habit_entries': 'habit_entries',
     'courses': 'courses',
     'topics': 'topics',
+    'blocks': 'blocks',
     'pdfs': 'pdfs',
     'quiz_questions': 'quiz_questions',
     'quiz_results': 'quiz_results',

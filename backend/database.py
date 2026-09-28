@@ -325,6 +325,31 @@ _TABLE_DDL = [
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
+    """
+    -- Sub-phase S3: content blocks within topics.
+    -- A block is an ordered, typed unit (markdown | content | separator |
+    -- pdf-ref | youtube | audio). Always belongs to a course; may belong
+    -- to a topic (nullable for course-level blocks). v2-compatible field
+    -- names kept (type, title, content, done) plus v3-friendly url/color
+    -- /collapsed. CASCADE from topics/courses so block deletion follows
+    -- the parent lifecycle.
+    CREATE TABLE IF NOT EXISTS blocks (
+        id          SERIAL PRIMARY KEY,
+        user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id   INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id    INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+        type        TEXT NOT NULL DEFAULT 'markdown',
+        title       TEXT DEFAULT '',
+        content     TEXT DEFAULT '',
+        url         TEXT DEFAULT '',
+        done        BOOLEAN NOT NULL DEFAULT FALSE,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        color       TEXT DEFAULT '',
+        collapsed   BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
 ]
 
 
@@ -394,6 +419,9 @@ _POST_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_topics_course_order ON topics(course_id, order_index)",
     "CREATE INDEX IF NOT EXISTS idx_todos_user_completed ON todos(user_id, completed)",
     "CREATE INDEX IF NOT EXISTS idx_quiz_results_user_time ON quiz_results(user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_blocks_course ON blocks(course_id)",
+    "CREATE INDEX IF NOT EXISTS idx_blocks_topic_order ON blocks(topic_id, order_index)",
+    "CREATE INDEX IF NOT EXISTS idx_blocks_user_course ON blocks(user_id, course_id)",
 ]
 
 
