@@ -255,3 +255,44 @@ def reorder_topics(current_user_id: int):
             (index, topic_id)
         )
     return jsonify({'message': 'Topics reordered successfully'})
+
+
+# ============================== Topic notes (S4) ==============================
+# Per-topic freeform notes panel. Stored in topics.notes (TEXT, '' default).
+# v2 has a similar concept at the COURSE level (/courses/<id>/notes). For v3
+# we keep it topic-scoped — that's where the Studyflow notes drawer lives.
+@bp.get('/courses/<int:course_id>/topics/<int:topic_id>/notes')
+@token_required
+def get_topic_notes(current_user_id: int, course_id: int, topic_id: int):
+    """Return {notes: {content: string}} for the given topic."""
+    row = fetchone(
+        'SELECT notes FROM topics '
+        'WHERE id = %s AND course_id = %s AND user_id = %s',
+        (topic_id, course_id, current_user_id)
+    )
+    if not row:
+        return jsonify({'error': 'Topic not found'}), 404
+    return jsonify({'notes': {'content': row.get('notes') or ''}})
+
+
+@bp.put('/courses/<int:course_id>/topics/<int:topic_id>/notes')
+@token_required
+def set_topic_notes(current_user_id: int, course_id: int, topic_id: int):
+    """Persist the notes text. Accepts {content, notes} (v2-compatible)."""
+    body = request.get_json() or {}
+    content = body.get('content')
+    if content is None:
+        content = body.get('notes') or ''
+    row = fetchone(
+        'SELECT id FROM topics '
+        'WHERE id = %s AND course_id = %s AND user_id = %s',
+        (topic_id, course_id, current_user_id)
+    )
+    if not row:
+        return jsonify({'error': 'Topic not found'}), 404
+    execute(
+        'UPDATE topics SET notes = %s, updated_at = NOW() '
+        'WHERE id = %s AND course_id = %s AND user_id = %s',
+        (content, topic_id, course_id, current_user_id)
+    )
+    return jsonify({'notes': {'content': content}})

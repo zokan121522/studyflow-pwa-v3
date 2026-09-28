@@ -71,8 +71,19 @@ def _create_tables(cur) -> None:
     _create_ai_tasks(cur)
     _migrate_sessions(cur)
     _migrate_habits(cur)
+    _migrate_topic_notes(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
+
+
+def _migrate_topic_notes(cur) -> None:
+    """Sub-phase S4: add `notes` column to topics for the per-topic
+    notes drawer (course-blocks frontend port). Idempotent so existing
+    installs upgrade in-place without losing topics.
+    """
+    cur.execute(
+        "ALTER TABLE topics ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''"
+    )
 
 
 def _create_ai_tasks(cur) -> None:
@@ -250,6 +261,7 @@ _TABLE_DDL = [
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         title VARCHAR(255) NOT NULL,
         description TEXT,
+        notes TEXT DEFAULT '',
         order_index INTEGER DEFAULT 0,
         status VARCHAR(20) DEFAULT 'pending',
         estimated_minutes INTEGER,

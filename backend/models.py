@@ -188,6 +188,7 @@ class Topic:
     user_id: int
     title: str
     description: Optional[str] = None
+    notes: Optional[str] = ''
     order_index: int = 0
     status: str = 'pending'
     estimated_minutes: Optional[int] = None
@@ -202,6 +203,7 @@ class Topic:
             'user_id': self.user_id,
             'title': self.title,
             'description': self.description,
+            'notes': self.notes or '',
             'order_index': self.order_index,
             'status': self.status,
             'estimated_minutes': self.estimated_minutes,
@@ -218,6 +220,7 @@ class Topic:
             user_id=row['user_id'],
             title=row['title'],
             description=row.get('description'),
+            notes=row.get('notes', '') or '',
             order_index=row.get('order_index', 0),
             status=row.get('status', 'pending'),
             estimated_minutes=row.get('estimated_minutes'),
