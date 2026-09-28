@@ -1,5 +1,14 @@
 /* ============================== STUDYFLOW PWA — APP BOOTSTRAP ============================== */
 
+// ─── Configuration ────────────────────────────────────────────────────
+const API_URL = (() => {
+  // In production, API is on same origin
+  // In development, frontend on :3000, backend on :8080
+  const isLocalDev = location.port === '3000' || location.hostname === 'localhost';
+  return isLocalDev ? 'http://localhost:8080/api' : '/api';
+})();
+
+
 // ─── Service Worker Registration ────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -7,7 +16,6 @@ if ('serviceWorker' in navigator) {
       .then((registration) => {
         console.log('[PWA] Service Worker registered:', registration.scope);
         
-        // Check for updates
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           newWorker.addEventListener('statechange', () => {
@@ -24,7 +32,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Show update notification
 function showUpdateNotification() {
   const notification = document.createElement('div');
   notification.className = 'update-notification';
@@ -42,6 +49,7 @@ function showUpdateNotification() {
   });
 }
 
+
 // ─── Online/Offline Detection ───────────────────────────────────────
 function updateOnlineStatus() {
   const indicator = document.getElementById('offline-indicator');
@@ -53,6 +61,7 @@ function updateOnlineStatus() {
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
 
+
 // ─── PWA Install Prompt ─────────────────────────────────────────────
 let deferredPrompt = null;
 
@@ -63,7 +72,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 function showInstallButton() {
-  // Only show if not already installed and not shown before
   if (window.matchMedia('(display-mode: standalone)').matches) return;
   if (localStorage.getItem('installPromptDismissed')) return;
   
@@ -86,6 +94,87 @@ function showInstallButton() {
   
   document.body.appendChild(btn);
 }
+
+
+// ─── Auth Token Management ──────────────────────────────────────────
+const Auth = {
+  getToken() {
+    return localStorage.getItem('auth_token');
+  },
+  
+  setToken(token) {
+    localStorage.setItem('auth_token', token);
+  },
+  
+  clearToken() {
+    localStorage.removeItem('auth_token');
+  },
+  
+  getHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+};
+
+
+// ─── API Client ──────────────────────────────────────────────────────
+async function apiRequest(path, options = {}) {
+  const url = `${API_URL}${path}`;
+  const defaultOptions = {
+    headers: Auth.getHeaders(),
+    credentials: 'include'
+  };
+  
+  const config = {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...(options.headers || {})
+    }
+  };
+  
+  try {
+    const response = await fetch(url, config);
+    
+    // Handle 401 - token expired
+    if (response.status === 401) {
+      Auth.clearToken();
+      // Dispatch event for app to handle (redirect to login)
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      throw new Error('Unauthorized');
+    }
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+    
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch (error) {
+    if (error.message === 'Unauthorized') throw error;
+    console.error(`[API] ${options.method || 'GET'} ${path}:`, error);
+    throw error;
+  }
+}
+
+const API = {
+  get: (path) => apiRequest(path),
+  post: (path, body) => apiRequest(path, { method: 'POST', body: JSON.stringify(body) }),
+  put: (path, body) => apiRequest(path, { method: 'PUT', body: JSON.stringify(body) }),
+  patch: (path, body) => apiRequest(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  del: (path) => apiRequest(path, { method: 'DELETE' })
+};
+
 
 // ─── Basic Router / Dispatcher ──────────────────────────────────────
 const Router = {
@@ -111,6 +200,7 @@ const Router = {
   }
 };
 
+
 // ─── App State ──────────────────────────────────────────────────────
 const App = {
   state: {
@@ -132,15 +222,43 @@ const App = {
   
   getModule(name) {
     return this.modules[name];
+  },
+  
+  async initAuth() {
+    const token = Auth.getToken();
+    if (token) {
+      try {
+        const data = await API.get('/auth/me');
+        this.state.currentUser = data.user;
+        return true;
+      } catch (error) {
+        Auth.clearToken();
+        return false;
+      }
+    }
+    return false;
   }
 };
+
 
 // Expose globally for feature modules
 window.App = App;
 window.Router = Router;
+window.API = API;
+window.Auth = Auth;
+window.API_URL = API_URL;
+
+
+// ─── Auth Event Listener ────────────────────────────────────────────
+window.addEventListener('auth:unauthorized', () => {
+  console.log('[Auth] Token expired or invalid, redirecting to login');
+  App.state.currentUser = null;
+  // Feature modules can listen for this event
+});
+
 
 // ─── Tab Navigation ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const tabButtons = document.querySelectorAll('.tab-btn');
   const viewPanels = document.querySelectorAll('.view-panel');
   
@@ -148,7 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
       
-      // Update buttons
       tabButtons.forEach(b => {
         b.classList.remove('active');
         b.setAttribute('aria-selected', 'false');
@@ -156,25 +273,20 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       btn.setAttribute('aria-selected', 'true');
       
-      // Update views
       viewPanels.forEach(p => p.classList.add('hidden'));
       const view = document.getElementById(`view-${tab}`);
       if (view) view.classList.remove('hidden');
       
       App.state.activeTab = tab;
       
-      // Trigger module render
       if (tab === 'agenda' && App.modules.Agenda) {
         App.modules.Agenda.render();
       } else if (tab === 'studyflow' && App.modules.Courses) {
         App.modules.Courses.render();
-      } else if (tab === 'dashboard') {
-        // Dashboard is static
       }
     });
   });
   
-  // Dashboard nav cards
   document.querySelectorAll('.dashboard-nav-card').forEach(card => {
     card.addEventListener('click', () => {
       const tab = card.dataset.tab;
@@ -183,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
-  // Logo click -> Dashboard
   document.querySelector('.header-logo')?.addEventListener('click', () => {
     tabButtons.forEach(b => b.classList.remove('active'));
     viewPanels.forEach(p => p.classList.add('hidden'));
@@ -191,7 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
     App.state.activeTab = 'dashboard';
   });
   
-  // Hamburger menu
   const hamburger = document.getElementById('hamburger-btn');
   const appEl = document.getElementById('app');
   if (hamburger && appEl) {
@@ -201,7 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Close sidebar on outside click (mobile)
   if (appEl) {
     appEl.addEventListener('click', (e) => {
       if (appEl.classList.contains('sidebar-open')) {
@@ -215,7 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Week navigation
   document.getElementById('week-prev')?.addEventListener('click', () => {
     const today = new Date();
     const weekStart = new Date(today);
@@ -234,21 +342,22 @@ document.addEventListener('DOMContentLoaded', () => {
     renderActiveTab();
   });
   
-  // Initialize week
   const today = new Date();
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - today.getDay());
   App.state.currentWeek = getWeekId(weekStart.toISOString().slice(0, 10));
   App.state.currentDay = today.toISOString().slice(0, 10);
   
-  // Initial render
+  // Initialize auth
+  await App.initAuth();
+  
   renderActiveTab();
   updateOnlineStatus();
   
-  // Hide loading screen
   const loading = document.getElementById('loading-screen');
   if (loading) loading.classList.add('hidden');
 });
+
 
 // ─── Render Active Tab ──────────────────────────────────────────────
 function renderActiveTab() {
@@ -260,6 +369,7 @@ function renderActiveTab() {
   }
   updateWeekLabel();
 }
+
 
 // ─── Utility Functions ──────────────────────────────────────────────
 function getWeekId(dateStr) {
@@ -280,57 +390,5 @@ function updateWeekLabel() {
     label.innerHTML = `<strong>Semana ${weekNum}</strong> — ${month} ${year}`;
   }
 }
-
-// ─── API Helpers (shared) ───────────────────────────────────────────
-const API = {
-  async get(path) {
-    const r = await fetch(`/api${path}`, { 
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin'
-    });
-    if (!r.ok) throw new Error(`GET ${path} ${r.status}`);
-    return r.json();
-  },
-  async post(path, body) {
-    const r = await fetch(`/api${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error(`POST ${path} ${r.status}`);
-    return r.json();
-  },
-  async put(path, body) {
-    const r = await fetch(`/api${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error(`PUT ${path} ${r.status}`);
-    return r.json();
-  },
-  async patch(path, body) {
-    const r = await fetch(`/api${path}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error(`PATCH ${path} ${r.status}`);
-    return r.json();
-  },
-  async del(path) {
-    const r = await fetch(`/api${path}`, { 
-      method: 'DELETE',
-      credentials: 'same-origin'
-    });
-    if (!r.ok) throw new Error(`DELETE ${path} ${r.status}`);
-    return r.json();
-  }
-};
-
-window.API = API;
 
 console.log('[PWA] App bootstrap loaded');
