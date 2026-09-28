@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Blueprint, request, jsonify, current_app
 
-from backend.database import execute, fetchone, fetchall
-from backend.models import User
+from database import execute, fetchone, fetchall
+from models import User
 
 
 bp = Blueprint('auth', __name__)

@@ -4,9 +4,9 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
-from backend.models import Todo
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from models import Todo
 
 
 bp = Blueprint('todos', __name__)

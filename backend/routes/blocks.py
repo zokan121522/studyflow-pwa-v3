@@ -19,9 +19,9 @@ which falls back to LOCAL_USER_ID (1) when no JWT is present.
 
 from flask import Blueprint, request, jsonify
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
-from backend.models import Block
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from models import Block
 
 
 bp = Blueprint('blocks', __name__)

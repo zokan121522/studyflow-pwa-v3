@@ -3,8 +3,8 @@ Quick Notes API — persistent text blob per user — port from studyflow-hub v2
 """
 from flask import Blueprint, jsonify, request
 
-from backend import database as db
-from backend.routes.auth import token_required
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
 
 
 bp = Blueprint("quick_notes", __name__)

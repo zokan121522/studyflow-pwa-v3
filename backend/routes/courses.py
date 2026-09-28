@@ -8,9 +8,9 @@ live in courses_aliases.py to keep each file <500 lines.
 
 from flask import Blueprint, request, jsonify
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
-from backend.models import Course, Topic, Block
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from models import Course, Topic, Block
 
 
 bp = Blueprint('courses', __name__)

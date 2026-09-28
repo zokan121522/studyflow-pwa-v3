@@ -17,8 +17,8 @@ works without changes, while leaving the canonical routes intact.
 
 from flask import Blueprint, request, jsonify
 
-from backend.database import execute, fetchone
-from backend.routes.auth import token_required
+from database import execute, fetchone
+from routes.auth import token_required
 
 
 bp = Blueprint('courses_aliases', __name__)

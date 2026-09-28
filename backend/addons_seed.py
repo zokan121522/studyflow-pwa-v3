@@ -99,7 +99,7 @@ def seed_addon_catalog() -> None:
     version/url_prefix so user choices (installed/enabled/hidden) survive
     re-seeding. Mirrors v2's "status preserved across re-seed" rule.
     """
-    from backend.database import execute
+    from database import execute
 
     for addon in ADDON_CATALOG_SEED:
         execute(

@@ -6,7 +6,7 @@ import tempfile
 import os
 from flask import Blueprint, request, jsonify, send_file
 
-from backend.routes.auth import token_required
+from routes.auth import token_required
 
 
 bp = Blueprint('tts', __name__)

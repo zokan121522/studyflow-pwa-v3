@@ -23,10 +23,10 @@ import requests
 from flask import Blueprint, jsonify, request
 from icalendar import Calendar
 
-from backend import database as db
-from backend.models import iso_week_key
-from backend.routes.auth import token_required
-from backend.routes.agenda import _upsert_week, _upsert_day
+from database import execute, fetchone, fetchall
+from models import iso_week_key
+from routes.auth import token_required
+from routes.agenda import _upsert_week, _upsert_day
 
 
 logger = logging.getLogger(__name__)

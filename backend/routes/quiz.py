@@ -3,9 +3,9 @@
 
 from flask import Blueprint, request, jsonify
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
-from backend.models import QuizQuestion, QuizResult
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from models import QuizQuestion, QuizResult
 
 
 bp = Blueprint('quiz', __name__)

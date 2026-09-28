@@ -11,9 +11,9 @@ import uuid
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 
-from backend import database as db
-from backend.models import SessionCategory, iso_week_key
-from backend.routes.auth import token_required
+from database import execute, fetchone, fetchall
+from models import SessionCategory, iso_week_key
+from routes.auth import token_required
 
 
 bp = Blueprint("agenda", __name__)

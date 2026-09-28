@@ -4,9 +4,9 @@ Built-in 7 categories are merged with custom_categories rows.
 """
 from flask import Blueprint, jsonify, request
 
-from backend import database as db
-from backend.routes.auth import token_required
-from backend.routes.agenda import _builtin_categories
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
+from routes.agenda import _builtin_categories
 
 
 bp = Blueprint("agenda_categories", __name__)

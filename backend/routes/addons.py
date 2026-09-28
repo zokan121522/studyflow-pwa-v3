@@ -21,8 +21,8 @@ Endpoints (Sub-phase SA):
 
 from flask import Blueprint, jsonify, request
 
-from backend.database import execute, fetchone, fetchall
-from backend.routes.auth import token_required
+from database import execute, fetchone, fetchall
+from routes.auth import token_required
 
 
 bp = Blueprint("addons", __name__)
