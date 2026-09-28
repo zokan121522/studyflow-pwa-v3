@@ -26,6 +26,8 @@ window.App.Courses = (function () {
     fetchCourses, fetchCourseDetail, clearDetailCache,
     createCourse, renameCourse, updateDescription, deleteCourse,
     addTopic, renameTopic, deleteTopic,
+    // Blocks (S3)
+    addBlock, toggleBlockDone, moveBlock,
   } = window.App.CoursesAPI;
   const {
     renderCourseTree, attachSidebarEvents, updateSelection,
@@ -34,6 +36,70 @@ window.App.Courses = (function () {
   const Blocks = window.App.CoursesBlocks;
 
   function STATE() { return window.STATE; }
+
+  // ── _inlineRenameCourse(courseId) — inline rename from sidebar ────────
+  async function _inlineRenameCourse(courseId) {
+    const span = document.querySelector(`.course-item[data-course-id="${courseId}"] .ci-title-text`);
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = current;
+    input.style.cssText = "font:inherit;padding:2px 4px;border:1px solid var(--primary);border-radius:2px;background:var(--bg);color:var(--text);width:100%;box-sizing:border-box;";
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = async (save) => {
+      const newTitle = (input.value || "").trim();
+      if (save && newTitle && newTitle !== current) {
+        try {
+          await renameCourse(courseId, newTitle);
+          await renderStudyflow();
+        } catch (err) {
+          alert("❌ Error al renombrar: " + (err.message || err));
+        }
+      } else {
+        await renderStudyflow();
+      }
+    };
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+  }
+
+  // ── _inlineRenameTopic(courseId, topicId) — inline rename from sidebar ──
+  async function _inlineRenameTopic(courseId, topicId) {
+    const span = document.querySelector(`.topic-header[data-topic-id="${topicId}"] .topic-title, .topic-item[data-topic-id="${topicId}"] .topic-title`);
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = current;
+    input.style.cssText = "font:inherit;padding:2px 4px;border:1px solid var(--primary);border-radius:2px;background:var(--bg);color:var(--text);width:100%;box-sizing:border-box;";
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = async (save) => {
+      const newTitle = (input.value || "").trim();
+      if (save && newTitle && newTitle !== current) {
+        try {
+          await renameTopic(courseId, topicId, newTitle);
+          await renderStudyflow();
+        } catch (err) {
+          alert("❌ Error al renombrar: " + (err.message || err));
+        }
+      } else {
+        await renderStudyflow();
+      }
+    };
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+  }
 
   // ── promptCreateCourse() — header "+ Nuevo curso" ─────────────
   async function promptCreateCourse() {
@@ -116,6 +182,138 @@ window.App.Courses = (function () {
     } catch (err) {
       alert("❌ Error al borrar tema: " + (err.message || err));
     }
+  }
+
+  // ── promptDeleteBlock(courseId, blockId) ──────────────────────
+  async function promptDeleteBlock(courseId, blockId) {
+    if (!confirm("¿Borrar este bloque?")) return;
+    try {
+      await window.App.CoursesAPI.deleteBlock(courseId, blockId);
+      const evt = new CustomEvent("studyflow:blocks-changed", {
+        detail: { courseId }
+      });
+      window.dispatchEvent(evt);
+    } catch (err) {
+      alert("❌ Error al borrar bloque: " + (err.message || err));
+    }
+  }
+
+  // ── _toggleBlockDone(courseId, blockId) — called from sidebar checkbox ────
+  async function _toggleBlockDone(courseId, blockId) {
+    try {
+      const newDone = await toggleBlockDone(courseId, blockId);
+      // Dispatch event so center panel refreshes if this topic is active
+      const evt = new CustomEvent("studyflow:blocks-changed", {
+        detail: { courseId }
+      });
+      window.dispatchEvent(evt);
+      return newDone;
+    } catch (err) {
+      alert("❌ Error al cambiar estado: " + (err.message || err));
+    }
+  }
+
+  // ── handleBlockClick(courseId, blockId) — select block in sidebar ──────
+  async function handleBlockClick(courseId, blockId) {
+    const s = STATE();
+    s._view = null;
+    s.currentCourseId = courseId;
+    s.selectedBlockId = blockId;
+    s.selectedTopicId = null;
+    // Find the topic containing this block to update sidebar selection
+    const detail = await fetchCourseDetail(courseId);
+    for (const t of (detail.topics || [])) {
+      if ((t.blocks || []).some(b => b.id === blockId)) {
+        s.selectedTopicId = t.id;
+        break;
+      }
+    }
+    await updateCenter();
+  }
+
+  // ── _showMoveDialog(blockId, courseId, topicId) — minimal move dialog ────
+  async function _showMoveDialog(blockId, courseId, topicId) {
+    const detail = await fetchCourseDetail(courseId);
+    const topics = (detail.topics || []).filter(t => t.id !== Number(topicId) || !topicId);
+    if (!topics.length) {
+      alert("No hay otros temas para mover el bloque.");
+      return;
+    }
+    const options = topics.map(t => `<option value="${t.id}">${escHtml(t.title)}</option>`).join("");
+    const html = `<select id="move-target-topic">${options}</select>
+      <label><input type="checkbox" id="move-to-top"> Insertar al principio</label>`;
+    const result = await new Promise(resolve => {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10000";
+      overlay.innerHTML = `<div style="background:var(--surface);padding:16px;border-radius:8px;min-width:280px;">
+        <h4 style="margin:0 0 12px;">🗂️ Mover bloque</h4>
+        ${html}
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="ht-btn-ghost" id="move-cancel">Cancelar</button>
+          <button class="ht-btn" id="move-ok">Mover</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector("#move-ok").onclick = () => {
+        const targetId = Number(overlay.querySelector("#move-target-topic").value);
+        const toTop = overlay.querySelector("#move-to-top").checked;
+        document.body.removeChild(overlay);
+        resolve({ targetId, toTop });
+      };
+      overlay.querySelector("#move-cancel").onclick = () => {
+        document.body.removeChild(overlay);
+        resolve(null);
+      };
+    });
+    if (!result) return;
+    try {
+      await moveBlock(blockId, { target_topic_id: result.targetId, index: result.toTop ? 0 : -1 });
+      const evt = new CustomEvent("studyflow:blocks-changed", { detail: { courseId } });
+      window.dispatchEvent(evt);
+    } catch (err) {
+      alert("❌ Error al mover: " + (err.message || err));
+    }
+  }
+
+  // ── _enterEditMode(blockId) — open block for editing in center ─────────
+  async function _enterEditMode(blockId) {
+    // The center panel will handle edit mode when the block is rendered.
+    // We just need to ensure the topic is selected so the block is visible.
+    // The caller (sidebar menu) should have already set selectedBlockId.
+  }
+
+  // ── _inlineRenameBlockTitle(courseId, blockId) — inline rename from sidebar ─
+  async function _inlineRenameBlockTitle(courseId, blockId) {
+    const span = document.querySelector(`.block-item[data-block-id="${blockId}"] .bi-title`);
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = current;
+    input.style.cssText = "font:inherit;padding:2px 4px;border:1px solid var(--primary);border-radius:2px;background:var(--bg);color:var(--text);width:100%;box-sizing:border-box;";
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = async (save) => {
+      const newTitle = (input.value || "").trim();
+      if (save && newTitle && newTitle !== current) {
+        try {
+          await window.App.CoursesAPI.updateBlock(courseId, blockId, { title: newTitle });
+          const evt = new CustomEvent("studyflow:blocks-changed", { detail: { courseId } });
+          window.dispatchEvent(evt);
+        } catch (err) {
+          alert("❌ Error al renombrar: " + (err.message || err));
+        }
+      } else {
+        // Revert on cancel or no change
+        await renderStudyflow();
+      }
+    };
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
   }
 
   // ── handleCourseClick(courseId) — select + expand ────────────
@@ -347,11 +545,14 @@ window.App.Courses = (function () {
 
   // ── _renderTopicDetail(centerEl, courseId, topicId) ──────────
   // S4: each block is rendered via App.CoursesBlocks._renderBlockCard (the
-  // SF-Card wrapper around the S3 block markup) and the "+ Añadir bloque"
-  // bar is appended. Edit / save / cancel / done / delete actions are
-  // delegated by CoursesBlocks._attachBlockHandlers. Up / down reorder +
-  // collapse are delegated by CoursesBlocks._attachCardHandlers. The
-  // per-topic notes drawer is mounted via App.CoursesNotes.render().
+  // SF-Card wrapper around the S3 block markup). The "+ Añadir bloque"
+  // bar is rendered BEFORE .sf-td-blocks so new blocks appear at the top.
+  // Hook: addons (OpenCode/NotebookLM) can inject their own add-bar items
+  // by listening for the `studyflow:add-bar-ready` event on the bar element.
+  // Edit / save / cancel / done / delete actions are delegated by
+  // CoursesBlocks._attachBlockHandlers. Up / down reorder + collapse are
+  // delegated by CoursesBlocks._attachCardHandlers. The per-topic notes
+  // drawer is mounted via App.CoursesNotes.render().
   async function _renderTopicDetail(centerEl, courseId, topicId) {
     const detail = await fetchCourseDetail(courseId);
     const topic = (detail.topics || []).find((t) => t.id === topicId);
@@ -380,8 +581,8 @@ window.App.Courses = (function () {
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
-        <div class="sf-td-blocks">${blocksHtml}</div>
         ${addBar}
+        <div class="sf-td-blocks">${blocksHtml}</div>
       </div>
     `;
 
@@ -451,8 +652,16 @@ window.App.Courses = (function () {
     promptAddTopic,
     promptRenameTopic,
     promptDeleteTopic,
+    promptDeleteBlock,
     handleCourseClick,
     handleTopicClick,
+    handleBlockClick,
+    _toggleBlockDone,
+    _showMoveDialog,
+    _enterEditMode,
+    _inlineRenameBlockTitle,
+    _inlineRenameCourse,
+    _inlineRenameTopic,
   };
 })();
 

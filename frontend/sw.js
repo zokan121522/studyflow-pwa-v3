@@ -1,16 +1,14 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v6 (S7b): bumped ASSET_CACHE so the activate handler evicts the v5
-// cache. The pre-cached list adds studyflow/pdf-import.js (unified PDF
-// + SCORM import popover) so it survives offline. PDF + SCORM zip
-// import paths keep working offline against the cached /api/pdf/import
-// endpoints (api cache unchanged).
-const ASSET_CACHE = 'studyflow-assets-v6';
+// v7 (S1.5): bumped ASSET_CACHE so the activate handler evicts the v6
+// cache. The pre-cached list adds courses-sidebar-blocks.css (sidebar
+// block tree styles: topic blocks, checkboxes, progress bar, menus).
+const ASSET_CACHE = 'studyflow-assets-v7';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
-// v6 (S7b): added pdf-import.js (unified PDF + SCORM import popover).
+// v7 (S1.5): added courses-sidebar-blocks.css (sidebar block tree styles).
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
@@ -28,6 +26,7 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/markdown-editor.js',
   '/features/studyflow/courses.css',
   '/features/studyflow/studyflow-blocks.css',
+  '/features/studyflow/courses-sidebar-blocks.css',
   '/features/studyflow/studyflow-editor.css',
   // S7: pdf viewer
   '/features/studyflow/pdf-viewer.js',

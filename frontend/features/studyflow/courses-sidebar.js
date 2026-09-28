@@ -5,6 +5,7 @@
 //
 // SCOPE (this slice): course list with nested topics, expand/collapse,
 // selection, "+ Nuevo curso" button, per-item rename/delete menu.
+// Topic expansion, block tree with checkbox/progress/menu.
 // Drag/drop, inline rename, share/export are deferred to S3/S4.
 
 window.App = window.App || {};
@@ -12,6 +13,26 @@ window.App.CoursesSidebar = (function () {
   "use strict";
 
   const { escHtml } = window.App.UI;
+
+  // ── Block type → icon mapping (mirrors v2 typeIcons) ───────────
+  const TYPE_ICONS = {
+    content: "📄", exercise: "❓", markdown: "📝",
+    "pdf-ref": "📕", youtube: "▶️", image: "🖼",
+    separator: "➖", interactive: "🌐"
+  };
+
+  function getBlockIcon(block) {
+    if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
+    // content-type title prefixes from v2 AI blocks
+    if (block.type === "content" && block.title) {
+      if (block.title.startsWith("🎵 ")) return "🎵";
+      if (block.title.startsWith("📊 ")) return "📊";
+      if (block.title.startsWith("🤖 ")) return "🤖";
+      if (block.title.startsWith("✨ ")) return "✨";
+      if (block.title.startsWith("🌙 ")) return "🌙";
+    }
+    return "📄";
+  }
 
   // ── renderCourseTree(courses, STATE) → HTML string ────────────
   function renderCourseTree(courses, STATE) {
@@ -58,13 +79,28 @@ window.App.CoursesSidebar = (function () {
     const topics = (isExpanded && STATE._expandedCourseTopics)
       ? STATE._expandedCourseTopics : (c.topics || []);
 
+    // Progress: done/total blocks across all topics (only when expanded)
+    let doneCount = 0, totalCount = 0, topicCount = 0;
+    if (isExpanded) {
+      topicCount = topics.length;
+      for (const t of topics) {
+        const blocks = t.blocks || [];
+        totalCount += blocks.length;
+        doneCount += blocks.filter(b => b.done).length;
+      }
+    }
+    const pct = totalCount > 0 ? (doneCount / totalCount * 100) : 0;
+    const countLabel = isExpanded
+      ? `${topicCount} temas · ${doneCount}/${totalCount}`
+      : `${c.topics ? c.topics.length : 0} temas`;
+
     let html = `<div class="course-item ${isActive ? "active" : ""} `
       + `${isExpanded ? "expanded" : ""}" data-course-id="${c.id}">`
       + `<div class="ci-body">`
       + `<div class="ci-title">`
       + `<span class="course-arrow">${arrow}</span>`
       + `<span class="ci-title-text">${escHtml(c.title || "Sin título")}</span>`
-      + `<span class="ci-block-count">${topics.length} temas</span>`
+      + `<span class="ci-block-count">${countLabel}</span>`
       + `<div class="topic-menu-wrap">`
       + `<button class="topic-menu-toggle" `
       + `onclick="event.stopPropagation();`
@@ -75,12 +111,24 @@ window.App.CoursesSidebar = (function () {
       + `window.App.Courses.promptRenameCourse('${c.id}')">`
       + `✏️ Renombrar</div>`
       + `<div class="topic-menu-sep"></div>`
+      + `<div class="topic-menu-item" onclick="event.stopPropagation();`
+      + `this.closest('.topic-menu').classList.remove('open');`
+      + `window.App.Courses.addBlock('${c.id}', {type:'markdown',title:'Nuevo Markdown',content:''})`
+      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">`
+      + `📝 Añadir markdown</div>`
+      + `<div class="topic-menu-item" onclick="event.stopPropagation();`
+      + `this.closest('.topic-menu').classList.remove('open');`
+      + `window.App.Courses.addBlock('${c.id}', {type:'pdf-ref',title:'Nuevo PDF',url:''})`
+      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">`
+      + `📕 Añadir PDF</div>`
+      + `<div class="topic-menu-sep"></div>`
       + `<div class="topic-menu-item danger" onclick="event.stopPropagation();`
       + `this.closest('.topic-menu').classList.remove('open');`
       + `window.App.Courses.promptDeleteCourse('${c.id}', `
       + `'${safeTitle}')">🗑️ Borrar curso</div>`
       + `</div></div>`
       + `</div>` // ci-title
+      + `${isExpanded ? `<div class="ci-progress-bar"><div class="ci-progress-fill" style="width:${pct}%"></div></div>` : ''}`
       + `<div class="ci-sub">${desc}</div>`
       + `</div></div>`; // ci-body, course-item
 
@@ -96,9 +144,7 @@ window.App.CoursesSidebar = (function () {
     if (!topics.length) {
       html += '<div class="empty-blocks">Sin temas aún</div>';
     } else {
-      for (const t of topics) {
-        html += _renderTopicItem(courseId, t, STATE);
-      }
+      html += _renderTopicTree(topics, courseId, STATE);
     }
     html += `<div class="add-topic-btn" data-course-id="${courseId}">`
       + `➕ Añadir tema</div>`;
@@ -106,7 +152,80 @@ window.App.CoursesSidebar = (function () {
     return html;
   }
 
-  // ── _renderTopicItem(courseId, topic, STATE) ─────────────────
+  // ── _renderTopicTree(topics, courseId, STATE) — Topic tree with blocks ────
+  function _renderTopicTree(topics, courseId, STATE) {
+    let html = `<div class="course-topics" data-expanded-course="${courseId}">`;
+    for (let i = 0; i < topics.length; i++) {
+      const t = topics[i];
+      const isTopicExpanded = STATE._expandedTopics?.[t.id] === true;
+      const tArrow = isTopicExpanded ? "▼" : "▶";
+      const safeTitle = escHtml(t.title || "Sin título").replace(/'/g, "\\'");
+      const blocks = t.blocks || [];
+      const tDone = blocks.filter(b => b.done).length;
+      const tTotal = blocks.length;
+
+      html += `<div class="topic-item" data-topic-id="${t.id}" data-course-id="${courseId}" data-topic-idx="${i}">
+        <div class="topic-header">
+          <span class="topic-drag-handle" title="Arrastrar para reordenar">⠿</span>
+          <span class="topic-arrow">${tArrow}</span>
+          <span class="topic-title">${escHtml(t.title || "Sin título")}</span>
+          <span class="topic-count">${tDone}/${tTotal}</span>
+          <div class="topic-menu-wrap">
+            <button class="topic-menu-toggle" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')">⋮</button>
+            <div class="topic-menu">
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.promptRenameTopic('${courseId}','${t.id}')">✏️ Renombrar</div>
+              <div class="topic-menu-sep"></div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'markdown',title:'Nuevo Markdown',content:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">📝 Añadir markdown</div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'pdf-ref',title:'Nuevo PDF',url:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">📕 Añadir PDF</div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'separator',title:'',content:'',topic_id:${t.id}}).then(async id=>{await window.App.Courses.renderStudyflow();window.App.Courses._inlineRenameBlockTitle('${courseId}',id)})">➖ Añadir separador</div>
+              <div class="topic-menu-sep"></div>
+              <div class="topic-menu-item danger" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.promptDeleteTopic('${courseId}','${t.id}','${safeTitle}')">🗑️ Borrar tema</div>
+            </div>
+          </div>
+        </div>
+        <div class="topic-blocks" style="display:${isTopicExpanded ? 'block' : 'none'}">
+          ${blocks.length
+            ? blocks.map((b, bIdx) => _renderBlockItem(courseId, t.id, b, bIdx, STATE)).join('')
+            : '<div class="empty-blocks">Sin bloques aún</div>'}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  // ── _renderBlockItem(courseId, topicId, block, idx, STATE) ───────────
+  function _renderBlockItem(courseId, topicId, b, idx, STATE) {
+    const isActive = b.id === STATE.selectedBlockId;
+    const icon = getBlockIcon(b);
+    const checked = b.done ? "checked" : "";
+    const safeBlockTitle = escHtml(b.title || "Sin título").replace(/'/g, "\\'");
+    const isSep = b.type === "separator";
+    const sepCls = isSep ? ` separator${(b.title || "").trim() ? " has-label" : " no-label"}` : "";
+    const dblClick = isSep
+      ? `ondblclick="event.stopPropagation();window.App.Courses._inlineRenameBlockTitle('${courseId}','${b.id}')" title="Doble clic para editar"`
+      : "";
+
+    return `<div class="block-item ${isActive ? "active" : ""}${sepCls}" data-block-id="${b.id}" data-course-id="${courseId}" data-topic-id="${topicId}" data-block-idx="${idx}">
+      <span class="bi-drag-handle" title="Arrastrar para reordenar">⠿</span>
+      <label class="bi-check" onclick="event.stopPropagation()">
+        <input type="checkbox" ${checked} onchange="window.App.Courses._toggleBlockDone('${courseId}','${b.id}')">
+      </label>
+      <span class="bi-icon">${icon}</span>
+      <span class="bi-title" ${dblClick}>${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
+      <div class="topic-menu-wrap">
+        <button class="topic-menu-toggle" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')">⋮</button>
+        <div class="topic-menu">
+          ${isSep ? `<div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses._inlineRenameBlockTitle('${courseId}','${b.id}')">✏️ Editar título</div>` : ""}
+          <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses._showMoveDialog('${b.id}','${courseId}','${topicId}')">🗂️ Mover bloque</div>
+          <div class="topic-menu-sep"></div>
+          <div class="topic-menu-item danger" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.promptDeleteBlock('${courseId}','${b.id}')">🗑️ Borrar bloque</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── _renderTopicItem(courseId, topic, STATE) — kept for flat blocks fallback ────
   function _renderTopicItem(courseId, t, STATE) {
     const isActive = t.id === STATE.selectedTopicId;
     const safeTitle = escHtml(t.title || "Sin título").replace(/'/g, "\\'");
@@ -142,10 +261,25 @@ window.App.CoursesSidebar = (function () {
       const arrow = el.querySelector(".course-arrow");
       if (arrow) arrow.textContent = cid === STATE.expandedCourseId ? "▼" : "▶";
     });
-    leftEl.querySelectorAll(".topic-item").forEach((el) => {
-      el.classList.toggle(
-        "active", Number(el.dataset.topicId) === STATE.selectedTopicId
-      );
+    // Topic headers (active class on header)
+    leftEl.querySelectorAll(".topic-header").forEach((header) => {
+      const topicItem = header.closest(".topic-item");
+      if (topicItem) {
+        header.classList.toggle("active", topicItem.dataset.topicId === String(STATE.selectedTopicId));
+      }
+    });
+    // Block items
+    leftEl.querySelectorAll(".block-item").forEach((el) => {
+      el.classList.toggle("active", el.dataset.blockId === String(STATE.selectedBlockId));
+    });
+    // Topic block containers visibility (expand/collapse)
+    leftEl.querySelectorAll(".topic-item").forEach((item) => {
+      const tid = item.dataset.topicId;
+      const isExpanded = STATE._expandedTopics?.[tid] === true;
+      const blocksDiv = item.querySelector(".topic-blocks");
+      if (blocksDiv) blocksDiv.style.display = isExpanded ? "block" : "none";
+      const arrow = item.querySelector(".topic-arrow");
+      if (arrow) arrow.textContent = isExpanded ? "▼" : "▶";
     });
   }
 
@@ -158,7 +292,7 @@ window.App.CoursesSidebar = (function () {
     leftEl.dataset._csDelegated = "1";
     leftEl._csCallbacks = callbacks || {};
 
-    // 1) Create course / course click / topic click
+    // 1) Create course / course click / topic header click / block click
     leftEl.addEventListener("click", async (e) => {
       // Create-course button
       const createBtn = e.target.closest("#create-course-btn");
@@ -180,14 +314,44 @@ window.App.CoursesSidebar = (function () {
         return;
       }
 
-      // Topic row → select topic
-      const topicItem = e.target.closest(".topic-item");
-      if (topicItem && !e.target.closest(".topic-menu-wrap")) {
-        if (window.App.Courses && window.App.Courses.handleTopicClick) {
-          await window.App.Courses.handleTopicClick(
-            Number(topicItem.dataset.courseId),
-            Number(topicItem.dataset.topicId)
-          );
+      // Topic header → expand/collapse or select topic
+      const topicHeader = e.target.closest(".topic-header");
+      if (topicHeader && !e.target.closest(".topic-menu-wrap")) {
+        e.stopPropagation();
+        const topicItem = topicHeader.closest(".topic-item");
+        const courseId = Number(topicItem.dataset.courseId);
+        const topicId = Number(topicItem.dataset.topicId);
+
+        // Click on topic title → select topic
+        if (e.target.closest(".topic-title")) {
+          if (window.App.Courses && window.App.Courses.handleTopicClick) {
+            await window.App.Courses.handleTopicClick(courseId, topicId);
+          }
+          return;
+        }
+
+        // Click elsewhere on header → toggle expand/collapse
+        const s = window.STATE || {};
+        s._expandedTopics = s._expandedTopics || {};
+        const expanded = s._expandedTopics[topicId] === true;
+        s._expandedTopics[topicId] = !expanded;
+        const blocksDiv = topicItem.querySelector(".topic-blocks");
+        if (blocksDiv) blocksDiv.style.display = !expanded ? "block" : "none";
+        const arrow = topicItem.querySelector(".topic-arrow");
+        if (arrow) arrow.textContent = !expanded ? "▼" : "▶";
+        return;
+      }
+
+      // Block item → select block (not on menu, checkbox, drag handle)
+      const blockItem = e.target.closest(".block-item");
+      if (blockItem
+        && !e.target.closest(".topic-menu-wrap")
+        && !e.target.closest(".bi-check")
+        && !e.target.closest(".bi-drag-handle")) {
+        const courseId = Number(blockItem.dataset.courseId);
+        const blockId = Number(blockItem.dataset.blockId);
+        if (window.App.Courses && window.App.Courses.handleBlockClick) {
+          await window.App.Courses.handleBlockClick(courseId, blockId);
         }
         return;
       }
