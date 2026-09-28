@@ -119,6 +119,23 @@ window.App.CoursesBlocks = (function () {
       bodyHtml = `<div class="sf-empty">Tipo ${escHtml(type)} no soportado</div>`;
     }
 
+    // Phase 7.7 — AI ✨ Generate toolbar (v2 port). Rendered inside
+    // markdown/content blocks (scope md → improve/convert/Gemini flows)
+    // and pdf-ref blocks (scope pdf → NotebookLM PDF→MD/HTML, test,
+    // infographic, audio). The toolbar is omitted when the AI module is
+    // absent or when the block carries no content worth generating.
+    let aiToolbarHtml = "";
+    const aiMod = window.App.AI;
+    if (aiMod && (type === "markdown" || type === "content" || type === "pdf-ref")) {
+      try {
+        aiToolbarHtml = type === "pdf-ref"
+          ? aiMod.renderPdfAiButtonsHtml(b.id, b.topic_id || "")
+          : aiMod.renderMdAiButtonsHtml(b.id, b.topic_id || "");
+      } catch (_) {
+        aiToolbarHtml = "";
+      }
+    }
+
     return `<div class="sf-td-block ${
       done ? "is-done" : ""
     }" data-block-id="${b.id}" data-block-type="${escHtml(type)}"
@@ -133,6 +150,7 @@ window.App.CoursesBlocks = (function () {
         <span class="sf-td-block-title">${title}</span>
       </div>
       <div class="sf-td-block-body">${bodyHtml}</div>
+      ${aiToolbarHtml}
       <div class="sf-td-edit-form" style="display:none;"></div>
     </div>`;
   }

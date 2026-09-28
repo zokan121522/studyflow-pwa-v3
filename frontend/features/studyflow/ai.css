@@ -1,0 +1,129 @@
+/* ─── AI ✨ Generate — unified block toolbar (v3, port of v2 ai.css) ──
+   Rendered by frontend/features/studyflow/ai.js inside .sf-td-block
+   for markdown/content/pdf-ref blocks. */
+
+.add-block-bar.block-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px;
+  margin: 0 0 8px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  align-items: center;
+  position: static;
+}
+
+/* Addon group boxes (one line per addon) */
+.add-block-bar.block-toolbar .toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  margin: 3px 0 0 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.03));
+}
+.add-block-bar.block-toolbar .toolbar-group:first-of-type {
+  margin-top: 0;
+}
+
+/* Brand chip (NotebookLM blue / OpenZen orange) */
+.add-block-bar.block-toolbar .toolbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.add-block-bar.block-toolbar .toolbar-chip.ai-btn-nb {
+  background: linear-gradient(135deg, #1a73e8, #0d47a1);
+  color: #fff;
+}
+.add-block-bar.block-toolbar .toolbar-chip.ai-btn-oc {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+  color: #fff;
+}
+
+/* Action buttons */
+.ai-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.ai-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+.ai-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ai-btn.disabled,
+.ai-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Addon brand buttons */
+.ai-btn-nb {
+  background: linear-gradient(135deg, #1a73e8, #0d47a1);
+  border-color: #0d47a1;
+  color: #fff;
+}
+.ai-btn-nb:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2b83f0, #1558b5);
+  border-color: #0d47a1;
+  color: #fff;
+}
+.ai-btn-oc {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+  border-color: #bf360c;
+  color: #fff;
+}
+.ai-btn-oc:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f2651a, #d0410e);
+  border-color: #bf360c;
+  color: #fff;
+}
+
+/* Per-block status line */
+.ai-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 0 0 0;
+  line-height: 1.3;
+  flex-basis: 100%;
+}
+
+/* Usage / quota counters (N/LIMIT) */
+.usage-counter {
+  font-size: 0.7em;
+  opacity: 0.55;
+  margin-left: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s;
+}
+.usage-counter.zero {
+  opacity: 0.35;
+}
+.usage-counter.near-limit {
+  opacity: 0.9;
+  color: #ffa726;
+}

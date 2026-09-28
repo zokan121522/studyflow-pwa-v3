@@ -1,10 +1,9 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v11 (7.3): bumped ASSET_CACHE so the activate handler evicts v10.
-// NotebookLM settings panel now includes the interactive Chrome login flow
-// (login-start/login-status polling + login-stop).
-const ASSET_CACHE = 'studyflow-assets-v11';
+// v12 (7.7): bumped ASSET_CACHE so the activate handler evicts v11.
+// AI ✨ Generate toolbar (ai.js/ai-tasks.js/ai-notebooklm.js/ai.css).
+const ASSET_CACHE = 'studyflow-assets-v12';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -42,6 +41,12 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/scorm-settings.js',
   // 7.2: NotebookLM settings panel
   '/features/studyflow/notebooklm-settings.js',
+  // 7.7: AI ✨ Generate — toolbar manifests/click/counters + generators
+  // + streaming task poll/modal + toolbar styles.
+  '/features/studyflow/ai-tasks.js',
+  '/features/studyflow/ai-notebooklm.js',
+  '/features/studyflow/ai.js',
+  '/features/studyflow/ai.css',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
   // SA.2 + S4.7: addons foundation (registry + marketplace) and the

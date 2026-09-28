@@ -41,6 +41,7 @@
   <!-- S7: pdf viewer (App.PdfViewer + App.PdfAnnots) -->
   <link rel="stylesheet" href="/features/studyflow/pdf-viewer.css">
   <link rel="stylesheet" href="/features/studyflow/study-scheduler.css">
+  <link rel="stylesheet" href="/features/studyflow/ai.css">
   <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
   <link rel="stylesheet" href="/features/addons/addons.css">
   
@@ -422,6 +423,16 @@
        register() into App.Addons in time for the marketplace grid. -->
   <script src="/features/addons/addons-core.js"></script>
   <script src="/features/addons/addons-manager.js"></script>
+  <!-- Phase 7.7 — AI ✨ Generate (v2 port): ai-tasks (streaming poll +
+       modal), ai-notebooklm (generators → v3 AI endpoints), ai.js
+       (manifests + toolbar render + click wiring + usage counters +
+       result-block insert via CoursesAPI.addBlock/moveBlock). Loads
+       AFTER addons-core so App.Addons.register exists when ai.js starts.
+       ai-tasks/ai-notebooklm MUST come before ai.js (ai.js references
+       window.App.AI.Tasks / App.AI.Generation). -->
+  <script src="/features/studyflow/ai-tasks.js"></script>
+  <script src="/features/studyflow/ai-notebooklm.js"></script>
+  <script src="/features/studyflow/ai.js"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
        App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,

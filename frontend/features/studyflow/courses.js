@@ -648,6 +648,13 @@ window.App.Courses = (function () {
     Blocks._attachBlockHandlers(centerEl, courseId, topicId);
     // S4 handlers — collapse / up / down reorder.
     Blocks._attachCardHandlers(centerEl, courseId, topicId);
+    // Phase 7.7 — AI ✨ toolbar: bind [data-ai-action] buttons + usage
+    // counters. Idempotent (AI module re-binds remove+add on each render).
+    if (window.App.AI && typeof window.App.AI.initSectionEvents === "function") {
+      try {
+        window.App.AI.initSectionEvents(centerEl);
+      } catch (_) { /* AI toolbar is optional progressive enhancement */ }
+    }
     // S4 — per-topic notes drawer.
     // S7 — pdf-ref blocks mount a real pdf.js viewer. Iterate every
     // .pdf-container and hand it to App.PdfViewer.init; the viewer

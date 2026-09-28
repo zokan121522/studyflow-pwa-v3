@@ -69,6 +69,57 @@ window.App.Addons = (function () {
     return API.get(`/addons/${slug}/status`);
   }
 
+  // ─── Block actions — per-addon toolbar actions (Phase 59 port) ──
+  // Manifest field: blockActions: [{ id, label, icon, cat, order }]
+  //   id    → data-ai-action (stable contract with ai.js / courses-blocks.js)
+  //   cat   → "add" | "generate" (toolbar section)
+  //   order → sort key within the section
+  function blockActions() {
+    const out = [];
+    for (const m of _registry.values()) {
+      if (!Array.isArray(m.blockActions)) continue;
+      for (const act of m.blockActions) {
+        // Propagate addon identity (name/icon/cls) to each action so the
+        // toolbar can render visual per-addon group headers.
+        out.push(Object.assign({
+          slug: m.slug,
+          icon: act.icon || "🧩",
+          addonName: m.name || m.slug,
+          addonIcon: m.icon || "🧩",
+          addonCls: m.cls || "",
+        }, act));
+      }
+    }
+    return out.sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /** Synchronous filter for sync renderers: strict by the cached catalog
+   *  when loaded; returns ALL actions when the catalog is missing or empty
+   *  (pre-seed / offline keeps today's behavior). */
+  function activeBlockActionsSync() {
+    const cats = _catalog;
+    if (!cats || !cats.length) return blockActions();
+    const enabled = new Set();
+    for (const a of cats) {
+      // v3 catalog rows carry installed/enabled/hidden (no v2 "state"
+      // field). A row is "active" when installed AND enabled.
+      if (a.installed && a.enabled) enabled.add(a.slug);
+    }
+    return blockActions().filter((act) => enabled.has(act.slug));
+  }
+
+  /** Async variant: warms the catalog cache first, then sync filter. */
+  async function activeBlockActions() {
+    if (!_catalog) {
+      try {
+        await refresh();
+      } catch (_) {
+        /* fallback below */
+      }
+    }
+    return activeBlockActionsSync();
+  }
+
   // ─── Gate helpers (forward-declared for S5/S6/S9 modules) ────
   // Both swallow network errors so callers can probe freely without
   // try/catch spam. Missing addon → false (not installed → throw).
@@ -108,6 +159,7 @@ window.App.Addons = (function () {
     refresh, catalog, getAddon,
     isEnabled, isInstalled,
     mutate,
+    blockActions, activeBlockActionsSync, activeBlockActions,
   };
 })();
 
