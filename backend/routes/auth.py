@@ -31,29 +31,41 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
 
 
+# Default implicit user id for single-user local-mode fallback.
+# When no Authorization header is sent (or the token is invalid/expired),
+# routes attribute data to LOCAL_USER_ID instead of returning 401.
+LOCAL_USER_ID = 1
+
+
 def token_required(f):
-    """Decorator to require valid JWT token."""
+    """Decorator to require valid JWT token.
+
+    Single-user local mode: if no Authorization header is sent or the token
+    is invalid/expired, fall back to LOCAL_USER_ID so the PWA can be used
+    without a login screen. A valid token still scopes data to its user_id.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
         auth_header = request.headers.get('Authorization')
-        
+
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header.split(' ')[1]
-        
+
         if not token:
-            return jsonify({'error': 'Token is missing'}), 401
-        
+            # No token → single-user local mode
+            return f(LOCAL_USER_ID, *args, **kwargs)
+
         try:
             data = decode_token(token)
             current_user_id = data['user_id']
         except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401
+            return f(LOCAL_USER_ID, *args, **kwargs)
         except jwt.InvalidTokenError:
-            return jsonify({'error': 'Token is invalid'}), 401
-        
+            return f(LOCAL_USER_ID, *args, **kwargs)
+
         return f(current_user_id, *args, **kwargs)
-    
+
     return decorated
 
 

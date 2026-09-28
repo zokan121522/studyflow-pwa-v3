@@ -14,7 +14,7 @@ bp = Blueprint('courses', __name__)
 @bp.get('/courses')
 @token_required
 def list_courses(current_user_id: int):
-    """Get all courses for the current user with topics."""
+    """Get all courses (with topics) for the current user."""
     courses_rows = fetchall(
         'SELECT * FROM courses WHERE user_id = %s ORDER BY created_at DESC',
         (current_user_id,)
@@ -23,8 +23,6 @@ def list_courses(current_user_id: int):
     courses = []
     for c in courses_rows:
         course = Course.from_row(c).to_dict()
-        
-        # Get topics for this course
         topics_rows = fetchall(
             'SELECT * FROM topics WHERE course_id = %s ORDER BY order_index ASC',
             (c['id'],)

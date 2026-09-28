@@ -34,6 +34,35 @@ def init_db() -> None:
             _create_tables(cur)
         conn.commit()
 
+    # Seed local user (id=1) for single-user mode
+    _seed_local_user()
+
+
+def _seed_local_user() -> None:
+    """Ensure the implicit local user (id=1) exists so single-user mode works.
+
+    Uses ON CONFLICT for idempotency. Resets the users.id sequence to avoid
+    colliding with id=1 on future inserts.
+    """
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (id, email, password_hash, name)
+                VALUES (1, 'local@studyflow.app', 'local-no-auth', 'Usuario Local')
+                ON CONFLICT (id) DO NOTHING
+                """
+            )
+            cur.execute(
+                """
+                SELECT setval(
+                    pg_get_serial_sequence('users', 'id'),
+                    GREATEST((SELECT MAX(id) FROM users), 1)
+                )
+                """
+            )
+        conn.commit()
+
 
 def _create_tables(cur) -> None:
     """Create all tables if they don't exist."""
