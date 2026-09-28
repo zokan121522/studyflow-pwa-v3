@@ -106,8 +106,13 @@ window.App.StudyScheduler = (function () {
 console.log("[Studyflow] study-scheduler.js loaded");
 
 // Self-mount on boot (idempotent) — the FAB lives in document.body.
+// mount() is a member of the returned namespace, not a global, so it has to
+// be reached through App.StudyScheduler; calling a bare `mount()` here threw
+// "ReferenceError: mount is not defined" and the FAB never appeared.
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", mount);
+  document.addEventListener("DOMContentLoaded", function () {
+    window.App.StudyScheduler.mount();
+  });
 } else {
-  mount();
+  window.App.StudyScheduler.mount();
 }
