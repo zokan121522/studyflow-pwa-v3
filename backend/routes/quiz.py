@@ -109,6 +109,80 @@ def create_question(current_user_id: int):
     return jsonify({'question': QuizQuestion.from_row(row).to_dict()}), 201
 
 
+def _prepare_bulk_rows(data: dict, user_id: int):
+    """Validate a batch of questions and build quiz_questions rows.
+
+    Returns (rows, errors). A malformed question is reported in `errors`
+    instead of failing the whole import, so one bad question out of twenty
+    does not cost the user the other nineteen.
+
+    Both key spellings for the correct option are accepted: the NotebookLM
+    generator emits `correct`, the column is `correct_answer`.
+    """
+    block_id = data.get('block_id')
+    questions = data.get('questions')
+    if block_id is None or not isinstance(questions, list) or not questions:
+        return [], [{'index': None, 'error': 'block_id and a non-empty questions[] are required'}]
+
+    rows, errors = [], []
+    for i, q in enumerate(questions):
+        if not isinstance(q, dict):
+            errors.append({'index': i, 'error': 'not an object'})
+            continue
+        text = (q.get('question') or '').strip()
+        options = q.get('options')
+        correct = q.get('correct_answer', q.get('correct'))
+        if not text or not isinstance(options, list) or len(options) < 2:
+            errors.append({'index': i, 'error': 'question and options (>=2) are required'})
+            continue
+        if correct is None or not (0 <= int(correct) < len(options)):
+            errors.append({'index': i, 'error': 'correct answer out of range'})
+            continue
+        rows.append((
+            user_id, data.get('course_id'), data.get('topic_id'), block_id,
+            text, json.dumps(options, ensure_ascii=False), int(correct),
+            q.get('explanation'), q.get('difficulty', 'medium'),
+        ))
+    return rows, errors
+
+
+@bp.post('/quiz/questions/bulk')
+@token_required
+def bulk_create_questions(current_user_id: int):
+    """Import a batch of questions for one block (AI-generated tests).
+
+    create_question handles a single question, so importing a 20-question
+    NotebookLM test meant 20 round-trips from the browser. Replaces the
+    block's questions in one call, which is what a regenerated test needs.
+    """
+    data = request.get_json() or {}
+    rows, errors = _prepare_bulk_rows(data, current_user_id)
+    if not rows:
+        return jsonify({'error': 'no valid questions', 'invalid': errors}), 400
+    block_id = data.get('block_id')
+
+    # A regenerated test replaces the previous one, otherwise every run
+    # duplicates the same questions on the block.
+    if data.get('replace'):
+        execute('DELETE FROM quiz_questions WHERE user_id = %s AND block_id = %s',
+                (current_user_id, block_id))
+
+    # database.execute() runs a single statement with one params tuple, so
+    # batch with a multi-row INSERT instead of N round-trips. Chunked to keep
+    # the placeholder list bounded for large batches.
+    inserted = 0
+    CHUNK = 50
+    cols = ('user_id, course_id, topic_id, block_id, question, options, '
+            'correct_answer, explanation, difficulty')
+    for start in range(0, len(rows), CHUNK):
+        chunk = rows[start:start + CHUNK]
+        placeholders = ', '.join(['(%s,%s,%s,%s,%s,%s,%s,%s,%s)'] * len(chunk))
+        params = tuple(v for row in chunk for v in row)
+        inserted += execute(
+            f'INSERT INTO quiz_questions ({cols}) VALUES {placeholders}', params)
+    return jsonify({'inserted': inserted, 'invalid': errors}), 201
+
+
 @bp.put('/quiz/questions/<int:question_id>')
 @token_required
 def update_question(current_user_id: int, question_id: int):

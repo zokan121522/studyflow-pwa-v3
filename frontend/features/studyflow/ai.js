@@ -808,28 +808,89 @@ window.App.AI = Object.assign(window.App.AI, (function () {
   }
 
   // ─── Test success callback ─────────────────────────────────────
+  // The generated test is a JSON array of {question, options, correct,
+  // explanation}. It used to be dropped verbatim into a `content` block, so
+  // the user got a wall of raw JSON instead of a test: only `exercise` blocks
+  // are rendered by App.QuizEmbed, and that reads the questions from
+  // quiz_questions. So: create an exercise block with an EMPTY stem (the
+  // questions are the content) and import them where the renderer looks.
   async function _onTestSuccess(task, blockId, topicId) {
     const courseId = await _resolveCourseIdForTopic(topicId, null);
     if (!courseId) {
       _showStatus(blockId, "❌ No hay curso activo", true);
       return;
     }
-    const raw = task.result_content || "";
+
+    let questions = [];
     try {
-      const newId = await _addBlockAfterSource(courseId, blockId, {
-        type: "content",
-        title: `❓ Test`,
-        content: raw,
+      const parsed = JSON.parse(task.result_content || "[]");
+      questions = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+    } catch {
+      _showStatus(blockId, "❌ No se pudo interpretar el test generado", true);
+      return;
+    }
+    // Drop anything the quiz API would reject instead of failing the import.
+    const usable = questions.filter(
+      (q) => q && q.question && Array.isArray(q.options) && q.options.length >= 2
+    );
+    if (!usable.length) {
+      _showStatus(blockId, "❌ El test generado no tiene preguntas válidas", true);
+      return;
+    }
+
+    // Name the block after its source, like v2 did.
+    let sourceTitle = "Test";
+    try {
+      const list = await window.App.CoursesAPI.fetchCourses();
+      const course = (list || []).find((c) => String(c.id) === String(courseId)) || {};
+      const src = (course.blocks || []).find((b) => String(b.id) === String(blockId));
+      if (src && src.title) sourceTitle = _cleanBlockTitle(src.title) || "Test";
+    } catch { /* fall back to "Test" */ }
+
+    let newId;
+    try {
+      newId = await _addBlockAfterSource(courseId, blockId, {
+        type: "exercise",
+        title: `❓ ${sourceTitle}`,
+        content: "",   // no JSON as stem — QuizEmbed paints the questions
         topic_id: topicId,
       });
-      _showStatus(blockId, "✅ Test generado", true);
-      window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
-        detail: { courseId, topicId }
-      }));
-      return newId;
     } catch (err) {
-      _showStatus(blockId, "❌ Error al guardar el test", true);
+      _showStatus(blockId, `❌ Error al crear el bloque: ${err.message || err}`, true);
+      return;
     }
+
+    try {
+      const res = await window.API.post("/quiz/questions/bulk", {
+        block_id: newId,
+        course_id: Number(courseId),
+        topic_id: topicId ? Number(topicId) : null,
+        replace: true,
+        questions: usable,
+      });
+      const inserted = (res && res.inserted) || usable.length;
+      const skipped = usable.length - inserted;
+      _showStatus(
+        blockId,
+        skipped
+          ? `✅ Test: ${inserted} preguntas (${skipped} descartadas)`
+          : `✅ Test generado (${inserted} preguntas)`,
+        true
+      );
+    } catch (err) {
+      // The block exists but has no questions: say so instead of claiming
+      // the test is ready — QuizEmbed would render an empty quiz.
+      _showStatus(
+        blockId,
+        `⚠️ Bloque creado, pero falló la importación de preguntas: ${err.message || err}`,
+        true
+      );
+    }
+
+    window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
+      detail: { courseId, topicId }
+    }));
+    return newId;
   }
 
   // ─── Public exports ────────────────────────────────────────────
