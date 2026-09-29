@@ -1,13 +1,17 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
+// v27: the generated NotebookLM test must render as a quiz. Installed PWAs
+// were still serving the pre-fix ai.js, where the test landed as raw JSON in
+// a `content` block, so a reload looked like the bug was unfixed. Bump so
+// the precache is refetched.
 // v24: content-blocks.js now sanitises through html-sanitizer.js, so embedded
 // <img>/<audio> render instead of showing as escaped text. Bump so installed
 // PWAs stop serving the old renderer.
 // v20 (#8 fix): v2Restore modal had `onConfirm` vs `onDone` typo — the
 // "Migrar a v3" button threw on click. Fixed + added a deferred-data
 // warning. Bump so installed PWAs stop serving the broken modal.
-const ASSET_CACHE = 'studyflow-assets-v26';
+const ASSET_CACHE = 'studyflow-assets-v27';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
