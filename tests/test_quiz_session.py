@@ -488,6 +488,25 @@ def test_index_html_loads_the_quiz_modules():
     assert html.index("quiz-runner.js") < html.index("quiz-embed.js")
 
 
+def test_the_quiz_modules_are_precached():
+    """index.html pulls its modules with <script src>; anything the precache
+    misses only works while online. S5 shipped this bug (six quiz files, zero
+    entries) and it fails silently — the app loads, the feature does not.
+
+    Scoped to the quiz files on purpose. The same audit found 29 modules from
+    index.html outside the precache across agenda/, habits/ and shared/ — a
+    pre-existing project-wide gap, tracked separately rather than fixed inside
+    a quiz commit. Widen this list deliberately, not by accident.
+    """
+    sw = _src(ROOT / "frontend" / "sw.js")
+    precache = sw.split("PRECACHE_ASSETS = [")[1].split("\n];")[0]
+    quiz = sorted(set(re.findall(r'(?:src|href)="(/features/quiz/[^"]+)"',
+                                 _src(INDEX_HTML))))
+    assert len(quiz) == 6, quiz
+    missing = [p for p in quiz if f"'{p}'" not in precache]
+    assert not missing, f"fuera del precache: {missing}"
+
+
 def test_embed_delegates_to_the_runner_instead_of_a_flat_list():
     src = _src(EMBED_JS)
     assert "QuizRunner.mount" in src

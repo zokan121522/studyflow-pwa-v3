@@ -72,6 +72,15 @@ const PRECACHE_ASSETS = [
   // while online — unacceptable for a headline feature of an offline PWA.
   '/shared/backup-restore.js',
   '/shared/v2-restore-modal.js',
+  // S5: quiz ecosystem. Same reason as above: index.html loads these with
+  // <script src>, so a single missing entry means no test, no failed pool
+  // and no summary while offline — the feature is simply gone.
+  '/features/quiz/quiz-api.js',
+  '/features/quiz/quiz-runner.js',
+  '/features/quiz/quiz-pool.js',
+  '/features/quiz/quiz-summary.js',
+  '/features/quiz/quiz-center.js',
+  '/features/quiz/quiz.css',
 ];
 
 // Maximum age for cached API responses (5 minutes)
