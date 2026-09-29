@@ -243,6 +243,48 @@ def test_zen_template_list_is_a_grid_not_a_narrow_column():
     )
 
 
+def test_zen_insert_resolves_the_course_that_owns_the_topic():
+    """`addBlock` posts to /courses/<cid>/topics/<tid>/blocks. The zen queue
+    calls _onContentSuccess with no courseIdHint, so it used to fall back to
+    STATE.currentCourseId — the course open at INSERT time. With a different
+    course open the backend answers 404 "Topic not found in this course" and
+    the user gets "Error al guardar el bloque"."""
+    src = AI_JS_MAIN.read_text()
+    assert "_resolveCourseIdForTopic" in src, "no hay resolutor de curso por topic"
+    body = src[src.index("async function _onContentSuccess") :][:600]
+    assert "_resolveCourseIdForTopic(topicId, courseIdHint)" in body, (
+        "_onContentSuccess sigue usando STATE.currentCourseId — el insert "
+        "falla con 404 si el curso abierto no es el dueño del topic"
+    )
+    # the resolver must look the topic up among the courses, not just guess
+    resolver = src[src.index("async function _resolveCourseIdForTopic") :][:900]
+    assert "fetchCourses()" in resolver, "el resolutor no consulta los cursos"
+    assert "course.topics" in resolver, "el resolutor no busca el topic dueño"
+
+
+def test_zen_format_has_its_own_label():
+    """youtube-queue.js passes format="ytd_zen", which matched no branch and
+    fell through to the generic one, titling the block "🤖 Markdown"."""
+    src = AI_JS_MAIN.read_text()
+    branch = re.search(
+        r'format === "ytd_zen"\)\s*\{(.{0,400})', src, re.S
+    )
+    assert branch, "el formato ytd_zen no tiene rama propia"
+    assert "YouTube Zen" in branch.group(1), (
+        "la rama ytd_zen no etiqueta el bloque como YouTube Zen — "
+        "cae en la genérica y se titula '🤖 Markdown'"
+    )
+
+
+def test_zen_queue_passes_the_zen_format():
+    """The queue must keep sending ytd_zen, and the insert must tolerate a
+    missing courseIdHint (it resolves the course from the topic instead)."""
+    q = (ROOT / "frontend" / "features" / "studyflow" / "youtube-queue.js").read_text()
+    call = re.search(r"_onContentSuccess\(([^)]*)\)", q, re.S)
+    assert call, "la cola no llama a _onContentSuccess"
+    assert "ytd_zen" in call.group(1), "la cola no pasa el formato ytd_zen"
+
+
 def test_index_html_loads_yt_modules_after_ai_js():
     """youtube-queue.js reads App.AI._onContentSuccess at insert time, so it
     must be loaded after ai.js defines it (v2's ordering does not apply)."""

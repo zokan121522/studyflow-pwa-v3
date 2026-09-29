@@ -148,11 +148,6 @@ window.App.AI = Object.assign(window.App.AI, (function () {
           task: { md: "notebooklm_total", pdf: "notebooklm" } },
         { id: "youtube", label: "YouTube", icon: "🎬", cat: "generate", order: 16,
           md: "notebooklm-youtube", pdf: "notebooklm-youtube" },
-        // Phase 8 — YouTubeZen: local yt-dlp + OpenZEN structuring. Distinct
-        // from the native NotebookLM entry above: this one opens the full zen
-        // dialog (template / depth / mode / language + FIFO queue for batches).
-        { id: "youtube-zen", label: "YouTube Zen", icon: "🎥", cat: "generate", order: 17,
-          md: "youtube", pdf: "youtube" },
         { id: "html", label: "HTML", icon: "🌐", cat: "generate", order: 20,
           md: "nb-html-content", pdf: "notebooklm-html",
           task: { md: "notebooklm_total", pdf: "notebooklm_md_to_html" } },
@@ -183,6 +178,13 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         { id: "audio", label: "Audio", icon: "🎵", cat: "generate", order: 60,
           md: "audio", pdf: "audio",
           task: { md: "opencode_audio", pdf: "opencode_audio" } },
+        // Phase 8 — YouTubeZen: local yt-dlp extracts subtitles, then OpenZEN
+        // (big-pickle via opencode-acp) structures them. It is NOT a NotebookLM
+        // feature, so it belongs to this addon, next to Audio. Opens the full
+        // zen dialog (template / depth / mode / language + FIFO queue).
+        { id: "youtube-zen", label: "YouTube Zen", icon: "🎥", cat: "generate", order: 61,
+          md: "youtube", pdf: "youtube",
+          task: { md: "youtube_zen", pdf: "youtube_zen" } },
       ],
     });
   }
@@ -662,6 +664,34 @@ window.App.AI = Object.assign(window.App.AI, (function () {
   }
 
   /**
+   * Resolve the course that OWNS `topicId`.
+   *
+   * `addBlock` posts to /courses/<cid>/topics/<tid>/blocks, so a cid that
+   * does not own the topic gets a 404 "Topic not found in this course". The
+   * youtube-zen queue finishes tasks long after they were enqueued and calls
+   * _onContentSuccess without a courseIdHint, so the ambient
+   * STATE.currentCourseId is whatever course the user happens to have open
+   * at insert time. Deriving the owner from the topic makes the insert
+   * correct no matter where the user navigated meanwhile.
+   *
+   * @returns {Promise<string|null>} course id, or null when unresolvable
+   */
+  async function _resolveCourseIdForTopic(topicId, hint) {
+    if (hint) return String(hint);
+    if (!topicId) return null;
+    const tid = String(topicId);
+    const current = (typeof STATE !== "undefined" && STATE.currentCourseId) || "";
+    try {
+      const list = await window.App.CoursesAPI.fetchCourses();
+      for (const course of list || []) {
+        const owns = (course.topics || []).some((t) => String(t.id) === tid);
+        if (owns) return String(course.id);
+      }
+    } catch { /* fall through to the ambient course */ }
+    return current ? String(current) : null;
+  }
+
+  /**
    * Create a block in the topic and move it right after the source block.
    * v3 has per-block POST + move (no v2 bulk PATCH with full blocks).
    */
@@ -699,9 +729,10 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
   // ─── Content success callback ──────────────────────────────────
   async function _onContentSuccess(task, blockId, topicId, format, courseIdHint) {
-    const courseId = courseIdHint
-      || (typeof STATE !== "undefined" && STATE.currentCourseId)
-      || "";
+    // Resolve the owning course from the topic when the caller has no hint:
+    // the zen queue inserts long after enqueue, so STATE.currentCourseId is
+    // the course open *now*, which is often a different one -> 404 on insert.
+    const courseId = await _resolveCourseIdForTopic(topicId, courseIdHint);
     if (!courseId) {
       _showStatus(blockId, "❌ No hay curso activo", true);
       return;
@@ -710,6 +741,11 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     let blockType, label, emoji;
     if (format === "markdown" || format === "md") {
       blockType = "markdown"; label = "NotebookLM"; emoji = "📚";
+    } else if (format === "ytd_zen") {
+      // Phase 8 — youtube-zen queue. Must be handled explicitly: without it
+      // it falls through to the generic branch and the block is titled
+      // "🤖 Markdown", hiding which tool produced it.
+      blockType = "markdown"; label = "YouTube Zen"; emoji = "🎥";
     } else if (format === "html") {
       blockType = "content"; label = "NotebookLM HTML"; emoji = "📚";
     } else if (format === "audio") {
@@ -761,7 +797,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
   // ─── Test success callback ─────────────────────────────────────
   async function _onTestSuccess(task, blockId, topicId) {
-    const courseId = (typeof STATE !== "undefined" && STATE.currentCourseId) || "";
+    const courseId = await _resolveCourseIdForTopic(topicId, null);
     if (!courseId) {
       _showStatus(blockId, "❌ No hay curso activo", true);
       return;
