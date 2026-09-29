@@ -76,7 +76,7 @@ window.V2Restore = (function () {
 
   /**
    * Show the v2 preview. `plan` is the /api/backup/v2/scan payload.
-   * `onConfirm(file)` runs the import when the user confirms.
+   * `onDone(file)` runs the import when the user confirms.
    */
   function open(plan, file, onDone) {
     ensureStyle();
@@ -98,6 +98,10 @@ window.V2Restore = (function () {
       : "";
 
     const v2Only = skipped.v2_only_tables || [];
+    const deferred = plan.deferred || {};
+    const deferredList = Object.entries(deferred)
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => `${k} (${n})`);
 
     const backdrop = document.createElement("div");
     backdrop.className = "v2m-backdrop";
@@ -122,6 +126,11 @@ window.V2Restore = (function () {
         ${secrets.length ? `<div class="v2m-warn">
           <b>No se migrarán estos secretos</b>
           ${secretList}
+        </div>` : ""}
+
+        ${deferredList.length ? `<div class="v2m-warn" style="border-color:#c86">
+          <b>No se migrarán (aplazado a propósito)</b>
+          <code>${esc(deferredList.join(", "))}</code>
         </div>` : ""}
 
         ${v2Only.length ? `<div class="v2m-warn" style="border-color:#888">
@@ -149,7 +158,7 @@ window.V2Restore = (function () {
       go.textContent = "Migrando…";
       bar.classList.add("on");
       try {
-        await onConfirm(file);
+        await onDone(file);
         close(backdrop);
       } catch (err) {
         go.disabled = false;

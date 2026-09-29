@@ -1,10 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v19 (#8 fix): v2 ZIPs were being read as valid-but-empty v3 backups.
-// Changed backup-restore.js + v2-restore-modal.js, so the precache must
-// be busted or users keep testing the old, broken scripts offline-first.
-const ASSET_CACHE = 'studyflow-assets-v19';
+// v20 (#8 fix): v2Restore modal had `onConfirm` vs `onDone` typo — the
+// "Migrar a v3" button threw on click. Fixed + added a deferred-data
+// warning. Bump so installed PWAs stop serving the broken modal.
+const ASSET_CACHE = 'studyflow-assets-v20';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

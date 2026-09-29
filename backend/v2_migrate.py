@@ -49,7 +49,7 @@ V2_ONLY_TABLES = [
     "chat_sessions", "column_visibility", "flashcards_cards",
     "flashcards_decks", "jsp_cells", "jsp_notebooks", "match_failed_cards",
     "match_scores", "quiz_summaries", "notices", "personality_overrides",
-    "planteamientos", "custom_tools", "agent_skills", "match_scores",
+    "planteamientos", "custom_tools", "agent_skills",
 ]
 
 
@@ -101,7 +101,6 @@ def plan(tables: dict) -> dict:
             "topics": len(topics) - len(orphan_topics),
             "blocks": len(blocks) - len(orphan_blocks),
             "questions": len(questions) - len(orphan_questions),
-            "quiz_errors": len(tables.get("quiz_errors", [])),
             "sessions": len(tables.get("sessions", [])),
             "weeks": len(tables.get("weeks", [])),
             "days": len(tables.get("days", [])),
@@ -112,7 +111,6 @@ def plan(tables: dict) -> dict:
             "quick_notes": len(tables.get("quick_notes", [])),
             "ai_tasks": len(tables.get("ai_tasks", [])),
             "ai_usage_log": len(tables.get("ai_usage_log", [])),
-            "user_addons": len(tables.get("user_addons", [])),
         },
         "block_types": by_type,
         "skipped": {
@@ -129,6 +127,12 @@ def plan(tables: dict) -> dict:
             "user_config.scorm_creds_enc",
             "user_config.calendars_enc (encrypted blob, no v3 counterpart)",
         ],
+        # Read but not imported, on purpose. Listed separately so the modal
+        # can say so instead of implying these are being migrated.
+        "deferred": {
+            "quiz_errors": len(tables.get("quiz_errors", [])),
+            "user_addons": len(tables.get("user_addons", [])),
+        },
         "live_topic_ids": len(live_topic_ids),
     }
 
