@@ -84,6 +84,13 @@
   border: 1px solid var(--border);
   padding: 4px 8px;
 }
+/* Issue #11 — interactive blocks embed a full web page in a sandboxed
+   iframe (.sf-it-bin is the placeholder container; the iframe itself
+   is created by App.ContentBlocks.renderInteractive with inline
+   styles). Ensure the block card doesn't constrain the iframe. */
+.sf-td-block-body .sf-it-bin iframe {
+  max-width: 100%;
+}
 .sf-td-block-body .sf-link-body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;

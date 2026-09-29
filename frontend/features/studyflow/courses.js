@@ -487,6 +487,29 @@ window.App.Courses = (function () {
     catch (err) { console.warn("[QuizEmbed.mountBins]", err); }
   }
 
+  // ── _mountInteractiveBins(centerEl) — Issue #11 hook ──────────
+  // Interactive blocks render a .sf-it-bin placeholder carrying the
+  // embedded HTML as JSON (inert <script type="application/json">).
+  // App.ContentBlocks.renderInteractive mounts it in a sandboxed
+  // iframe with allow-scripts (opaque origin — no same-origin access,
+  // no top-level navigation). Idempotent via dataset.mounted.
+  function _mountInteractiveBins(centerEl) {
+    if (!centerEl) return;
+    const CB = window.App && window.App.ContentBlocks;
+    if (!CB || typeof CB.renderInteractive !== "function") return;
+    centerEl.querySelectorAll(".sf-it-bin").forEach((bin) => {
+      if (bin.dataset.mounted === "1") return;
+      bin.dataset.mounted = "1";
+      try {
+        const src = bin.querySelector(".sf-it-src");
+        const html = src ? JSON.parse(src.textContent) : "";
+        CB.renderInteractive(bin, html);
+      } catch (err) {
+        bin.innerHTML = `<div class="sf-empty">⚠️ Error cargando página web: ${escHtml(err.message || err)}</div>`;
+      }
+    });
+  }
+
   // ── updateCenter() — lightweight: only the center panel ──────
   async function updateCenter() {
     const centerEl = document.getElementById("studyflow-center");
@@ -664,6 +687,8 @@ window.App.Courses = (function () {
     _mountPdfViewers(centerEl);
     // Issue #10 — exercise blocks mount their embedded quiz.
     _mountQuizBins(centerEl);
+    // Issue #11 — interactive blocks mount their embedded web page.
+    _mountInteractiveBins(centerEl);
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {

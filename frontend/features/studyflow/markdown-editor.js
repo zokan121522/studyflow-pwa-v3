@@ -281,8 +281,15 @@ window.App.MarkdownEditor = (function () {
       body = `<input class="sf-td-md-url" type="text" value="${
         escHtml(block && block.url || "")
       }" placeholder="${escHtml(ph)}" />`;
+    } else if (type === "interactive") {
+      // Issue #11 — interactive blocks embed a full HTML document;
+      // edit it as raw HTML (save path reuses .sf-td-md-plain → content).
+      body = `<textarea class="sf-td-md-plain" rows="16" spellcheck="false"
+        placeholder="HTML completo del ejercicio (doctype + html + body)…">${
+        escHtml(block && block.content || "")
+      }</textarea>`;
     } else {
-      // separator / exercise / interactive / unknown
+      // separator / exercise / unknown
       body = `<div class="sf-empty">Edita el título. Contenido completo en siguientes fases.</div>`;
     }
     return `<div class="sf-td-md-edit">

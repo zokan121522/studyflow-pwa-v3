@@ -143,6 +143,20 @@ window.App.CoursesBlocks = (function () {
         data-course-id="${courseId}"
         data-topic-id="${b.topic_id || ""}"
         data-stem="${escHtml(b.content || "")}"></div>`;
+    } else if (type === "interactive") {
+      // Issue #11 — interactive blocks embed a full HTML document
+      // (AI-generated English practice exercises). The HTML is stored
+      // inert inside a JSON-typed <script> (escaped `</script>` via
+      // JSON-safe encoding) so nothing executes at render time;
+      // App.ContentBlocks.renderInteractive mounts it in a sandboxed
+      // iframe (allow-scripts, no same-origin/top-navigation).
+      const raw = b.content || "";
+      const enc = JSON.stringify(raw).replace(/</g, "\\u003c");
+      bodyHtml = `<div class="sf-it-bin"
+        data-block-id="${b.id}"
+        data-course-id="${courseId}">
+        <script type="application/json" class="sf-it-src">${enc}<\/script>
+      </div>`;
     } else {
       bodyHtml = `<div class="sf-empty">Tipo ${escHtml(type)} no soportado</div>`;
     }
