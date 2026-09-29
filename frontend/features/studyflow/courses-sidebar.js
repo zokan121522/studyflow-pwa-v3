@@ -125,6 +125,17 @@ window.App.CoursesSidebar = (function () {
       + `<span class="course-arrow">${arrow}</span>`
       + `<span class="ci-title-text">${escHtml(c.title || "Sin título")}</span>`
       + `<span class="ci-block-count">${countLabel}</span>`
+      // Issue #12 — inline star. It used to live ONLY in the ⋮ menu, and
+      // nobody found it there: the favourites group in the nav looked
+      // empty/unreachable. Visible affordance, same toggleFavorite() call
+      // the menu item uses, so both paths stay in sync.
+      + `<button class="ci-fav${c.is_favorite ? " on" : ""}" `
+      + `title="${c.is_favorite ? "Quitar de favoritas" : "Marcar como favorita"}" `
+      + `aria-label="${c.is_favorite ? "Quitar de favoritas" : "Marcar como favorita"}" `
+      + `aria-pressed="${c.is_favorite ? "true" : "false"}" `
+      + `onclick="event.stopPropagation();`
+      + `window.App.Courses.toggleFavorite(${c.id})">`
+      + `${c.is_favorite ? "⭐" : "☆"}</button>`
       + `<div class="topic-menu-wrap">`
       + `<button class="topic-menu-toggle" `
       + `onclick="event.stopPropagation();`
@@ -347,7 +358,8 @@ window.App.CoursesSidebar = (function () {
 
       // Course row → expand/collapse + select
       const courseItem = e.target.closest(".course-item");
-      if (courseItem && !e.target.closest(".topic-menu-wrap")) {
+      if (courseItem && !e.target.closest(".topic-menu-wrap")
+        && !e.target.closest(".ci-fav")) {
         if (window.App.Courses && window.App.Courses.handleCourseClick) {
           await window.App.Courses.handleCourseClick(
             Number(courseItem.dataset.courseId)
@@ -389,7 +401,7 @@ window.App.CoursesSidebar = (function () {
       if (blockItem
         && !e.target.closest(".topic-menu-wrap")
         && !e.target.closest(".bi-check")
-        && !e.target.closest(".bi-drag-handle")) {
+        && !e.target.closest(".drag-handle")) {
         const courseId = Number(blockItem.dataset.courseId);
         const blockId = Number(blockItem.dataset.blockId);
         if (window.App.Courses && window.App.Courses.handleBlockClick) {

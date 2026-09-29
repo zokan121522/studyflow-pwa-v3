@@ -696,12 +696,15 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 }
 
 /* ============================== DASHBOARD ============================== */
+/* max-width 700 -> 980: con 700 solo cabian 4 tarjetas de 132px y las
+   6 restantes quedaban tras el scroll lateral. 980 da sitio a 5 por fila
+   (5*150 + 4*10 + 48 de padding ~= 838px) con margen comodo. */
 .dashboard-container {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 24px;
-  max-width: 700px;
+  max-width: 980px;
   margin: 0 auto;
 }
 

@@ -59,6 +59,17 @@
   font-weight: 500;
   white-space: nowrap;
 }
+/* Issue #12 — estrella inline en la fila de curso. Apagada pero visible
+   cuando no es favorita; dorada cuando lo es. Mismo toggle que el menu. */
+.ci-fav {
+  flex: 0 0 auto;
+  background: none; border: 0; padding: 0 2px;
+  font: inherit; font-size: 12px; line-height: 1;
+  cursor: pointer; color: var(--text-muted); opacity: .45;
+  transition: opacity .12s, transform .12s;
+}
+.ci-fav:hover { opacity: 1; transform: scale(1.15); }
+.ci-fav.on { opacity: 1; color: #f59e0b; }
 .course-arrow {
   display: inline-block;
   width: 12px;
@@ -355,12 +366,23 @@
   background: rgba(245,158,11,.14); color: #f59e0b;
   border-radius: 10px; padding: 1px 8px;
 }
+/* Rejilla, no tira: una sola fila de flex con hijos de ancho fijo nunca
+   envuelve, por eso habia scroll lateral. repeat(5,...) reparte las
+   favoritas en 5 columnas y deja el resto en la fila siguiente. */
 .dfv-strip {
-  display: flex; gap: 10px; overflow-x: auto;
-  padding-bottom: 4px; scrollbar-width: thin;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 4px;
+}
+@media (max-width: 900px) {
+  .dfv-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .dfv-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .dfv-card {
-  flex: 0 0 auto; width: 132px;
+  width: auto; min-width: 0; /* el ancho lo decide la celda de la rejilla */
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   padding: 10px 12px; text-align: left; cursor: pointer;
   background: var(--surface, rgba(255,255,255,.04));
