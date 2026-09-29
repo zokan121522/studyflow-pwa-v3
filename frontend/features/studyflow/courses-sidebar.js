@@ -113,9 +113,13 @@ window.App.CoursesSidebar = (function () {
       ? `${topicCount} temas · ${doneCount}/${totalCount}`
       : `${c.topics ? c.topics.length : 0} temas`;
 
+    // Issue #12 — only the grip is draggable, NOT the whole row. A
+    // draggable row swallows the click that opens the course/topic/
+    // block, which is exactly what the user needs to be able to do.
     let html = `<div class="course-item ${isActive ? "active" : ""} `
-      + `${isExpanded ? "expanded" : ""}" data-course-id="${c.id}" `
-      + `draggable="true">`
+      + `${isExpanded ? "expanded" : ""}" data-course-id="${c.id}">`
+      + `<span class="drag-handle" draggable="true" `
+      + `title="Arrastrar para reordenar" aria-hidden="true">⠿</span>`
       + `<div class="ci-body">`
       + `<div class="ci-title">`
       + `<span class="course-arrow">${arrow}</span>`
@@ -197,8 +201,9 @@ window.App.CoursesSidebar = (function () {
       const tDone = blocks.filter(b => b.done).length;
       const tTotal = blocks.length;
 
-      html += `<div class="topic-item" data-topic-id="${t.id}" data-course-id="${courseId}" data-topic-idx="${i}" draggable="true">
+      html += `<div class="topic-item" data-topic-id="${t.id}" data-course-id="${courseId}" data-topic-idx="${i}">
         <div class="topic-header">
+          <span class="drag-handle" draggable="true" title="Arrastrar para reordenar" aria-hidden="true">⠿</span>
           <span class="topic-arrow">${tArrow}</span>
           <span class="topic-title">${escHtml(t.title || "Sin título")}</span>
           <span class="topic-count">${tDone}/${tTotal}</span>
@@ -238,7 +243,8 @@ window.App.CoursesSidebar = (function () {
       ? `ondblclick="event.stopPropagation();window.App.Courses._inlineRenameBlockTitle('${courseId}','${b.id}')" title="Doble clic para editar"`
       : "";
 
-    return `<div class="block-item ${isActive ? "active" : ""}${sepCls}" data-block-id="${b.id}" data-course-id="${courseId}" data-topic-id="${topicId}" data-block-idx="${idx}" draggable="true">
+    return `<div class="block-item ${isActive ? "active" : ""}${sepCls}" data-block-id="${b.id}" data-course-id="${courseId}" data-topic-id="${topicId}" data-block-idx="${idx}">
+      <span class="drag-handle" draggable="true" title="Arrastrar para mover" aria-hidden="true">⠿</span>
       <label class="bi-check" onclick="event.stopPropagation()">
         <input type="checkbox" ${checked} onchange="window.App.Courses._toggleBlockDone('${courseId}','${b.id}')">
       </label>
@@ -325,6 +331,11 @@ window.App.CoursesSidebar = (function () {
 
     // 1) Create course / course click / topic header click / block click
     leftEl.addEventListener("click", async (e) => {
+      // Issue #12 — the grip is a drag-only affordance. A click on it
+      // must not expand/select, or the handle becomes a dead zone
+      // where the row stops responding.
+      if (e.target.closest(".drag-handle")) return;
+
       // Create-course button
       const createBtn = e.target.closest("#create-course-btn");
       if (createBtn) {

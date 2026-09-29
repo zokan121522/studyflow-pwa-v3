@@ -17,6 +17,15 @@
 let dragSrc = null; // {type:'topic'|'block', courseId, id, topicId}
 
 leftEl.addEventListener("dragstart", (e) => {
+  // Issue #12 — a drag may only START on a .drag-handle. The rows
+  // themselves are not draggable, so this is mostly a guard against
+  // a stray drag from a child that sets its own draggable=true: it
+  // keeps "drag to reorder" and "click to open" from fighting over
+  // the same pixels.
+  if (!e.target.closest(".drag-handle")) {
+    e.preventDefault();
+    return;
+  }
   // NOTE: .block-item lives INSIDE .topic-item, so the block check
   // MUST come first — otherwise every block drag is captured as a
   // topic drag (blocks would reorder topics or silently no-op).
