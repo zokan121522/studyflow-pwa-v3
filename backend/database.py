@@ -550,6 +550,31 @@ _TABLE_DDL = [
     )
     """,
     """
+    -- S5 (quíntesis del ecosistema Quiz v2): pool de falladas.
+    -- v2 lo guardaba en el sidecar con claves TEXT (topic/tpl = títulos),
+    -- sin block_id, lo que dejó 12 filas huérfanas al migrar (Engram
+    -- migration/v2-quiz-history-deferred). Aquí se ancla a question_id,
+    -- que es lo único estable, y se heredan course/topic/block de la
+    -- pregunta (igual que quiz_results) para no depender de joins.
+    --
+    -- resolved_at en vez de DELETE: v2 borraba la fila al acertar, lo que
+    -- destruía el histórico. Acertar la marca resuelta (sale de la pool,
+    -- se puede reabrir) y el badge "falladas" conserva la trazabilidad.
+    CREATE TABLE IF NOT EXISTS quiz_errors (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        question_id INTEGER NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        block_id INTEGER REFERENCES blocks(id) ON DELETE CASCADE,
+        wrong_count INTEGER NOT NULL DEFAULT 1,
+        last_wrong_answer INTEGER,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        last_failed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS todos (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -666,6 +691,17 @@ _POST_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_blocks_course ON blocks(course_id)",
     "CREATE INDEX IF NOT EXISTS idx_blocks_topic_order ON blocks(topic_id, order_index)",
     "CREATE INDEX IF NOT EXISTS idx_blocks_user_course ON blocks(user_id, course_id)",
+    # Pool de falladas. El UNIQUE parcial es la garantía de integridad que
+    # le faltaba a v2 (append-only duplicaba la misma fallada cada intento):
+    # como mucho UNA fila abierta por pregunta. Por eso el ON CONFLICT del
+    # upsert debe repetir el predicado `WHERE resolved_at IS NULL`.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_quiz_errors_open "
+    "ON quiz_errors(user_id, question_id) WHERE resolved_at IS NULL",
+    # Índice de la consulta que la UI ejecuta siempre: la pool abierta.
+    "CREATE INDEX IF NOT EXISTS idx_quiz_errors_open "
+    "ON quiz_errors(user_id, last_failed_at DESC) WHERE resolved_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS idx_quiz_errors_block "
+    "ON quiz_errors(block_id, resolved_at)",
 ]
 
 

@@ -1,26 +1,27 @@
 // frontend/features/studyflow/quiz-embed.js
-// Issue #10 — quiz por bloque (parity v2): renders the test of an
-// `exercise` block embedded inside the block body (preguntas + opciones
-// + corrección), with create/edit/delete for the block owner.
+// Issue #10 — quiz por bloque (parity v2), now on the S5 paged runner.
+//
+// An `exercise` block paints a placeholder:
+//   <div class="sf-quiz-bin" data-block-id="N" data-course-id="M"
+//        data-topic-id="K" data-stem="..."></div>
+// and this module fills it after the center panel is painted (the PdfViewer
+// pattern), so the UI never blocks on the API.
+//
+// S5 changed the shape: the questions now run through App.QuizRunner (5 per
+// page, per-page results table, final score). Owner CRUD stays here, behind
+// a "Gestionar preguntas" disclosure, because editing a question is block
+// authoring and not part of taking a test.
 //
 // Contract:
 //   window.App.QuizEmbed = {
-//     mountBins(centerEl)      — mount every .sf-quiz-bin in the panel
-//     _renderBin(bin)          — async: fetch block questions, render
-//     _askAddQuestion(bin)     — prompt-driven question creation
+//     mountBins(centerEl)   — mount every .sf-quiz-bin in the panel
+//     _renderBin(bin)       — async: fetch questions, mount runner
 //   }
-//
-// The block renderer (courses-blocks.js) emits a placeholder container:
-//   <div class="sf-quiz-bin" data-block-id="N" data-course-id="M"
-//        data-topic-id="K"></div>
-// This module fills it after the center panel is painted (the same
-// pattern PdfViewer uses), so the UI never blocks on the API.
 
 (function () {
   if (window.App === undefined) window.App = {};
   if (window.App.QuizEmbed !== undefined) return;
 
-  const API = window.App.CoursesAPI;
   const __auth = () => (window.App.Auth && window.App.Auth.authHeaders)
     ? window.App.Auth.authHeaders()
     : {};
@@ -44,23 +45,14 @@
     }[c]));
   }
 
-  // ── fetch questions for a block ────────────────────────────────
-  async function _fetchQuestions(blockId) {
-    const base = (window.API_URL || "/api");
-    const r = await fetch(`${base}/quiz/questions?block_id=${blockId}`, {
-      headers: __auth(),
-    });
-    if (!r.ok) throw new Error("quiz/questions " + r.status);
-    const j = await r.json();
-    return j.questions || [];
-  }
-
-  function _questionCardHtml(q, idx, blockId) {
+  function _questionCardHtml(q, idx) {
     const opts = (q.options || []).map((o, i) => `
         <label class="sf-q-opt" data-qid="${q.id}" data-opt="${i}">
-          <input type="radio" name="sf-q-${q.id}" value="${i}">
+          <input type="radio" name="sf-q-${q.id}" value="${i}" disabled>
           <span class="sf-q-opt-text">${_esc(o)}</span>
         </label>`).join("");
+    const letters = "ABCDEFGH";
+    const right = letters[q.correct_answer] || "?";
     return `
       <div class="sf-q-card" data-qid="${q.id}">
         <div class="sf-q-head">
@@ -72,70 +64,59 @@
           </span>
         </div>
         <div class="sf-q-opts">${opts}</div>
-        <button class="sf-btn sf-q-submit" data-qid="${q.id}"
-          data-block-id="${blockId}">Responder</button>
-        <div class="sf-q-feedback"></div>
+        <div class="sf-q-answer-key">Correcta: <b>${right}</b>${q.explanation
+          ? ` <span class="sf-q-explain">${_md(q.explanation)}</span>` : ""}</div>
       </div>`;
   }
 
   function _emptyHtml(blockId) {
     return `<div class="sf-q-empty">
-        <span>❓ Sin preguntas todavía — añade la primera.</span>
+        <span>❓ Sin preguntas todavía — genera un test con IA o añade la primera.</span>
         <button class="sf-btn sf-q-add" data-block-id="${blockId}">➕ Añadir pregunta</button>
       </div>`;
   }
 
-  // ── render one bin ─────────────────────────────────────────────
+  // ── manager (owner CRUD) ─────────────────────────────────────
+  // Rendered as a placeholder on purpose: the runner's questions come from
+  // the study route, which strips `correct_answer` on the server, so the
+  // answer key only exists in the owner's route. Fetching it lazily (on the
+  // first open) keeps the key out of the page until it is actually wanted.
+  function _managerHtml(blockId, count) {
+    return `<details class="sf-q-manager" data-block-id="${blockId}">
+        <summary>⚙️ Gestionar preguntas (${count})</summary>
+        <div class="sf-q-list" data-loaded="0">
+          <div class="sf-q-empty">Abre para cargar las respuestas correctas.</div>
+        </div>
+      </details>`;
+  }
+
+  // ── render one bin ───────────────────────────────────────────
   async function _renderBin(bin) {
     const blockId = Number(bin.dataset.blockId);
     const courseId = Number(bin.dataset.courseId);
     const topicId = Number(bin.dataset.topicId);
     const stem = bin.dataset.stem || "";
     try {
-      const qs = await _fetchQuestions(blockId);
-      const body = qs.length
-        ? qs.map((q, i) => _questionCardHtml(q, i, blockId)).join("")
-          + `<button class="sf-btn sf-q-add" data-block-id="${blockId}">➕ Añadir pregunta</button>`
-        : _emptyHtml(blockId);
+      const qs = await window.App.QuizAPI.questionsForBlock(blockId);
+      const testHtml = qs.length ? "" : _emptyHtml(blockId);
       bin.innerHTML = `
         <div class="sf-quiz-wrap">
           ${stem ? `<div class="sf-q-stem md-view">${_md(stem)}</div>` : ""}
-          <div class="sf-q-list">${body}</div>
+          <div class="sf-quiz-test" data-block-id="${blockId}"></div>
+          ${testHtml}
+          ${_managerHtml(blockId, qs.length)}
         </div>`;
-      _bindBin(bin, blockId, courseId, topicId);
+      if (qs.length) {
+        const slot = bin.querySelector(".sf-quiz-test");
+        window.App.QuizRunner.mount(slot, { questions: qs, mode: "block" });
+      }
+      _bindManager(bin, blockId, courseId, topicId);
     } catch (e) {
       bin.innerHTML = `<div class="sf-q-error">⚠️ Error cargando preguntas: ${_esc(e.message || e)}</div>`;
     }
   }
 
-  // ── submit answer ──────────────────────────────────────────────
-  async function _submitAnswer(qid, optIdx, feedbackEl, blockId) {
-    const base = (window.API_URL || "/api");
-    const t0 = Date.now();
-    try {
-      const r = await fetch(`${base}/quiz/answer`, {
-        method: "POST",
-        headers: Object.assign({ "Content-Type": "application/json" }, __auth()),
-        body: JSON.stringify({ question_id: qid, selected_answer: optIdx, time_taken_ms: Date.now() - t0, block_id: blockId }),
-      });
-      if (!r.ok) throw new Error("quiz/answer " + r.status);
-      const j = await r.json();
-      const ok = j.result && j.result.is_correct;
-      const correct = ok ? (j.correct_answer != null ? j.correct_answer : optIdx) : j.correct_answer;
-      feedbackEl.innerHTML = `
-        <div class="sf-q-fb ${ok ? "ok" : "bad"}">
-          ${ok ? "✅ ¡Correcto!" : "❌ Incorrecto"}
-          ${j.explanation ? `<div class="sf-q-explain">${_md(j.explanation)}</div>` : ""}
-          ${!ok && correct != null ? `<div class="sf-q-correct">Respuesta correcta: opción ${correct + 1}</div>` : ""}
-        </div>`;
-      // Disable options after answering
-      feedbackEl.closest(".sf-q-card").querySelectorAll("input").forEach((i) => (i.disabled = true));
-    } catch (e) {
-      feedbackEl.innerHTML = `<div class="sf-q-error">⚠️ ${_esc(e.message || e)}</div>`;
-    }
-  }
-
-  // ── create / edit / delete questions ───────────────────────────
+  // ── create / edit / delete questions ─────────────────────────
   function _askPayload(blockId, courseId, topicId, existing) {
     const baseQ = existing ? existing.question : "";
     const baseOpts = existing ? (existing.options || []).join("\n") : "";
@@ -160,94 +141,110 @@
     };
   }
 
-  async function _createQuestion(blockId, courseId, topicId) {
+  async function _postQuestion(path, payload) {
+    const r = await fetch(`${window.API_URL || "/api"}${path}`, {
+      method: path ? "PUT" : "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, __auth()),
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`${path || "/quiz/questions"} → ${r.status}`);
+  }
+
+  function _remount(blockId) {
+    const bin = document.querySelector(`.sf-quiz-bin[data-block-id="${blockId}"]`);
+    if (!bin) return Promise.resolve();
+    // Add/edit/delete rebuild the whole bin; keep the manager open so the
+    // owner does not lose their place after every save.
+    const wasOpen = !!bin.querySelector(".sf-q-manager[open]");
+    return _renderBin(bin).then(() => {
+      if (wasOpen) {
+        const det = bin.querySelector(".sf-q-manager");
+        if (det) { det.open = true; det.dispatchEvent(new Event("toggle")); }
+      }
+    });
+  }
+
+  function _createQuestion(blockId, courseId, topicId) {
     const payload = _askPayload(blockId, courseId, topicId, null);
     if (!payload) return;
-    const base = (window.API_URL || "/api");
-    const r = await fetch(`${base}/quiz/questions`, {
-      method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json" }, __auth()),
-      body: JSON.stringify(payload),
-    });
-    if (!r.ok) {
-      alert("Error creando pregunta: " + r.status);
-      return;
-    }
-    const bin = document.querySelector(`.sf-quiz-bin[data-block-id="${blockId}"]`);
-    if (bin) await _renderBin(bin);
+    _postQuestion("/quiz/questions", payload)
+      .then(() => _remount(blockId))
+      .catch((e) => alert("Error creando pregunta: " + e.message));
   }
 
-  async function _editQuestion(qid, blockId, courseId, topicId, existing) {
+  function _editQuestion(qid, blockId, courseId, topicId, existing) {
     const payload = _askPayload(blockId, courseId, topicId, existing);
     if (!payload) return;
-    const base = (window.API_URL || "/api");
-    const r = await fetch(`${base}/quiz/questions/${qid}`, {
-      method: "PUT",
-      headers: Object.assign({ "Content-Type": "application/json" }, __auth()),
-      body: JSON.stringify(payload),
-    });
-    if (!r.ok) {
-      alert("Error editando pregunta: " + r.status);
-      return;
-    }
-    const bin = document.querySelector(`.sf-quiz-bin[data-block-id="${blockId}"]`);
-    if (bin) await _renderBin(bin);
+    _postQuestion(`/quiz/questions/${qid}`, payload)
+      .then(() => _remount(blockId))
+      .catch((e) => alert("Error editando pregunta: " + e.message));
   }
 
-  async function _deleteQuestion(qid, blockId) {
+  function _deleteQuestion(qid, blockId) {
     if (!confirm("¿Borrar esta pregunta?")) return;
-    const base = (window.API_URL || "/api");
-    const r = await fetch(`${base}/quiz/questions/${qid}`, {
-      method: "DELETE",
-      headers: __auth(),
-    });
-    if (!r.ok) {
-      alert("Error borrando pregunta: " + r.status);
-      return;
-    }
-    const bin = document.querySelector(`.sf-quiz-bin[data-block-id="${blockId}"]`);
-    if (bin) await _renderBin(bin);
+    fetch(`${window.API_URL || "/api"}/quiz/questions/${qid}`, { headers: __auth() })
+      .then((r) => {
+        if (!r.ok) throw new Error("→ " + r.status);
+        return _remount(blockId);
+      })
+      .catch((e) => alert("Error borrando pregunta: " + e.message));
   }
 
-  // ── event delegation per bin ───────────────────────────────────
-  function _bindBin(bin, blockId, courseId, topicId) {
-    bin.querySelectorAll(".sf-q-submit").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const qid = Number(btn.dataset.qid);
-        const card = btn.closest(".sf-q-card");
-        const selected = card ? card.querySelector("input:checked") : null;
-        const fb = card ? card.querySelector(".sf-q-feedback") : null;
-        if (!selected || !fb) {
-          if (fb) fb.innerHTML = '<div class="sf-q-error">Selecciona una opción primero.</div>';
-          return;
-        }
-        _submitAnswer(qid, Number(selected.value), fb, Number(btn.dataset.blockId));
-      });
-    });
-    bin.querySelectorAll(".sf-q-add").forEach((btn) => {
+  // ── manager bindings ─────────────────────────────────────────
+  // Split so they can be re-applied to the list injected by the lazy load,
+  // which replaces the nodes these listeners were attached to.
+  function _bindAdd(root, blockId, courseId, topicId) {
+    root.querySelectorAll(".sf-q-add").forEach((btn) => {
       btn.addEventListener("click", () => _createQuestion(blockId, courseId, topicId));
     });
-    bin.querySelectorAll(".sf-q-edit").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const qid = Number(btn.closest(".sf-q-card").dataset.qid);
-        const r = await fetch(
-          `${window.API_URL || "/api"}/quiz/questions?block_id=${blockId}&limit=200`,
-          { headers: __auth() }
-        );
-        const j = await r.json();
-        const existing = (j.questions || []).find((q) => q.id === qid);
-        if (existing) await _editQuestion(qid, blockId, courseId, topicId, existing);
-      });
-    });
-    bin.querySelectorAll(".sf-q-del").forEach((btn) => {
+  }
+
+  function _bindRows(root, blockId, courseId, topicId) {
+    root.querySelectorAll(".sf-q-edit").forEach((btn) => {
       btn.addEventListener("click", () => {
         const qid = Number(btn.closest(".sf-q-card").dataset.qid);
-        _deleteQuestion(qid, blockId);
+        // The owner's route carries the answer key; the study route hides it.
+        window.App.QuizAPI.questionsForManage(blockId).then((qs) => {
+          const existing = (qs || []).find((q) => q.id === qid);
+          if (existing) _editQuestion(qid, blockId, courseId, topicId, existing);
+          else alert("No se pudo cargar la pregunta para editar.");
+        }).catch(() => alert("No se pudo cargar la pregunta para editar."));
+      });
+    });
+    root.querySelectorAll(".sf-q-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        _deleteQuestion(Number(btn.closest(".sf-q-card").dataset.qid), blockId);
       });
     });
   }
 
-  // ── public API ─────────────────────────────────────────────────
+  function _bindManager(bin, blockId, courseId, topicId) {
+    _bindAdd(bin, blockId, courseId, topicId);
+    _bindRows(bin, blockId, courseId, topicId);
+    const det = bin.querySelector(".sf-q-manager");
+    if (!det || det.dataset.bound) return;
+    det.dataset.bound = "1";
+    det.addEventListener("toggle", () => {
+      if (!det.open) return;
+      const list = det.querySelector(".sf-q-list");
+      if (!list || list.dataset.loaded === "1") return;
+      list.dataset.loaded = "1";
+      list.innerHTML = '<div class="sf-q-empty">Cargando…</div>';
+      window.App.QuizAPI.questionsForManage(blockId).then((qs) => {
+        const rows = (qs || []).map((q, i) => _questionCardHtml(q, i)).join("");
+        const add = `<button class="sf-btn sf-q-add" data-block-id="${blockId}">`
+                  + "➕ Añadir pregunta</button>";
+        list.innerHTML = (rows || '<div class="sf-q-empty">Sin preguntas.</div>') + add;
+        _bindAdd(list, blockId, courseId, topicId);
+        _bindRows(list, blockId, courseId, topicId);
+      }).catch((e) => {
+        list.dataset.loaded = "0";
+        list.innerHTML = `<div class="sf-q-error">⚠️ ${_esc(e.message || e)}</div>`;
+      });
+    });
+  }
+
+  // ── public API ───────────────────────────────────────────────
   function mountBins(centerEl) {
     if (!centerEl) return;
     centerEl.querySelectorAll(".sf-quiz-bin").forEach((bin) => {
@@ -257,12 +254,5 @@
     });
   }
 
-  window.App.QuizEmbed = {
-    mountBins,
-    _renderBin,
-    _fetchQuestions,
-  };
-
-  // Legacy: exercise block stem may live in `content` — the renderer
-  // passes it via data-stem (see courses-blocks.js).
+  window.App.QuizEmbed = { mountBins, _renderBin };
 })();

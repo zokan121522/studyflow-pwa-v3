@@ -488,6 +488,13 @@ window.App.Courses = (function () {
         window.App.AddonsManager.renderMarketplaceNav();
       }
     } catch (_) { /* nav is optional cosmetic */ }
+    // S5 — same treatment for the Quiz center nav (Resumen / Falladas).
+    try {
+      if (window.App.QuizCenter
+          && typeof window.App.QuizCenter.renderNav === "function") {
+        window.App.QuizCenter.renderNav();
+      }
+    } catch (_) { /* nav is optional cosmetic */ }
     await updateCenter();
   }
 
@@ -556,11 +563,16 @@ window.App.Courses = (function () {
     if (!centerEl) return;
     const s = STATE();
 
-    // SA.2 — Marketplace view (AddonsManager). Routes BEFORE the
-    // topic/course branches so the catalog takes over the center
-    // panel when STATE._view === "addons". Sidebar nav (qs-nav-item
-    // [data-am-nav]) sets STATE._view and calls updateCenter().
-    if (s._view === "addons" && window.App.AddonsManager
+    // Center views that take over the panel, routed BEFORE the
+    // topic/course branches. Sidebar nav items (qs-nav-item [data-am-nav]
+    // for the marketplace, [data-qc-view] for S5) set STATE._view and call
+    // updateCenter().
+    //   "addons" → AddonsManager (SA.2 marketplace catalog)
+    //   "quiz"   → QuizCenter (S5 Resumen por Card / Preguntas Falladas)
+    if (s._view === "quiz" && window.App.QuizCenter
+        && typeof window.App.QuizCenter.renderView === "function") {
+      await window.App.QuizCenter.renderView(centerEl);
+    } else if (s._view === "addons" && window.App.AddonsManager
         && typeof window.App.AddonsManager.renderView === "function") {
       await window.App.AddonsManager.renderView(centerEl);
     } else if (s.selectedTopicId && s.currentCourseId) {
