@@ -151,6 +151,10 @@
         <div class="dashboard-badges">
           <span class="badge badge-base">🏛️ Cuenta BASE</span>
         </div>
+        <!-- Issue #12: favourites row on the dashboard (v2 fase 72 F2).
+             Populated by courses-dashboard.js; hidden when empty so the
+             home does not grow a dead heading for users with no stars. -->
+        <div id="dashboard-favorites" class="dashboard-favorites hidden"></div>
         <div class="dashboard-nav-grid">
           <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
             <div class="dnc-icon">📅</div>
@@ -416,6 +420,7 @@
   <!-- Issue #12: courses-dnd.js must load BEFORE courses-sidebar.js, which
        calls CoursesDND.attach() when it wires the sidebar events. -->
   <script src="/features/studyflow/courses-dnd.js"></script>
+  <script src="/features/studyflow/courses-dashboard.js"></script>
   <script src="/features/studyflow/courses-sidebar.js"></script>
   <!-- S4.5: markdown-editor.js (toolbar + color + split) loads BEFORE
        courses-blocks.js so the courses-blocks rewire can delegate to

@@ -339,3 +339,45 @@
   display: block;
   margin-bottom: 4px;
 }
+
+/* ─── Dashboard favourites row (Issue #12) ───────────────────────
+   Port of the v2 #dashboard-favorites strip (fase 72 F2): starred
+   assignments reachable from the home without opening Studyflow. */
+.dashboard-favorites { margin: 0 0 18px; }
+.dashboard-favorites.hidden { display: none; }
+.dfv-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 8px 2px;
+}
+.dfv-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.dfv-count {
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(245,158,11,.14); color: #f59e0b;
+  border-radius: 10px; padding: 1px 8px;
+}
+.dfv-strip {
+  display: flex; gap: 10px; overflow-x: auto;
+  padding-bottom: 4px; scrollbar-width: thin;
+}
+.dfv-card {
+  flex: 0 0 auto; width: 132px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; text-align: left; cursor: pointer;
+  background: var(--surface, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border-radius: 10px; color: inherit; font: inherit;
+  transition: border-color .12s, transform .12s;
+}
+.dfv-card:hover {
+  border-color: rgba(245,158,11,.55);
+  transform: translateY(-1px);
+}
+.dfv-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.dfv-icon { font-size: 18px; line-height: 1; }
+.dfv-name {
+  font-size: 12px; font-weight: 600; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dfv-meta { font-size: 10px; color: var(--text-dim); }
+.dfv-more { justify-content: center; align-items: center; opacity: .8; }

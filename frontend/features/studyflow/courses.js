@@ -148,9 +148,20 @@ window.App.Courses = (function () {
     try {
       await setFavorite(courseId, next);
       await renderStudyflow();
+      refreshDashboardFavorites();
     } catch (err) {
       c.is_favorite = !next; // revert
+      refreshDashboardFavorites();
       alert("❌ No se pudo marcar como favorita: " + (err.message || err));
+    }
+  }
+
+  // The dashboard strip mirrors the same flag. It lives in its own
+  // module, so this is a soft dependency: during boot CoursesDashboard
+  // may not be loaded yet, and a missing strip is not an error.
+  function refreshDashboardFavorites() {
+    if (window.App.CoursesDashboard) {
+      window.App.CoursesDashboard.renderFavoritesRow();
     }
   }
 
