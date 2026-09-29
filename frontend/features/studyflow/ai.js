@@ -677,18 +677,27 @@ window.App.AI = Object.assign(window.App.AI, (function () {
    * @returns {Promise<string|null>} course id, or null when unresolvable
    */
   async function _resolveCourseIdForTopic(topicId, hint) {
-    if (hint) return String(hint);
-    if (!topicId) return null;
-    const tid = String(topicId);
+    // A course id is always numeric. The zen flow used to pass the *depth*
+    // ("standard"/"detailed") in the courseIdHint slot, so trusting any
+    // truthy hint produced POST /courses/standard/topics/<id>/blocks -> 405.
+    const isCourseId = (v) => /^\d+$/.test(String(v == null ? "" : v).trim());
+    const tid = topicId ? String(topicId) : null;
+
+    // The topic is the authority: it decides which course the block belongs
+    // to, so prefer its owner even when a hint is present. This also repairs
+    // a hint that is numeric but points at the wrong course.
+    if (tid) {
+      try {
+        const list = await window.App.CoursesAPI.fetchCourses();
+        for (const course of list || []) {
+          const owns = (course.topics || []).some((t) => String(t.id) === tid);
+          if (owns) return String(course.id);
+        }
+      } catch { /* fall through to the hints */ }
+    }
+    if (isCourseId(hint)) return String(hint).trim();
     const current = (typeof STATE !== "undefined" && STATE.currentCourseId) || "";
-    try {
-      const list = await window.App.CoursesAPI.fetchCourses();
-      for (const course of list || []) {
-        const owns = (course.topics || []).some((t) => String(t.id) === tid);
-        if (owns) return String(course.id);
-      }
-    } catch { /* fall through to the ambient course */ }
-    return current ? String(current) : null;
+    return isCourseId(current) ? String(current) : null;
   }
 
   /**
@@ -791,7 +800,10 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       return newId;
     } catch (err) {
       console.error("[AI] insert block failed:", err);
-      _showStatus(blockId, "❌ Error al guardar el bloque", true);
+      // Surface the real reason: a generic "Error al guardar el bloque" sent
+      // debugging this through the UI nowhere.
+      const why = (err && (err.message || err.statusText)) || "error desconocido";
+      _showStatus(blockId, `❌ Error al guardar: ${why}`, true);
     }
   }
 

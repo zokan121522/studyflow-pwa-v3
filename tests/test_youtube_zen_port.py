@@ -285,6 +285,73 @@ def test_zen_queue_passes_the_zen_format():
     assert "ytd_zen" in call.group(1), "la cola no pasa el formato ytd_zen"
 
 
+def test_start_stream_poll_call_does_not_pass_depth_as_the_course():
+    """startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert).
+    The zen flow passed `depth` in the courseIdHint slot, so the insert
+    POSTed to /courses/standard/topics/<id>/blocks and failed."""
+    src = AI_JS.read_text()
+    # target the zen call specifically: many generators call startStreamPoll
+    call = re.search(
+        r'startStreamPoll\((?:[^()]|\([^()]*\))*?"ytd_zen"(?:[^()]|\([^()]*\))*\)', src, re.S
+    )
+    assert call, "no se encuentra la llamada a startStreamPoll con formato ytd_zen"
+    args = [a.strip() for a in call.group(0)[len("startStreamPoll("): -1].split(",")]
+    assert len(args) == 5, f"se esperaban 5 argumentos, hay {len(args)}: {args}"
+    assert "depth" not in args[4], (
+        f"el 5º argumento es courseIdHint pero se le pasa {args[4]!r} "
+        "(depth) -> POST /courses/standard/topics/<id>/blocks -> 405"
+    )
+    # the hint must be a real course id captured from state, not a literal
+    assert re.search(r"const\s+courseId\s*=[^;]*currentCourseId", src), (
+        "la llamada no captura el curso actual en una variable courseId"
+    )
+    assert src.index("const courseId") < src.index('"ytd_zen"'), (
+        "courseId debe calcularse ANTES de la llamada a startStreamPoll"
+    )
+
+
+def _function_body(src, header):
+    """Return the function starting at `header`, brace-matched. A fixed-length
+    slice silently truncates as the function grows, which reads as a missing
+    branch rather than as a test bug."""
+    start = src.index(header)
+    depth = 0
+    for i in range(start, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start : i + 1]
+    raise AssertionError(f"no se pudo cerrar la funcion {header!r}")
+
+
+def test_course_resolver_rejects_a_non_numeric_hint():
+    """Course ids are numeric. A hint like "standard" (the depth) must never be
+    trusted, or the insert targets a course that does not exist."""
+    resolver = _function_body(AI_JS_MAIN.read_text(),
+                              "async function _resolveCourseIdForTopic")
+    assert re.search(r"isCourseId\(hint\)", resolver), (
+        "el resolutor no valida que el hint sea numerico — un depth colado "
+        "produciria /courses/standard/..."
+    )
+    assert re.search(r"\\d\+", resolver), "el resolutor no comprueba el formato numerico"
+
+
+def test_course_resolver_prefers_the_topic_owner_over_the_hint():
+    """Even a numeric hint can point at the wrong course (the user navigated
+    before the task finished). The topic decides, so the owner must win."""
+    resolver = _function_body(AI_JS_MAIN.read_text(),
+                              "async function _resolveCourseIdForTopic")
+    i_owner = resolver.find("fetchCourses()")
+    i_hint = resolver.find("isCourseId(hint)")
+    assert i_owner != -1 and i_hint != -1, "faltan las dos ramas del resolutor"
+    assert i_owner < i_hint, (
+        "el hint se evalua antes que el dueno del topic: un hint numerico "
+        "equivocado gana y el bloque cae en el curso que no es"
+    )
+
+
 def test_index_html_loads_yt_modules_after_ai_js():
     """youtube-queue.js reads App.AI._onContentSuccess at insert time, so it
     must be loaded after ai.js defines it (v2's ordering does not apply)."""

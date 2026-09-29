@@ -166,7 +166,12 @@ window.App.AI.Generation = (function () {
       if (tasks) {
         const label = fmt === "html" ? "🤖 YouTubeZen → HTML" : "🤖 YouTubeZen → Markdown";
         tasks.showStreamModal(label, "OpenZEN");
-        tasks.startStreamPoll(resp.task_id, blockId, "ytd_zen", topicId || "", depth);
+        // startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert).
+        // `depth` used to be passed in the courseIdHint slot, so the insert
+        // POSTed to /courses/standard/topics/<id>/blocks and died. Capture the
+        // real course now; the resolver still falls back to the topic owner.
+        const courseId = (window.STATE && window.STATE.currentCourseId) || "";
+        tasks.startStreamPoll(resp.task_id, blockId, "ytd_zen", topicId || "", courseId);
       }
     } catch (err) {
       Status(blockId, `❌ Error: ${err.message}`, true);
