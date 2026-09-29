@@ -1,5 +1,10 @@
 {
+  // The opencode server treats this file as authoritative for the model and
+  // IGNORES the `modelID` / `providerID` sent with each message — verified
+  // against the running sidecar, including the `x-opencode-model` header.
+  // So the model the user picks in the OpenZen panel only takes effect if it
+  // matches this line. Change it here (and restart the sidecar) to switch.
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/nemotron-3-ultra-free",
+  "model": "opencode/big-pickle",
   "small_model": "opencode/nemotron-3.5-lightning-free"
 }
