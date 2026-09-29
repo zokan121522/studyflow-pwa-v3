@@ -2,6 +2,7 @@
 """Quiz routes for StudyFlow PWA v3."""
 
 from flask import Blueprint, request, jsonify
+import json
 
 from database import execute, fetchone, fetchall
 from routes.auth import token_required
@@ -14,9 +15,10 @@ bp = Blueprint('quiz', __name__)
 @bp.get('/quiz/questions')
 @token_required
 def list_questions(current_user_id: int):
-    """Get quiz questions, optionally filtered by course/topic."""
+    """Get quiz questions, optionally filtered by course/topic/block."""
     course_id = request.args.get('course_id', type=int)
     topic_id = request.args.get('topic_id', type=int)
+    block_id = request.args.get('block_id', type=int)
     limit = request.args.get('limit', type=int, default=50)
     offset = request.args.get('offset', type=int, default=0)
 
@@ -29,6 +31,9 @@ def list_questions(current_user_id: int):
     if topic_id:
         query += ' AND topic_id = %s'
         params.append(topic_id)
+    if block_id:
+        query += ' AND block_id = %s'
+        params.append(block_id)
 
     query += ' ORDER BY created_at DESC LIMIT %s OFFSET %s'
     params.extend([limit, offset])
@@ -43,6 +48,132 @@ def list_questions(current_user_id: int):
         questions.append(q)
 
     return jsonify({'questions': questions})
+
+
+@bp.post('/quiz/questions')
+@token_required
+def create_question(current_user_id: int):
+    """Create a quiz question (optionally tied to a block for issue #10)."""
+    data = request.get_json() or {}
+
+    question = data.get('question')
+    options = data.get('options')
+    correct_answer = data.get('correct_answer')
+    if not question or not isinstance(options, list) or len(options) < 2:
+        return jsonify({'error': 'question and options (>=2) are required'}), 400
+    if correct_answer is None or not (0 <= correct_answer < len(options)):
+        return jsonify({'error': 'correct_answer out of range'}), 400
+
+    row = fetchone(
+        '''INSERT INTO quiz_questions
+             (user_id, course_id, topic_id, block_id, question, options,
+              correct_answer, explanation, difficulty)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING *''',
+        (
+            current_user_id,
+            data.get('course_id'),
+            data.get('topic_id'),
+            data.get('block_id'),
+            question,
+            json.dumps(options),  # jsonb column: pass a JSON string
+            correct_answer,
+            data.get('explanation'),
+            data.get('difficulty', 'medium'),
+        )
+    )
+    # fetchone() opens a read transaction that ROLLS BACK on close —
+    # use execute() instead so INSERT is committed, then re-read.
+    execute(
+        '''INSERT INTO quiz_questions
+             (user_id, course_id, topic_id, block_id, question, options,
+              correct_answer, explanation, difficulty)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+        (
+            current_user_id,
+            data.get('course_id'),
+            data.get('topic_id'),
+            data.get('block_id'),
+            question,
+            json.dumps(options),
+            correct_answer,
+            data.get('explanation'),
+            data.get('difficulty', 'medium'),
+        )
+    )
+    row = fetchone(
+        'SELECT * FROM quiz_questions WHERE user_id = %s '
+        'ORDER BY id DESC LIMIT 1',
+        (current_user_id,)
+    )
+    return jsonify({'question': QuizQuestion.from_row(row).to_dict()}), 201
+
+
+@bp.put('/quiz/questions/<int:question_id>')
+@token_required
+def update_question(current_user_id: int, question_id: int):
+    """Update an existing quiz question."""
+    data = request.get_json() or {}
+    q_row = fetchone(
+        'SELECT * FROM quiz_questions WHERE id = %s AND user_id = %s',
+        (question_id, current_user_id)
+    )
+    if not q_row:
+        return jsonify({'error': 'Question not found'}), 404
+
+    options = data.get('options', q_row['options'])
+    if isinstance(options, str):
+        options = __import__('json').loads(options)
+    correct_answer = data.get('correct_answer', q_row['correct_answer'])
+    if not isinstance(options, list) or len(options) < 2:
+        return jsonify({'error': 'options must be a list (>=2)'}), 400
+    if not (0 <= correct_answer < len(options)):
+        return jsonify({'error': 'correct_answer out of range'}), 400
+
+    # Same commit caveat as create: fetchone() rolls back on close —
+    # run UPDATE via execute() (commits), then re-read.
+    execute(
+        '''UPDATE quiz_questions SET
+             course_id = COALESCE(%s, course_id),
+             topic_id = %s,
+             block_id = COALESCE(%s, block_id),
+             question = %s,
+             options = %s,
+             correct_answer = %s,
+             explanation = %s,
+             difficulty = %s
+           WHERE id = %s AND user_id = %s''',
+        (
+            data.get('course_id'),
+            data.get('topic_id'),
+            data.get('block_id'),
+            data.get('question', q_row['question']),
+            json.dumps(options),  # jsonb column: pass a JSON string
+            correct_answer,
+            data.get('explanation', q_row.get('explanation')),
+            data.get('difficulty', q_row.get('difficulty', 'medium')),
+            question_id,
+            current_user_id,
+        )
+    )
+    row = fetchone(
+        'SELECT * FROM quiz_questions WHERE id = %s AND user_id = %s',
+        (question_id, current_user_id)
+    )
+    return jsonify({'question': QuizQuestion.from_row(row).to_dict()})
+
+
+@bp.delete('/quiz/questions/<int:question_id>')
+@token_required
+def delete_question(current_user_id: int, question_id: int):
+    """Delete a quiz question (cascades quiz_results via FK)."""
+    count = execute(
+        'DELETE FROM quiz_questions WHERE id = %s AND user_id = %s',
+        (question_id, current_user_id)
+    )
+    if not count:
+        return jsonify({'error': 'Question not found'}), 404
+    return jsonify({'deleted': True})
 
 
 @bp.post('/quiz/answer')
@@ -68,9 +199,10 @@ def submit_answer(current_user_id: int):
 
     # Save result
     execute(
-        '''INSERT INTO quiz_results (user_id, course_id, topic_id, question_id, selected_answer, is_correct, time_taken_ms)
-           VALUES (%s, %s, %s, %s, %s, %s, %s)''',
-        (current_user_id, question.course_id, question.topic_id, question_id, selected_answer, is_correct, time_taken_ms)
+        '''INSERT INTO quiz_results (user_id, course_id, topic_id, block_id, question_id, selected_answer, is_correct, time_taken_ms)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+        (current_user_id, question.course_id, question.topic_id, question.block_id,
+         question_id, selected_answer, is_correct, time_taken_ms)
     )
 
     result_row = fetchone(
@@ -91,6 +223,7 @@ def get_results(current_user_id: int):
     """Get quiz results for the current user."""
     course_id = request.args.get('course_id', type=int)
     topic_id = request.args.get('topic_id', type=int)
+    block_id = request.args.get('block_id', type=int)
     limit = request.args.get('limit', type=int, default=100)
 
     query = 'SELECT * FROM quiz_results WHERE user_id = %s'
@@ -102,6 +235,9 @@ def get_results(current_user_id: int):
     if topic_id:
         query += ' AND topic_id = %s'
         params.append(topic_id)
+    if block_id:
+        query += ' AND block_id = %s'
+        params.append(block_id)
 
     query += ' ORDER BY created_at DESC LIMIT %s'
     params.append(limit)

@@ -81,8 +81,33 @@ def _create_tables(cur) -> None:
     _migrate_habits(cur)
     _migrate_topic_notes(cur)
     _migrate_ai_tasks_v2(cur)
+    _migrate_quiz_block_id(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
+
+
+def _migrate_quiz_block_id(cur) -> None:
+    """Issue #10 (parity v2): quiz por bloque. v2 liga tests a bloques
+    `exercise` vía block_id; el quiz v3 solo conocía course/topic. Añade
+    block_id (nullable) a quiz_questions y quiz_results en instalaciones
+    existentes (idempotente, patrón _migrate_topic_notes).
+    """
+    cur.execute(
+        "ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS "
+        "block_id INTEGER REFERENCES blocks(id) ON DELETE CASCADE"
+    )
+    cur.execute(
+        "ALTER TABLE quiz_results ADD COLUMN IF NOT EXISTS "
+        "block_id INTEGER REFERENCES blocks(id) ON DELETE SET NULL"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quiz_questions_block "
+        "ON quiz_questions(block_id)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quiz_results_block "
+        "ON quiz_results(block_id)"
+    )
 
 
 def _migrate_topic_notes(cur) -> None:
@@ -434,6 +459,7 @@ _TABLE_DDL = [
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
         topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        block_id INTEGER REFERENCES blocks(id) ON DELETE CASCADE,
         question TEXT NOT NULL,
         options JSONB NOT NULL,
         correct_answer INTEGER NOT NULL,
@@ -448,6 +474,7 @@ _TABLE_DDL = [
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
         topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        block_id INTEGER REFERENCES blocks(id) ON DELETE SET NULL,
         question_id INTEGER REFERENCES quiz_questions(id) ON DELETE CASCADE,
         selected_answer INTEGER,
         is_correct BOOLEAN,

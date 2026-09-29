@@ -133,6 +133,16 @@ window.App.CoursesBlocks = (function () {
       bodyHtml = url
         ? `<div class="sf-link-body">▶️ <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></div>`
         : `<div class="sf-empty">Sin URL</div>`;
+    } else if (type === "exercise") {
+      // Issue #10 — quiz por bloque: the exercise stem renders as
+      // markdown and the questions live in quiz_questions.block_id.
+      // The placeholder bin is filled asynchronously by App.QuizEmbed
+      // (same mount pattern as PdfViewer).
+      bodyHtml = `<div class="sf-quiz-bin"
+        data-block-id="${b.id}"
+        data-course-id="${courseId}"
+        data-topic-id="${b.topic_id || ""}"
+        data-stem="${escHtml(b.content || "")}"></div>`;
     } else {
       bodyHtml = `<div class="sf-empty">Tipo ${escHtml(type)} no soportado</div>`;
     }

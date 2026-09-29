@@ -475,6 +475,18 @@ window.App.Courses = (function () {
     });
   }
 
+  // ── _mountQuizBins(centerEl) — Issue #10 hook ─────────────────
+  // Exercise blocks render a .sf-quiz-bin placeholder; App.QuizEmbed
+  // fills it with the block's questions (quiz_questions.block_id).
+  // Idempotent and safe to call on every topic re-render.
+  function _mountQuizBins(centerEl) {
+    if (!centerEl) return;
+    const QE = window.App && window.App.QuizEmbed;
+    if (!QE || typeof QE.mountBins !== "function") return;
+    try { QE.mountBins(centerEl); }
+    catch (err) { console.warn("[QuizEmbed.mountBins]", err); }
+  }
+
   // ── updateCenter() — lightweight: only the center panel ──────
   async function updateCenter() {
     const centerEl = document.getElementById("studyflow-center");
@@ -650,6 +662,8 @@ window.App.Courses = (function () {
     // .pdf-container and hand it to App.PdfViewer.init; the viewer
     // fetches its own PDF bytes and renders the first page.
     _mountPdfViewers(centerEl);
+    // Issue #10 — exercise blocks mount their embedded quiz.
+    _mountQuizBins(centerEl);
 
     const back = centerEl.querySelector(".sf-td-back");
     if (back) {

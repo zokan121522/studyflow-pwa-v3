@@ -331,6 +331,7 @@ class QuizQuestion:
     user_id: int
     course_id: int
     topic_id: Optional[int] = None
+    block_id: Optional[int] = None
     question: str = ''
     options: List[str] = None
     correct_answer: int = 0
@@ -348,6 +349,7 @@ class QuizQuestion:
             'user_id': self.user_id,
             'course_id': self.course_id,
             'topic_id': self.topic_id,
+            'block_id': self.block_id,
             'question': self.question,
             'options': self.options,
             'correct_answer': self.correct_answer,
@@ -366,6 +368,7 @@ class QuizQuestion:
             user_id=row['user_id'],
             course_id=row['course_id'],
             topic_id=row.get('topic_id'),
+            block_id=row.get('block_id'),
             question=row['question'],
             options=options,
             correct_answer=row['correct_answer'],
@@ -381,6 +384,7 @@ class QuizResult:
     user_id: int
     course_id: int
     topic_id: Optional[int] = None
+    block_id: Optional[int] = None
     question_id: int = 0
     selected_answer: Optional[int] = None
     is_correct: Optional[bool] = None
@@ -393,6 +397,7 @@ class QuizResult:
             'user_id': self.user_id,
             'course_id': self.course_id,
             'topic_id': self.topic_id,
+            'block_id': self.block_id,
             'question_id': self.question_id,
             'selected_answer': self.selected_answer,
             'is_correct': self.is_correct,
@@ -407,6 +412,7 @@ class QuizResult:
             user_id=row['user_id'],
             course_id=row['course_id'],
             topic_id=row.get('topic_id'),
+            block_id=row.get('block_id'),
             question_id=row['question_id'],
             selected_answer=row.get('selected_answer'),
             is_correct=row.get('is_correct'),
