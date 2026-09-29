@@ -1,0 +1,18 @@
+# Contexto de build = ./backend. Sin esto se copian __pycache__ y los
+# .pyc de la máquina, que invalidan la cache de la capa COPY en cada cambio.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Credenciales y artefactos: NUNCA dentro de la imagen.
+.env
+.env.*
+uploads/
+*.db
+*.sqlite3
+
+# Tests: no hacen falta en producción.
+tests/
+.pytest_cache/
