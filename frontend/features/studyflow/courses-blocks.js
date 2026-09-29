@@ -76,7 +76,31 @@ window.App.CoursesBlocks = (function () {
   // closing tag (e.g. `<img`, `</p>`, `<audio`). Plain prose without tags
   // returns false so legacy text-only content keeps rendering as text.
   function _looksLikeHtml(s) {
-    return /<\/?[a-z][\s>]/i.test(String(s || "").slice(0, 2000));
+    // A real tag needs a full name: <audio …>, </audio>, <img …>. The old
+    // pattern only matched ONE letter (so <p> worked but <audio> never did)
+    // and media blocks silently degraded to escaped text.
+    return /<\/?[a-z][a-z0-9]*(?:\s[^>]*)?\/?>/i.test(String(s || ""));
+  }
+
+  // Peels the embedded media tags off the head of a mixed markdown block so
+  // the player renders as a real element and the prose keeps its markdown.
+  // Only a leading run of <audio>/<img>/<video>/<iframe>/<source> is taken;
+  // everything after the first prose character is returned as `rest`.
+  const _MEDIA_RE =
+    /^\s*(?:<(audio|img|video|iframe|source)\b[^>]*>(?:[\s\S]*?<\/\1\s*>)?|<(?:audio|img|video|iframe|source)\b[^>]*\/?>)(?:\s*)/i;
+
+  function _splitLeadingMedia(s) {
+    const raw = String(s || "");
+    let rest = raw;
+    const collected = [];
+    // Loop: several adjacent media tags may precede the prose.
+    for (let i = 0; i < 8; i++) {
+      const m = rest.match(_MEDIA_RE);
+      if (!m) break;
+      collected.push(m[0].trim());
+      rest = rest.slice(m[0].length);
+    }
+    return { media: collected.join(""), rest };
   }
 
   // ── _renderBlock(block, courseId) → HTML string ──────────────
@@ -97,9 +121,24 @@ window.App.CoursesBlocks = (function () {
     const m = meta(type);
     let bodyHtml = "";
     if (type === "markdown") {
-      bodyHtml = `<div class="md-view">${
-        _renderMd(b.content || "")
-      }</div>`;
+      // Orca blocks interleave an embedded <audio>/<img> with markdown prose.
+      // Running the whole string through the sanitizer would emit the raw
+      // markdown (##, **) unrendered, and running it through _renderMd
+      // escapes the media into literal text. So: split the leading media
+      // tags out, render them via the allowlist, and markdown-render the rest.
+      const raw = b.content || "";
+      const split = _splitLeadingMedia(raw);
+      if (split.media) {
+        const mediaHtml = window.App.UI.sanitizeHtml
+          ? window.App.UI.sanitizeHtml(split.media)
+          : "";
+        const restHtml = split.rest.trim()
+          ? `<div class="md-view">${_renderMd(split.rest)}</div>`
+          : "";
+        bodyHtml = `<div class="sf-html-body">${mediaHtml}</div>${restHtml}`;
+      } else {
+        bodyHtml = `<div class="md-view">${_renderMd(raw)}</div>`;
+      }
     } else if (type === "content") {
       // Issue #9 — v2 content blocks embed HTML (infografía <img>,
       // audio <audio>, NotebookLM HTML). Detect real markup and render it
@@ -198,10 +237,15 @@ window.App.CoursesBlocks = (function () {
   // image / exercise / interactive / separator). Each chip posts a
   // new block via App.CoursesAPI.addBlock using the type's defaults
   // (see TYPE_META.defaults) so the new block renders immediately.
+  // Block types hidden from the "Añadir bloque" menu. The type stays in
+  // TYPE_META so existing blocks (28 separators in the DB) keep rendering.
+  const HIDDEN_ADD_TYPES = new Set(["separator"]);
+
   function _renderAddBar(courseId, topicId) {
     const topicAttr = topicId ? ` data-topic-id="${topicId}"` : "";
     let chips = "";
     for (const [type, m] of Object.entries(TYPE_META)) {
+      if (HIDDEN_ADD_TYPES.has(type)) continue;
       chips += `<button type="button" class="sf-td-add-chip"`
         + ` data-type="${escHtml(type)}"`
         + ` title="${escHtml(m.label)}">`

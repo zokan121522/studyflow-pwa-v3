@@ -276,18 +276,31 @@ window.App.ContentBlocks = (function () {
 
   // ── renderContentPreview(container, html) ──────────────────────
   // Full HTML document → iframe with blob URL; snippet → Shadow DOM.
-  // XSS-safe: when no DOMPurify is present (CDN-free PWA), snippets are
-  // sanitised by stripping every <script> tag before mounting.
+  //
+  // XSS: html-sanitizer.js (loaded before this file, see index.html:403)
+  // allowlists img/audio/video/iframe so embedded media actually renders,
+  // and drops script/on* handlers. _stripScripts is only the fallback for
+  // when that module failed to load — it removes <script> but leaves every
+  // other tag, which is why media used to show up as escaped text.
   function _stripScripts(s) {
     return String(s).replace(
       /<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, ""
     ).replace(/<\s*script\b[^>]*\/?>/gi, "");
   }
 
+  // Sanitise through the shared allowlist, falling back to _stripScripts.
+  function _sanitize(s) {
+    try {
+      const fn = window.App && window.App.UI && window.App.UI.sanitizeHtml;
+      if (typeof fn === "function") return fn(String(s));
+    } catch (_) { /* fall through */ }
+    return _stripScripts(s);
+  }
+
   function renderContentPreview(container, html) {
     if (!container) return;
     if (/<html[\s>]/i.test(html) && /<body[\s>]/i.test(html)) {
-      const clean = _stripScripts(html);
+      const clean = _sanitize(html);
       const blob = new Blob([clean], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       const iframe = document.createElement("iframe");
@@ -306,7 +319,7 @@ window.App.ContentBlocks = (function () {
       });
       return;
     }
-    const clean = _stripScripts(html);
+    const clean = _sanitize(html);
     const shadow = container.shadowRoot
       || container.attachShadow({ mode: "open" });
     shadow.innerHTML = "<style>"

@@ -25,7 +25,7 @@ Voices (per language):
     es → es-ES-AlvaroNeural  (Álvaro)
     en → en-US-ChristopherNeural (Christopher)
 
-The result_content stored is a URL path like "/api/audio/serve/xxx.mp3"
+The result_content stored is a URL path like "/api/ai/notebooklm/audio/xxx.mp3"
 which the frontend uses to construct an <audio> player. The transcript
 (the narrated text, verbatim or script) is stored in coverage_data as JSON
 {"transcript_md": "..."} so the frontend can offer inserting it as a
@@ -343,7 +343,10 @@ def _run_audio_task(
         _log_usage(task_id, user_id, duration, usage, task_type)
 
         # ── Result URL for the frontend audio player ───────────────────
-        audio_url = f"/api/audio/serve/{audio_filename}"
+        # Must match the registered route in routes/notebooklm_content.py.
+        # (The legacy /api/audio/serve/ alias still exists for rows written
+        # before this fix, but new rows use the canonical path.)
+        audio_url = f"/api/ai/notebooklm/audio/{audio_filename}"
 
         # Transcript = what is narrated (verbatim source or generated script)
         coverage_json = json.dumps({"transcript_md": transcript_md})

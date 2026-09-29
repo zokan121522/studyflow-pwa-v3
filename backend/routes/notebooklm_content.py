@@ -346,15 +346,34 @@ def markdown_to_html(current_user_id: int):
 # ═══════════════════════════════════════════════════════════════════
 
 
-@bp.route("/ai/notebooklm/audio/<filename>", methods=["GET"])
-@token_required
-def serve_audio(current_user_id: int, filename: str):
-    """Serve a generated audio file from the local audio dir."""
+def _serve_audio_file(filename: str):
+    """Shared body for both audio URLs. Basename-only: no path traversal."""
     safe = os.path.basename(filename)
     path = os.path.join(_AUDIO_DIR, safe)
     if not os.path.isfile(path):
         return jsonify(error="File not found"), 404
     return send_file(path, mimetype="audio/mpeg")
+
+
+@bp.route("/ai/notebooklm/audio/<filename>", methods=["GET"])
+@token_required
+def serve_audio(current_user_id: int, filename: str):
+    """Serve a generated audio file from the local audio dir."""
+    return _serve_audio_file(filename)
+
+
+@bp.route("/audio/serve/<filename>", methods=["GET"])
+@token_required
+def serve_audio_legacy(current_user_id: int, filename: str):
+    """Legacy URL alias.
+
+    backend/ai/notebooklm/audio.py persisted `/api/audio/serve/<name>.mp3` into
+    ai_tasks.result_content and blocks.content, but no such route was ever
+    registered -- every one of those 131 stored URLs 404'd. Rather than rewrite
+    the stored rows, serve the same file under the path they already point at.
+    New writes still go through audio.py, which now uses the canonical route.
+    """
+    return _serve_audio_file(filename)
 
 
 @bp.route("/ai/notebooklm/infographic/<filename>", methods=["GET"])

@@ -90,9 +90,40 @@ window.App.AI = Object.assign(window.App.AI, (function () {
   }
 
   // ─── Status helper (per-block inline status line) ─────────────
+  // The inline container only exists inside a rendered block toolbar. When a
+  // generation is started from elsewhere (nav button, dashboard) there is no
+  // [data-ai-status] node, and the old code returned silently — the user saw
+  // the modal close and nothing at all, not even the error. Fall back to a
+  // transient toast so progress and failures are always visible.
+  function _toast(msg, isPersistent = false) {
+    let host = document.getElementById("sf-ai-toast");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "sf-ai-toast";
+      host.style.cssText =
+        "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);"
+        + "z-index:100000;max-width:min(92vw,560px);padding:10px 16px;"
+        + "border-radius:10px;background:#16213e;color:#fff;font-size:14px;"
+        + "line-height:1.4;box-shadow:0 8px 28px rgba(0,0,0,.45);"
+        + "border:1px solid #3a4a6e;white-space:pre-wrap;word-break:break-word;";
+      document.body.appendChild(host);
+    }
+    host.textContent = msg;
+    host.style.display = "block";
+    clearTimeout(host._sfToastTimer);
+    if (!isPersistent) {
+      host._sfToastTimer = setTimeout(() => {
+        host.style.display = "none";
+      }, 6000);
+    }
+  }
+
   function _showStatus(blockId, msg, isPersistent = false) {
     const container = document.querySelector(`[data-ai-status="${blockId}"]`);
-    if (!container) return;
+    if (!container) {
+      _toast(msg, isPersistent);
+      return;
+    }
     container.style.display = "block";
     container.textContent = msg;
     if (isPersistent) return;

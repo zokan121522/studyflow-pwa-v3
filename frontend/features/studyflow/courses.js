@@ -325,15 +325,23 @@ window.App.Courses = (function () {
     s._view = null;
     s.currentCourseId = courseId;
     s.selectedBlockId = blockId;
+    // Keep the current topic until we know better: nulling it up front made a
+    // failed lookup drop updateCenter() into the course landing, so the click
+    // looked like a no-op.
+    const prevTopicId = s.selectedTopicId;
     s.selectedTopicId = null;
-    // Find the topic containing this block to update sidebar selection
-    const detail = await fetchCourseDetail(courseId);
-    for (const t of (detail.topics || [])) {
-      if ((t.blocks || []).some(b => b.id === blockId)) {
-        s.selectedTopicId = t.id;
-        break;
+    try {
+      const detail = await fetchCourseDetail(courseId);
+      for (const t of (detail.topics || [])) {
+        if ((t.blocks || []).some(b => b.id === blockId)) {
+          s.selectedTopicId = t.id;
+          break;
+        }
       }
+    } catch (err) {
+      console.warn("[Courses] handleBlockClick: no se pudo resolver el tema", err);
     }
+    if (s.selectedTopicId == null) s.selectedTopicId = prevTopicId;
     await updateCenter();
   }
 
@@ -676,12 +684,24 @@ window.App.Courses = (function () {
         '<div class="empty-state">⚠️ Tema no encontrado.</div>';
       return;
     }
-    const blocks = topic.blocks || [];
+    // v2 parity — clicking a block in the sidebar narrows the center panel
+    // to that single block. STATE.selectedBlockId is set by
+    // handleBlockClick; clearing it (topic title, course landing) restores
+    // the full list.
+    const s = STATE();
+    const focusId = s.selectedBlockId;
+    const allBlocks = topic.blocks || [];
+    const blocks = focusId
+      ? allBlocks.filter((b) => b.id === focusId)
+      : allBlocks;
     const blocksHtml = blocks.length
       ? blocks.map((b) => Blocks._renderBlockCard(b, courseId)).join("")
-      : '<div class="empty-state"><span class="big">📝</span><br>'
-        + 'Este tema no tiene bloques aún.<br>'
-        + 'Crea uno con “+ Añadir bloque”.</div>';
+      : (focusId
+        ? '<div class="empty-state"><span class="big">🔍</span><br>'
+          + 'Ese bloque ya no existe en este tema.</div>'
+        : '<div class="empty-state"><span class="big">📝</span><br>'
+          + 'Este tema no tiene bloques aún.<br>'
+          + 'Crea uno con “+ Añadir bloque”.</div>');
     // v2 parity: the global ➕ Añadir bar only renders on EMPTY topics.
     // On non-empty topics the create chips live inside each block's
     // unified toolbar (ai.js ➕ Añadir group, below NotebookLM/OpenZen).
@@ -693,6 +713,12 @@ window.App.Courses = (function () {
           ← ${escHtml(course.title || "Curso")}
         </div>
         <h2 class="sf-td-title">${escHtml(topic.title || "Tema")}</h2>
+        ${focusId
+          ? `<button type="button" class="sf-td-show-all ht-btn"
+               data-course-id="${courseId}" data-topic-id="${topicId}">
+               ☰ Ver todos los bloques (${allBlocks.length})
+             </button>`
+          : ""}
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
@@ -705,6 +731,16 @@ window.App.Courses = (function () {
     Blocks._attachBlockHandlers(centerEl, courseId, topicId);
     // S4 handlers — collapse / up / down reorder.
     Blocks._attachCardHandlers(centerEl, courseId, topicId);
+
+    // v2 parity — exit the single-block focus and show the whole topic again.
+    const showAllBtn = centerEl.querySelector(".sf-td-show-all");
+    if (showAllBtn) {
+      showAllBtn.addEventListener("click", async () => {
+        const st = STATE();
+        st.selectedBlockId = null;
+        await updateCenter();
+      });
+    }
     // Phase 7.7 — AI ✨ toolbar: bind [data-ai-action] buttons + usage
     // counters. Idempotent (AI module re-binds remove+add on each render).
     if (window.App.AI && typeof window.App.AI.initSectionEvents === "function") {
@@ -740,12 +776,23 @@ window.App.Courses = (function () {
   // CoursesBlocks dispatches `studyflow:blocks-changed` after every
   // add / update / delete so we just need to refresh the center when
   // we're currently showing that topic.
+  //
+  // Ids arrive with two different types depending on the emitter: the API
+  // returns `359` (number) so STATE holds a number, but the AI action buttons
+  // carry `data-topic-id="359"` and read it back as a *string*. A strict
+  // `!==` therefore never matches and the panel silently failed to re-render —
+  // the new block only appeared after navigating away and back. Compare as
+  // strings so both origins agree.
+  function _sameId(a, b) {
+    if (a == null || b == null) return false;
+    return String(a) === String(b);
+  }
+
   function _onBlocksChanged(e) {
     const detail = (e && e.detail) || {};
     const s = STATE();
-    if (s.currentCourseId !== detail.courseId) return;
-    if (detail.topicId != null
-        && s.selectedTopicId !== detail.topicId) return;
+    if (detail.courseId != null && !_sameId(s.currentCourseId, detail.courseId)) return;
+    if (detail.topicId != null && !_sameId(s.selectedTopicId, detail.topicId)) return;
     // Fire-and-forget: don't block the event handler.
     updateCenter().catch((err) => console.error("[blocks-changed]", err));
   }
