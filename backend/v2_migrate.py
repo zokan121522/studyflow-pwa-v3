@@ -201,16 +201,29 @@ def _free_title(cur, table, col, user_id, base):
 
 
 def _import_courses(conn, user_id, tables):
-    """Insert v2 courses. Returns {v2_id: v3_id}."""
+    """Insert v2 courses. Returns {v2_id: v3_id}.
+
+    Issue #12: carries is_favorite, icon and notes across. v2 marked
+    favourites in the sidebar and on the dashboard (fase 72 F1/F2), and
+    the real backup has six of them flagged — dropping the column here is
+    what made the migration silently lose them.
+    """
     mapping = {}
     cur = conn.cursor()
-    for c in tables.get("courses", []):
+    for order, c in enumerate(tables.get("courses", [])):
         title = _free_title(cur, "courses", "title", user_id,
                             c.get("title") or "Sin título")
+        # COPY exports booleans as t/f; be liberal in what you accept.
+        fav = c.get("is_favorite")
+        is_favorite = fav in (True, "t", "true", "T", "1", 1)
         cur.execute(
-            "INSERT INTO courses (user_id, title, description, color, progress) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (user_id, title, c.get("description"), c.get("color"), 0),
+            "INSERT INTO courses (user_id, title, description, color, "
+            "progress, is_favorite, icon, order_index, created_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, "
+            "COALESCE(%s::timestamptz, NOW())) RETURNING id",
+            (user_id, title, c.get("description"), c.get("color"), 0,
+             is_favorite, c.get("icon") or None, order,
+             c.get("created_at")),
         )
         mapping[c["id"]] = cur.fetchone()["id"]
     cur.close()

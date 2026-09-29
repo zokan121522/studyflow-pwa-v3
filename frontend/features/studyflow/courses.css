@@ -114,6 +114,10 @@
 .topic-menu-item:hover { background: var(--surface-hover); }
 .topic-menu-item.danger { color: var(--red); }
 .topic-menu-item.danger:hover { background: rgba(239,68,68,.1); }
+/* Favorite toggle in the ⋮ menu (Issue #12) — dimmed when off, amber
+   when on, so the current state is readable without opening the menu. */
+.topic-menu-item.fav-on { color: #f59e0b; }
+.topic-menu-item.fav-on:hover { background: rgba(245,158,11,.12); }
 .topic-menu-sep {
   height: 1px;
   background: var(--border);

@@ -214,6 +214,33 @@ window.App.CoursesAPI = (function () {
     clearDetailCache(courseId);
   }
 
+  // ── toggleFavorite(courseId, favorite) ────────────────────────
+  // Issue #12. Optimistic in the caller (the star flips instantly);
+  // here we just persist and keep both caches honest so a later
+  // sidebar re-render doesn't snap the star back to the stale value.
+  async function setFavorite(courseId, favorite) {
+    await API.patch(`/courses/${courseId}/favorite`, { favorite: !!favorite });
+    _patchListCache(courseId, (c) => { c.is_favorite = !!favorite; });
+    if (_detailCache[courseId]) {
+      _detailCache[courseId].is_favorite = !!favorite;
+    }
+  }
+
+  // ── reorderCourses(courseIds) ─────────────────────────────────
+  // Full visible sidebar order after a course drag&drop. Reorders the
+  // list CACHE in place rather than dropping it: fetchCourses() serves
+  // that same array, so a refetch-based re-render would otherwise show
+  // the old order until the page is reloaded.
+  async function reorderCourses(courseIds) {
+    const order = courseIds || [];
+    await API.post("/courses/reorder", { course_ids: order });
+    if (!_listCache) return;
+    const rank = new Map(order.map((id, i) => [id, i]));
+    _listCache.sort((a, b) =>
+      (rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER)
+      - (rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER));
+  }
+
   // ── getTopicNotes(courseId, topicId) ──────────────────────────
   // S4: returns the freeform notes string for a topic.
   async function getTopicNotes(courseId, topicId) {
@@ -268,6 +295,9 @@ window.App.CoursesAPI = (function () {
     reorderBlocks,
     moveBlock,
     reorderTopics,
+    // Favorites + course order (Issue #12)
+    setFavorite,
+    reorderCourses,
     // Topic notes (S4)
     getTopicNotes,
     saveTopicNotes,

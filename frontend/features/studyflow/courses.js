@@ -28,6 +28,8 @@ window.App.Courses = (function () {
     addTopic, renameTopic, deleteTopic,
     // Blocks (S3)
     addBlock, toggleBlockDone, moveBlock,
+    // Favorites + course order (Issue #12)
+    setFavorite, reorderCourses,
   } = window.App.CoursesAPI;
   const {
     renderCourseTree, attachSidebarEvents, updateSelection,
@@ -130,6 +132,25 @@ window.App.Courses = (function () {
       await renderStudyflow();
     } catch (err) {
       alert("❌ Error al renombrar: " + (err.message || err));
+    }
+  }
+
+  // ── toggleFavorite(courseId) ────────────────────────────────
+  // Issue #12. Flips the star, re-renders (which re-sorts the groups),
+  // and puts the flag back if the server rejected the write — a star
+  // that lies is worse than one that didn't move.
+  async function toggleFavorite(courseId) {
+    const list = await fetchCourses();
+    const c = (list || []).find((x) => x.id === courseId);
+    if (!c) return;
+    const next = !c.is_favorite;
+    c.is_favorite = next; // optimistic
+    try {
+      await setFavorite(courseId, next);
+      await renderStudyflow();
+    } catch (err) {
+      c.is_favorite = !next; // revert
+      alert("❌ No se pudo marcar como favorita: " + (err.message || err));
     }
   }
 
@@ -731,6 +752,7 @@ window.App.Courses = (function () {
     // prompt/handlers exposed for sidebar inline onclick
     promptCreateCourse,
     promptRenameCourse,
+    toggleFavorite,
     promptEditDescription,
     promptDeleteCourse,
     promptAddTopic,

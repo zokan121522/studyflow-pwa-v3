@@ -82,8 +82,35 @@ def _create_tables(cur) -> None:
     _migrate_topic_notes(cur)
     _migrate_ai_tasks_v2(cur)
     _migrate_quiz_block_id(cur)
+    _migrate_courses_favorites_order(cur)
     for stmt in _POST_INDEXES:
         cur.execute(stmt)
+
+
+def _migrate_courses_favorites_order(cur) -> None:
+    """Issue #12: port de las favoritas de v2 + orden manual de cursos.
+
+    v2 marcaba asignaturas como favoritas y pintaba una sección propia en
+    el nav y una fila de tarjetas en el dashboard (fase 72 F1/F2). v3 no
+    tenía ni la columna ni el icon, así que la migración desde v2 las
+    estaba descartando en silencio: seis asignaturas del backup real
+    (SERVIDOR, CLIENTE, INTERFACES, DESPLIEGUE, IP2, CIBERSEGURIDAD).
+
+    `order_index` replica el patrón que ya usan topics y blocks, de modo
+    que el drag&drop de cursos no inventa un segundo criterio de orden.
+    Idempotente, patrón _migrate_quiz_block_id.
+    """
+    for col, ddl in (
+        ("is_favorite", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("icon", "TEXT"),
+        ("order_index", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        cur.execute(f"ALTER TABLE courses ADD COLUMN IF NOT EXISTS {col} {ddl}")
+    # Un índice parcial: solo las favoritas, que es lo que consulta la UI.
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_courses_favorite "
+        "ON courses(user_id, order_index) WHERE is_favorite"
+    )
 
 
 def _migrate_quiz_block_id(cur) -> None:
@@ -407,6 +434,9 @@ _TABLE_DDL = [
         description TEXT,
         color VARCHAR(20),
         progress INTEGER DEFAULT 0,
+        is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+        icon TEXT,
+        order_index INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
@@ -451,6 +481,29 @@ _TABLE_DDL = [
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE (pdf_id, page)
+    )
+    """,
+    """
+    -- Sub-phase S3: content blocks within topics (v2-shaped fields + url/color/collapsed).
+    -- MUST be declared before quiz_questions / quiz_results: both carry a
+    -- block_id FK, so creating them first breaks a fresh install with
+    -- 'relation blocks does not exist'. On an existing DB the order was
+    -- invisible because blocks was already there from an older release.
+    CREATE TABLE IF NOT EXISTS blocks (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'markdown',
+        title TEXT DEFAULT '',
+        content TEXT DEFAULT '',
+        url TEXT DEFAULT '',
+        done BOOLEAN NOT NULL DEFAULT FALSE,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        color TEXT DEFAULT '',
+        collapsed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
     """
@@ -506,25 +559,6 @@ _TABLE_DDL = [
         voice VARCHAR(50),
         language VARCHAR(10) DEFAULT 'es',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-    """,
-    """
-    -- Sub-phase S3: content blocks within topics (v2-shaped fields + url/color/collapsed).
-    CREATE TABLE IF NOT EXISTS blocks (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
-        topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
-        type TEXT NOT NULL DEFAULT 'markdown',
-        title TEXT DEFAULT '',
-        content TEXT DEFAULT '',
-        url TEXT DEFAULT '',
-        done BOOLEAN NOT NULL DEFAULT FALSE,
-        order_index INTEGER NOT NULL DEFAULT 0,
-        color TEXT DEFAULT '',
-        collapsed BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
     # Sub-phase SA — Addons Foundation. Catalog + per-row installed/enabled/

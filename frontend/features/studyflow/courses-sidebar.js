@@ -44,16 +44,35 @@ window.App.CoursesSidebar = (function () {
     // their own .sf-stats-section into this slot via renderMarketplaceNav
     // and friends (see addons-marketplace.js / quiz.js).
     html += '<div id="studyflow-left-stats"></div>';
-    html += '<div class="col-title">📖 Cursos</div>';
 
-    if (!list.length) {
+    // Issue #12 — favorites pinned in their own group on top (v2 fase 72).
+    // order_index stays a SINGLE global order; the split is a view. That
+    // is why dropping a course into the other group also flips its star:
+    // otherwise "drag to the top" would silently do nothing visible for a
+    // non-favorite, which is the one thing a drag&drop must never do.
+    const favs = list.filter((c) => c.is_favorite);
+    const rest = list.filter((c) => !c.is_favorite);
+
+    if (favs.length) {
+      html += '<div class="col-title course-group-title" data-drop-group="fav">'
+        + '⭐ Favoritas</div>';
+      html += '<div class="course-drop-group" data-drop-group="fav">';
+      for (const c of favs) html += _renderCourseItem(c, STATE);
+      html += '</div>';
+    }
+
+    html += '<div class="col-title" data-drop-group="rest">📖 Cursos</div>';
+
+    if (!rest.length) {
       html += '<div class="empty-state" style="padding:12px;">'
         + '<span class="big">📚</span><br>'
-        + '<span style="font-size:11px;">Sin cursos aún</span></div>';
+        + '<span style="font-size:11px;">'
+        + (favs.length ? "Todo está en Favoritas" : "Sin cursos aún")
+        + '</span></div>';
     } else {
-      for (const c of list) {
-        html += _renderCourseItem(c, STATE);
-      }
+      html += '<div class="course-drop-group" data-drop-group="rest">';
+      for (const c of rest) html += _renderCourseItem(c, STATE);
+      html += '</div>';
     }
 
     // "+ Nuevo curso" button + bottom spacer (for mobile scroll)
@@ -95,7 +114,8 @@ window.App.CoursesSidebar = (function () {
       : `${c.topics ? c.topics.length : 0} temas`;
 
     let html = `<div class="course-item ${isActive ? "active" : ""} `
-      + `${isExpanded ? "expanded" : ""}" data-course-id="${c.id}">`
+      + `${isExpanded ? "expanded" : ""}" data-course-id="${c.id}" `
+      + `draggable="true">`
       + `<div class="ci-body">`
       + `<div class="ci-title">`
       + `<span class="course-arrow">${arrow}</span>`
@@ -110,6 +130,15 @@ window.App.CoursesSidebar = (function () {
       + `this.closest('.topic-menu').classList.remove('open');`
       + `window.App.Courses.promptRenameCourse('${c.id}')">`
       + `✏️ Renombrar</div>`
+      // Issue #12 — the star lives in the ⋮ menu rather than inline, so
+      // the title row keeps the same metrics as before and nothing
+      // reflows when a course becomes a favorite.
+      + `<div class="topic-menu-item ${c.is_favorite ? "fav-on" : ""}" `
+      + `onclick="event.stopPropagation();`
+      + `this.closest('.topic-menu').classList.remove('open');`
+      + `window.App.Courses.toggleFavorite(${c.id})">`
+      + `${c.is_favorite ? "⭐ Quitar de favoritas" : "☆ Marcar como favorita"}`
+      + `</div>`
       + `<div class="topic-menu-item" onclick="event.stopPropagation();`
       + `this.closest('.topic-menu').classList.remove('open');`
       + `window.App.Courses.promptEditDescription('${c.id}')">`
@@ -397,6 +426,7 @@ window.App.CoursesSidebar = (function () {
         // topic drag (blocks would reorder topics or silently no-op).
         const block = e.target.closest(".block-item");
         const topic = block ? null : e.target.closest(".topic-item");
+        const course = topic ? null : e.target.closest(".course-item");
         if (block) {
           dragSrc = {
             type: "block",
@@ -416,6 +446,21 @@ window.App.CoursesSidebar = (function () {
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", String(dragSrc.id));
           topic.classList.add("dragging");
+        } else if (course) {
+          // Issue #12 — course-level drag. MUST be checked LAST: a
+          // .course-item is the ANCESTOR of every .topic-item and
+          // .block-item, so testing it first would swallow every topic
+          // and block drag into a course drag.
+          dragSrc = {
+            type: "course",
+            id: Number(course.dataset.courseId),
+            group: course.closest(".course-drop-group")
+              ? course.closest(".course-drop-group").dataset.dropGroup
+              : "rest",
+          };
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(dragSrc.id));
+          course.classList.add("dragging");
         }
       });
 
@@ -428,7 +473,11 @@ window.App.CoursesSidebar = (function () {
           el.classList.remove("drag-over")
         );
         const t = e.target.closest(
-          dragSrc.type === "topic" ? ".topic-item" : ".block-item, .topic-item"
+          dragSrc.type === "topic"
+            ? ".topic-item"
+            : dragSrc.type === "course"
+              ? ".course-item, .course-drop-group"
+              : ".block-item, .topic-item"
         );
         if (t) {
           // A block dropped on its own collapsed topic header is a no-op —
@@ -436,7 +485,14 @@ window.App.CoursesSidebar = (function () {
           const sameTopic = dragSrc.type === "block"
             && t.classList.contains("topic-item")
             && Number(t.dataset.topicId) === dragSrc.topicId;
-          if (!sameTopic) t.classList.add("drag-over");
+          if (sameTopic) return;
+          // Dropping a course on ITS OWN group is a no-op too — highlight
+          // only groups the course could actually move into.
+          if (dragSrc.type === "course" && t.classList.contains("course-drop-group")
+              && t.dataset.dropGroup === dragSrc.group) {
+            return;
+          }
+          t.classList.add("drag-over");
         }
       });
 
@@ -452,11 +508,56 @@ window.App.CoursesSidebar = (function () {
         e.stopPropagation();
         const src = dragSrc;
         const over = e.target.closest(
-          src.type === "topic" ? ".topic-item" : ".block-item, .topic-item"
+          src.type === "topic"
+            ? ".topic-item"
+            : src.type === "course"
+              ? ".course-item, .course-drop-group"
+              : ".block-item, .topic-item"
         );
         if (!over) return _cleanupDrag();
         const callbacks = leftEl._csCallbacks || {};
         try {
+          if (src.type === "course") {
+            // Issue #12 — course reorder. A drop on a .course-item means
+            // "insert before it"; a drop on a group container means
+            // "append to that group". Crossing groups also flips the
+            // favorite flag, so the star and the section can never
+            // disagree about where a course lives.
+            const overGroup = over.classList.contains("course-drop-group")
+              ? over
+              : over.closest(".course-drop-group");
+            if (!overGroup) return _cleanupDrag();
+            const targetGroup = overGroup.dataset.dropGroup;
+            const isFavGroup = targetGroup === "fav";
+
+            const groupIds = (g) => [...leftEl.querySelectorAll(
+              `.course-drop-group[data-drop-group="${g}"] .course-item`
+            )].map((el) => Number(el.dataset.courseId));
+
+            const fav = groupIds("fav").filter((id) => id !== src.id);
+            const rest = groupIds("rest").filter((id) => id !== src.id);
+            const dest = isFavGroup ? fav : rest;
+
+            const overId = over.classList.contains("course-item")
+              ? Number(over.dataset.courseId) : null;
+            let at = overId != null ? dest.indexOf(overId) : dest.length;
+            if (at < 0) at = dest.length;
+            dest.splice(at, 0, src.id);
+
+            // Persist order FIRST, then the flag. If the flag write fails
+            // the order is still valid; doing it the other way round would
+            // leave a course starred but sitting in the wrong section.
+            await window.App.CoursesAPI.reorderCourses(fav.concat(rest));
+            if (isFavGroup !== (src.group === "fav")) {
+              await window.App.CoursesAPI.setFavorite(src.id, isFavGroup);
+            }
+            if (typeof callbacks.onDataChanged === "function") {
+              await callbacks.onDataChanged();
+            } else {
+              await window.App.Courses.renderStudyflow();
+            }
+            return _cleanupDrag();
+          }
           if (src.type === "topic") {
             const overId = Number(over.dataset.topicId);
             if (overId === src.id) return _cleanupDrag();

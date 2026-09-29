@@ -44,6 +44,35 @@
   border-radius: 6px;
 }
 
+/* ─── Course drag&drop + favorites group (Issue #12) ──────────── */
+.course-item.dragging {
+  opacity: .45;
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
+}
+.course-item.drag-over {
+  opacity: 1;
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+  background: rgba(79,140,255,.10);
+  border-radius: 6px;
+}
+/* An empty group (e.g. all courses starred) still needs a drop target. */
+.course-drop-group {
+  min-height: 8px;
+  border-radius: 6px;
+  transition: background .12s, outline-color .12s;
+}
+.course-drop-group.drag-over {
+  outline: 1px dashed var(--primary);
+  outline-offset: 2px;
+  background: rgba(79,140,255,.06);
+}
+.course-group-title {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 /* ─── Topic tree (course-children → course-topics) ─────────────── */
 /* V3-L: topics flush left — title starts at the nav edge (was 12px
    margin + 8px padding + a grab handle before the title). */

@@ -79,6 +79,35 @@ def update_description_alias(current_user_id: int, course_id: int):
     return jsonify({'message': 'Description updated'})
 
 
+# ============================== Course favorites (Issue #12) =================
+@bp.patch('/courses/<int:course_id>/favorite')
+@token_required
+def toggle_favorite_alias(current_user_id: int, course_id: int):
+    """v2 alias: PATCH /courses/<id>/favorite {favorite: bool}.
+
+    v2 exposed the same toggle at /api/courses/<id>/favorite (fase 72 F1).
+    Kept as a dedicated route — rather than folded into the generic
+    PATCH /courses/<id> — so the sidebar star has one obvious endpoint and
+    the v2/v3 surface keeps matching.
+    """
+    if not _user_course(course_id, current_user_id):
+        return jsonify({'error': 'Course not found'}), 404
+
+    data = request.get_json() or {}
+    # Strictly a JSON boolean. A truthy string like "false" would otherwise
+    # be stored as text and fail as a type error inside the driver.
+    if 'favorite' not in data or not isinstance(data['favorite'], bool):
+        return jsonify({'error': 'favorite must be a boolean'}), 400
+
+    execute(
+        'UPDATE courses SET is_favorite = %s, updated_at = NOW() '
+        'WHERE id = %s',
+        (data['favorite'], course_id)
+    )
+    return jsonify({'message': 'Course favorite updated',
+                    'is_favorite': data['favorite']})
+
+
 # ============================== Topic aliases (scoped under course) ========
 @bp.patch('/courses/<int:course_id>/topics/<int:topic_id>/rename')
 @token_required

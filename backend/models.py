@@ -152,6 +152,11 @@ class Course:
     description: Optional[str] = None
     color: Optional[str] = None
     progress: int = 0
+    # Issue #12: favorite flag + icon come from the v2 port; order_index
+    # drives the sidebar order set by drag&drop.
+    is_favorite: bool = False
+    icon: Optional[str] = None
+    order_index: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -163,6 +168,9 @@ class Course:
             'description': self.description,
             'color': self.color,
             'progress': self.progress,
+            'is_favorite': self.is_favorite,
+            'icon': self.icon,
+            'order_index': self.order_index,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -176,6 +184,11 @@ class Course:
             description=row.get('description'),
             color=row.get('color'),
             progress=row.get('progress', 0),
+            # row.get, not row[...]: the v3 restore path builds Course
+            # objects from v2 rows that predate these columns.
+            is_favorite=bool(row.get('is_favorite', False)),
+            icon=row.get('icon'),
+            order_index=row.get('order_index', 0) or 0,
             created_at=row.get('created_at'),
             updated_at=row.get('updated_at'),
         )
