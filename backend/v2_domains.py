@@ -173,17 +173,31 @@ def _import_habit_rows(conn, user_id, tables):
 
 # ─── notes ────────────────────────────────────────────────────────────
 def _import_quick_notes(conn, user_id, tables):
+    """v2 quick_notes → v3.
+
+    v3 keeps ONE quick note per user — the primary key is `user_id` and
+    nothing else, so the table is a singleton. v2 stored a row per note.
+    Inserting them one by one blew up with
+    `duplicate key value violates unique constraint "quick_notes_pkey"`
+    as soon as the user already had a note in v3.
+
+    So: keep only the most recently updated v2 note and upsert on the
+    natural key. A re-run replaces the note instead of exploding.
+    """
+    rows = tables.get("quick_notes") or []
+    if not rows:
+        return 0
+    newest = max(rows, key=lambda r: r.get("updated_at") or "")
     cur = conn.cursor()
-    n = 0
-    for q in tables.get("quick_notes", []):
-        cur.execute(
-            "INSERT INTO quick_notes (user_id, content, updated_at) "
-            "VALUES (%s, %s, %s)",
-            (user_id, q.get("content") or "", q.get("updated_at")),
-        )
-        n += 1
+    cur.execute(
+        "INSERT INTO quick_notes (user_id, content, updated_at) "
+        "VALUES (%s, %s, COALESCE(%s, now())) "
+        "ON CONFLICT (user_id) DO UPDATE SET "
+        "content = EXCLUDED.content, updated_at = EXCLUDED.updated_at",
+        (user_id, newest.get("content") or "", newest.get("updated_at")),
+    )
     cur.close()
-    return n
+    return 1
 
 
 # ─── AI history ───────────────────────────────────────────────────────
