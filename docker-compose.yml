@@ -14,6 +14,31 @@
 name: studyflow-pwa-v3
 
 services:
+  # ── Sidecar OpenZen ──────────────────────────────────────────────────────
+  # Proveedor de IA para OpenZen. Se alcanza por NOMBRE de servicio (`opencode`)
+  # desde `app` porque ambos comparten la red interna de compose.
+  #
+  # El puerto 54321 NO se publica al host a propósito: publicar un servidor de
+  # agentes sin `OPENCODE_SERVER_PASSWORD` lo deja expuesto a cualquier
+  # contenedor de la máquina (hallazgo de la auditoría de v2).
+  opencode:
+    build:
+      context: .
+      dockerfile: docker/opencode/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Vacío = servidor sin contraseña. Un agent server abierto en la red de
+      # compose es aceptable (la red es interna), pero en cuanto exponemos el
+      # puerto hay que ponerla.
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+    volumes:
+      # Persistir auth.json entre rebuilds: sin este volumen, las credenciales
+      # que la app empuja vía PUT /auth/:id se pierden en cada reconstrucción.
+      - opencode-auth:/root/.local/share/opencode
+      # Solo el fichero de config, no el directorio entero (que contiene el
+      # runtime node_modules). Montar el dir entero pisaría el runtime.
+      - ./docker/opencode/opencode.jsonc:/root/.config/opencode/opencode.jsonc:ro
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -58,6 +83,11 @@ services:
       AUDIO_UPLOAD_FOLDER: /srv/backend/uploads/audio
       INFOGRAPHIC_UPLOAD_FOLDER: /srv/backend/uploads/infographics
       NOTEBOOKLM_DIR: /srv/backend/uploads/notebooklm
+      # The `notebooklm` library resolves its profile dir from
+      # NOTEBOOKLM_HOME, NOT NOTEBOOKLM_DIR. Without this the library looks
+      # under /root/.notebooklm and every generation fails with
+      # "Storage file not found: /root/.notebooklm/profiles/<p>/…".
+      NOTEBOOKLM_HOME: /srv/backend/uploads/notebooklm
       SCRAPED_DIR: /srv/backend/uploads/scraped_pdfs
       INFOGRAPHIC_MAX_CHARS: ${INFOGRAPHIC_MAX_CHARS:-12000}
 
@@ -74,6 +104,11 @@ services:
 
       # ── IA ──
       AI_PROVIDER: ${AI_PROVIDER:-opencode-acp}
+      # Sidecar OpenZen. Por nombre de servicio, no por localhost: `app` corre
+      # en su propio contenedor y `localhost` allí es él mismo.
+      OPENCODE_SERVER_URL: ${OPENCODE_SERVER_URL:-http://opencode:54321}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-big-pickle}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
       AI_PERSONALITY: ${AI_PERSONALITY:-}
       ADMIN_USER_IDS: ${ADMIN_USER_IDS:-1}
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-52428800}
@@ -103,6 +138,7 @@ services:
 
 volumes:
   pgdata:
+  opencode-auth:
   pdf_uploads:
   audio_uploads:
   infographics:
