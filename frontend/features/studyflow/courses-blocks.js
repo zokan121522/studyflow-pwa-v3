@@ -71,6 +71,14 @@ window.App.CoursesBlocks = (function () {
       || { icon: "📌", label: type || "Bloque", strip: "var(--border-light)" };
   }
 
+  // ── _looksLikeHtml(str) → boolean ──────────────────────────────
+  // Conservative heuristic: true when the string contains an opening or
+  // closing tag (e.g. `<img`, `</p>`, `<audio`). Plain prose without tags
+  // returns false so legacy text-only content keeps rendering as text.
+  function _looksLikeHtml(s) {
+    return /<\/?[a-z][\s>]/i.test(String(s || "").slice(0, 2000));
+  }
+
   // ── _renderBlock(block, courseId) → HTML string ──────────────
   // Renders ONE block in read mode. Markdown uses _renderMd; content
   // is plain text; separator is a thin rule; pdf-ref/youtube show the
@@ -93,9 +101,19 @@ window.App.CoursesBlocks = (function () {
         _renderMd(b.content || "")
       }</div>`;
     } else if (type === "content") {
-      const txt = escHtml(b.content || "").replace(/\n/g, "<br>");
-      bodyHtml = `<div class="sf-text-body">${txt
-        || '<span class="sf-empty">Sin contenido</span>'}</div>`;
+      // Issue #9 — v2 content blocks embed HTML (infografía <img>,
+      // audio <audio>, NotebookLM HTML). Detect real markup and render it
+      // through the allowlist sanitizer; fall back to plain text.
+      const raw = b.content || "";
+      if (_looksLikeHtml(raw) && window.App.UI.sanitizeHtml) {
+        bodyHtml = `<div class="sf-html-body">${
+          window.App.UI.sanitizeHtml(raw)
+        }</div>`;
+      } else {
+        const txt = escHtml(raw).replace(/\n/g, "<br>");
+        bodyHtml = `<div class="sf-text-body">${txt
+          || '<span class="sf-empty">Sin contenido</span>'}</div>`;
+      }
     } else if (type === "separator") {
       bodyHtml = `<div class="sf-sep-line"></div>`;
     } else if (type === "pdf-ref") {

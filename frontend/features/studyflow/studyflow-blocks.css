@@ -53,6 +53,37 @@
   word-wrap: break-word;
   line-height: 1.5;
 }
+/* Issue #9 — sanitized HTML inside content blocks (v2 parity):
+   responsive media, full-width audio/video, safe embeds. */
+.sf-td-block-body .sf-html-body {
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.sf-td-block-body .sf-html-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body audio,
+.sf-td-block-body .sf-html-body video {
+  width: 100%;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body iframe {
+  width: 100%;
+  max-width: 100%;
+  border: 0;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+.sf-td-block-body .sf-html-body th,
+.sf-td-block-body .sf-html-body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
 .sf-td-block-body .sf-link-body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
