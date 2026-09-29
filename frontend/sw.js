@@ -1,17 +1,70 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
-const CACHE_NAME = 'studyflow-pwa-v1';
-const ASSET_CACHE = 'studyflow-assets-v1';
+const CACHE_NAME = 'studyflow-pwa-v2';
+// v20 (#8 fix): v2Restore modal had `onConfirm` vs `onDone` typo — the
+// "Migrar a v3" button threw on click. Fixed + added a deferred-data
+// warning. Bump so installed PWAs stop serving the broken modal.
+const ASSET_CACHE = 'studyflow-assets-v23';
 const API_CACHE = 'studyflow-api-v1';
 
-// Assets to cache on install (cache-first strategy)
+// Assets to cache on install (cache-first strategy).
+// v8 (S7b-A): added features/studyflow/pdf-import-stream.js.
 const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
   '/styles.css',
   '/app.js',
   '/shared/ui-common.js',
-  '/shared/load-partial.js'
+  '/shared/load-partial.js',
+  '/features/studyflow/content-blocks.js',
+  '/features/studyflow/content-blocks.css',
+  '/features/studyflow/courses.js',
+  '/features/studyflow/courses-api.js',
+  '/features/studyflow/courses-blocks.js',
+  '/features/studyflow/courses-notes.js',
+  '/features/studyflow/courses-dnd.js',
+  '/features/studyflow/courses-dashboard.js',
+  '/features/studyflow/openzen-settings.js',
+  '/features/studyflow/courses-sidebar.js',
+  '/features/studyflow/markdown-editor.js',
+  '/features/studyflow/courses.css',
+  '/features/studyflow/studyflow-blocks.css',
+  '/features/studyflow/courses-sidebar-blocks.css',
+  '/features/studyflow/studyflow-editor.css',
+  // S7: pdf viewer
+  '/features/studyflow/pdf-viewer.js',
+  '/features/studyflow/pdf-viewer-annots.js',
+  '/features/studyflow/pdf-viewer.css',
+  // S7b: unified PDF + SCORM import popover
+  '/features/studyflow/pdf-import.js',
+  // S7b-A: SSE pseudo-terminal for the SCORM import
+  '/features/studyflow/pdf-import-stream.js',
+  // S7b-B: floating study menu + SCORM credentials settings
+  '/features/studyflow/study-scheduler.js',
+  '/features/studyflow/study-scheduler.css',
+  '/features/studyflow/scorm-settings.js',
+  // 7.2: NotebookLM settings panel
+  '/features/studyflow/notebooklm-settings.js',
+  // 7.7: AI ✨ Generate — toolbar manifests/click/counters + generators
+  // + streaming task poll/modal + toolbar styles.
+  '/features/studyflow/ai-tasks.js',
+  '/features/studyflow/ai-notebooklm.js',
+  '/features/studyflow/ai-config-modal.js',
+  '/features/studyflow/ai-modals.js',
+  '/features/studyflow/ai.js',
+  '/features/studyflow/ai.css',
+  '/vendor/pdfjs/pdf.min.js',
+  '/vendor/pdfjs/pdf.worker.min.js',
+  // SA.2: addons foundation (registry + marketplace). The S4.7 sticky
+  // floating toolbar was removed in V3 — see git history.
+  '/features/addons/addons-core.js',
+  '/features/addons/addons-manager.js',
+  '/features/addons/addons.css',
+  // #7/#8: local Backup (ZIP export) + Restore (v3 and v2 migration).
+  // These were missing from the precache, so the toolbar buttons only worked
+  // while online — unacceptable for a headline feature of an offline PWA.
+  '/shared/backup-restore.js',
+  '/shared/v2-restore-modal.js',
 ];
 
 // Maximum age for cached API responses (5 minutes)
@@ -57,8 +110,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network-first strategy
+  // API calls: Network-first strategy.
+  //
+  // Two requests must reach the origin untouched (S7b-A):
+  //  - Accept: text/event-stream (SCORM import progress). The SW's
+  //    networkFirstApi awaits response.blob(), which buffers the whole
+  //    body and turns the stream into a single late chunk — the 524 story
+  //    all over again.
+  //  - non-GET. Cache writes are only meaningful for GETs anyway.
   if (url.pathname.startsWith('/api/')) {
+    const accept = (request.headers.get('accept') || '').toLowerCase();
+    if (request.method !== 'GET' || accept.includes('text/event-stream')) {
+      return;
+    }
     event.respondWith(networkFirstApi(request));
     return;
   }

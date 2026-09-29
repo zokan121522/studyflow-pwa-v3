@@ -152,6 +152,11 @@ class Course:
     description: Optional[str] = None
     color: Optional[str] = None
     progress: int = 0
+    # Issue #12: favorite flag + icon come from the v2 port; order_index
+    # drives the sidebar order set by drag&drop.
+    is_favorite: bool = False
+    icon: Optional[str] = None
+    order_index: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -163,6 +168,9 @@ class Course:
             'description': self.description,
             'color': self.color,
             'progress': self.progress,
+            'is_favorite': self.is_favorite,
+            'icon': self.icon,
+            'order_index': self.order_index,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -176,6 +184,11 @@ class Course:
             description=row.get('description'),
             color=row.get('color'),
             progress=row.get('progress', 0),
+            # row.get, not row[...]: the v3 restore path builds Course
+            # objects from v2 rows that predate these columns.
+            is_favorite=bool(row.get('is_favorite', False)),
+            icon=row.get('icon'),
+            order_index=row.get('order_index', 0) or 0,
             created_at=row.get('created_at'),
             updated_at=row.get('updated_at'),
         )
@@ -188,6 +201,7 @@ class Topic:
     user_id: int
     title: str
     description: Optional[str] = None
+    notes: Optional[str] = ''
     order_index: int = 0
     status: str = 'pending'
     estimated_minutes: Optional[int] = None
@@ -202,6 +216,7 @@ class Topic:
             'user_id': self.user_id,
             'title': self.title,
             'description': self.description,
+            'notes': self.notes or '',
             'order_index': self.order_index,
             'status': self.status,
             'estimated_minutes': self.estimated_minutes,
@@ -218,10 +233,63 @@ class Topic:
             user_id=row['user_id'],
             title=row['title'],
             description=row.get('description'),
+            notes=row.get('notes', '') or '',
             order_index=row.get('order_index', 0),
             status=row.get('status', 'pending'),
             estimated_minutes=row.get('estimated_minutes'),
             actual_minutes=row.get('actual_minutes', 0),
+            created_at=row.get('created_at'),
+            updated_at=row.get('updated_at'),
+        )
+
+
+@dataclass
+class Block:
+    """Content block (markdown | content | separator | pdf-ref | youtube | audio).
+
+    v2-compatible fields + v3-friendly url/color/collapsed. topic_id
+    is optional for course-level blocks.
+    """
+    id: int
+    user_id: int
+    course_id: int
+    topic_id: Optional[int] = None
+    type: str = 'markdown'
+    title: str = ''
+    content: str = ''
+    url: str = ''
+    done: bool = False
+    order_index: int = 0
+    color: str = ''
+    collapsed: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id, 'user_id': self.user_id,
+            'course_id': self.course_id, 'topic_id': self.topic_id,
+            'type': self.type, 'title': self.title,
+            'content': self.content, 'url': self.url,
+            'done': self.done, 'order_index': self.order_index,
+            'color': self.color, 'collapsed': self.collapsed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> 'Block':
+        return cls(
+            id=row['id'], user_id=row['user_id'], course_id=row['course_id'],
+            topic_id=row.get('topic_id'),
+            type=row.get('type', 'markdown'),
+            title=row.get('title') or '',
+            content=row.get('content') or '',
+            url=row.get('url') or '',
+            done=bool(row.get('done', False)),
+            order_index=row.get('order_index', 0) or 0,
+            color=row.get('color') or '',
+            collapsed=bool(row.get('collapsed', False)),
             created_at=row.get('created_at'),
             updated_at=row.get('updated_at'),
         )
@@ -276,6 +344,7 @@ class QuizQuestion:
     user_id: int
     course_id: int
     topic_id: Optional[int] = None
+    block_id: Optional[int] = None
     question: str = ''
     options: List[str] = None
     correct_answer: int = 0
@@ -293,6 +362,7 @@ class QuizQuestion:
             'user_id': self.user_id,
             'course_id': self.course_id,
             'topic_id': self.topic_id,
+            'block_id': self.block_id,
             'question': self.question,
             'options': self.options,
             'correct_answer': self.correct_answer,
@@ -311,6 +381,7 @@ class QuizQuestion:
             user_id=row['user_id'],
             course_id=row['course_id'],
             topic_id=row.get('topic_id'),
+            block_id=row.get('block_id'),
             question=row['question'],
             options=options,
             correct_answer=row['correct_answer'],
@@ -326,6 +397,7 @@ class QuizResult:
     user_id: int
     course_id: int
     topic_id: Optional[int] = None
+    block_id: Optional[int] = None
     question_id: int = 0
     selected_answer: Optional[int] = None
     is_correct: Optional[bool] = None
@@ -338,6 +410,7 @@ class QuizResult:
             'user_id': self.user_id,
             'course_id': self.course_id,
             'topic_id': self.topic_id,
+            'block_id': self.block_id,
             'question_id': self.question_id,
             'selected_answer': self.selected_answer,
             'is_correct': self.is_correct,
@@ -352,6 +425,7 @@ class QuizResult:
             user_id=row['user_id'],
             course_id=row['course_id'],
             topic_id=row.get('topic_id'),
+            block_id=row.get('block_id'),
             question_id=row['question_id'],
             selected_answer=row.get('selected_answer'),
             is_correct=row.get('is_correct'),
@@ -448,6 +522,7 @@ TABLES = {
     'habit_entries': 'habit_entries',
     'courses': 'courses',
     'topics': 'topics',
+    'blocks': 'blocks',
     'pdfs': 'pdfs',
     'quiz_questions': 'quiz_questions',
     'quiz_results': 'quiz_results',

@@ -5,3 +5,26 @@ python-dotenv==1.1.0
 flask-cors==4.0.0
 pyjwt==2.8.0
 bcrypt==4.1.2
+cryptography>=42.0.0
+requests>=2.31.0
+edge-tts>=6.1.9
+playwright>=1.44.0
+
+# ── Añadidas al dockerizar: estaban en requirements.txt sin declararse ──
+# icalendar: import DURO en routes/calendar.py (la ruta del ICS). Sin esto
+#   la app no arranca en un entorno limpio. El propio código decía
+#   "icalendar (already installed)": estaba instalado a mano en el host,
+#   nunca declarado, y por eso solo reventaba dentro del contenedor.
+icalendar==7.3.0
+
+# El paquete se llama notebooklm-py pero se importa como "notebooklm" — y
+# choca con el subpaquete interno backend/ai/notebooklm. Cuidado al tocar
+# esto: no es el mismo.
+notebooklm-py==0.7.2
+
+# Las tres siguientes las usa backend/scraping/ y scorm_import.py, que
+# server.py NO importa: no bloquean el arranque, pero sin ellas esas
+# funciones fallan en runtime dentro del contenedor.
+selenium==4.49.0        # requiere además un chromedriver en la imagen
+PyMuPDF==1.28.2         # importado como "fitz"
+Pillow==12.3.0          # importado como "PIL"

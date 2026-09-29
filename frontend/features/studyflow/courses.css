@@ -1,0 +1,405 @@
+/* ─── Studyflow Courses — sidebar tree + course/topic landing ─────
+   Dark-theme adapted to v3 tokens (variables.css).
+   Loaded after content-blocks.css. */
+
+/* ─── Left sidebar: course tree ──────────────────────────────── */
+#studyflow-left {
+  padding: 10px 8px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+#studyflow-left .col-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin: 6px 4px 10px;
+}
+
+.course-item {
+  padding: 8px 6px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--surface);
+  transition: background .12s, border-color .12s;
+}
+.course-item:hover { background: var(--surface-hover); }
+.course-item.active {
+  border-color: var(--primary);
+  background: var(--surface-hover);
+}
+.course-item.expanded { border-color: var(--border-light); }
+
+.ci-body { display: block; }
+.ci-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ci-title-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ci-block-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* Issue #12 — estrella inline en la fila de curso. Apagada pero visible
+   cuando no es favorita; dorada cuando lo es. Mismo toggle que el menu. */
+.ci-fav {
+  flex: 0 0 auto;
+  background: none; border: 0; padding: 0 2px;
+  font: inherit; font-size: 12px; line-height: 1;
+  cursor: pointer; color: var(--text-muted); opacity: .45;
+  transition: opacity .12s, transform .12s;
+}
+.ci-fav:hover { opacity: 1; transform: scale(1.15); }
+.ci-fav.on { opacity: 1; color: #f59e0b; }
+.course-arrow {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.ci-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0 18px;
+  line-height: 1.4;
+}
+
+/* ─── Topic menu (3-dots per item) ───────────────────────────── */
+.topic-menu-wrap { position: relative; display: inline-block; }
+.topic-menu-toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+.topic-menu-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+.topic-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 1000;
+  min-width: 170px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  font-size: 12px;
+}
+.topic-menu.open { display: block; }
+.topic-menu-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+.topic-menu-item:hover { background: var(--surface-hover); }
+.topic-menu-item.danger { color: var(--red); }
+.topic-menu-item.danger:hover { background: rgba(239,68,68,.1); }
+/* Favorite toggle in the ⋮ menu (Issue #12) — dimmed when off, amber
+   when on, so the current state is readable without opening the menu. */
+.topic-menu-item.fav-on { color: #f59e0b; }
+.topic-menu-item.fav-on:hover { background: rgba(245,158,11,.12); }
+.topic-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ─── Course children (expanded topics) ──────────────────────── */
+.course-children {
+  margin: 6px 0 4px 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topic-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.topic-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.topic-item.active {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--text);
+}
+.topic-arrow {
+  display: inline-block;
+  width: 10px;
+  color: var(--text-muted);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.topic-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.add-topic-btn {
+  padding: 6px 8px;
+  margin: 4px 0 0;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+}
+.add-topic-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.empty-blocks {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+  font-style: italic;
+}
+
+/* ─── "+ Nuevo curso" header button ───────────────────────────── */
+.cs-new-row {
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.cs-new-btn {
+  width: 100%;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px dashed var(--border-light);
+}
+.cs-new-btn:hover {
+  border-style: solid;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ─── Center: course landing ─────────────────────────────────── */
+#studyflow-center {
+  padding: 16px 20px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.sf-course-landing {
+  max-width: 920px;
+  margin: 0 auto;
+}
+.sf-cl-header {
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.sf-cl-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--text);
+}
+.sf-cl-desc { font-size: 13px; color: var(--text-secondary); }
+.sf-cl-empty { color: var(--text-muted); font-style: italic; font-size: 12px; }
+
+.sf-cl-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin: 14px 4px 10px;
+}
+.sf-cl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.sf-cl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.sf-cl-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.sf-cl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sf-cl-card-icon { font-size: 18px; }
+.sf-cl-card-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-cl-card-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ─── Center: topic detail ───────────────────────────────────── */
+/* V3-BW: blocks now span the full body width (no 800px cap). */
+.sf-topic-detail {
+  width: 100%;
+  margin: 0;
+}
+.sf-td-back {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  margin-bottom: 6px;
+  padding: 4px 0;
+}
+.sf-td-back:hover { text-decoration: underline; }
+.sf-td-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: var(--text);
+}
+.sf-td-desc {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sf-td-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sf-td-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.sf-td-block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+/* ─── Empty-state (Studyflow variant) ────────────────────────── */
+#studyflow-center .empty-state {
+  padding: 32px 12px;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+#studyflow-center .empty-state .big {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ─── Dashboard favourites row (Issue #12) ───────────────────────
+   Port of the v2 #dashboard-favorites strip (fase 72 F2): starred
+   assignments reachable from the home without opening Studyflow. */
+.dashboard-favorites { margin: 0 0 18px; }
+.dashboard-favorites.hidden { display: none; }
+.dfv-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 8px 2px;
+}
+.dfv-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.dfv-count {
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(245,158,11,.14); color: #f59e0b;
+  border-radius: 10px; padding: 1px 8px;
+}
+/* Rejilla, no tira: una sola fila de flex con hijos de ancho fijo nunca
+   envuelve, por eso habia scroll lateral. repeat(5,...) reparte las
+   favoritas en 5 columnas y deja el resto en la fila siguiente. */
+.dfv-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 4px;
+}
+@media (max-width: 900px) {
+  .dfv-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .dfv-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.dfv-card {
+  width: auto; min-width: 0; /* el ancho lo decide la celda de la rejilla */
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; text-align: left; cursor: pointer;
+  background: var(--surface, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border-radius: 10px; color: inherit; font: inherit;
+  transition: border-color .12s, transform .12s;
+}
+.dfv-card:hover {
+  border-color: rgba(245,158,11,.55);
+  transform: translateY(-1px);
+}
+.dfv-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.dfv-icon { font-size: 18px; line-height: 1; }
+.dfv-name {
+  font-size: 12px; font-weight: 600; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dfv-meta { font-size: 10px; color: var(--text-dim); }
+.dfv-more { justify-content: center; align-items: center; opacity: .8; }

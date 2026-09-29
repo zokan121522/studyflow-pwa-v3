@@ -1,13 +1,17 @@
 /* ============================== SHARED UI UTILITIES ============================== */
 
 // ─── HTML Escaping ──────────────────────────────────────────────────
+// Escapes the 5 characters that can break out of an HTML attribute or
+// text context. Must use entity NAMES (&amp; / &lt; / &gt; / &quot; /
+// &#39;), NOT the raw characters — otherwise user input with `<script>`
+// would be inserted verbatim into the DOM.
 function escHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
 

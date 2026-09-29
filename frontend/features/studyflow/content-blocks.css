@@ -1,0 +1,217 @@
+/* ─── Studyflow content-blocks — markdown preview + callouts + toolbar ──
+   Dark-theme adapted to v3 tokens (variables.css).
+   Loaded after features/studyflow/content-blocks.js. */
+
+.md-view,
+.so-notes-rendered,
+.sf-td-block-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ─── Headings ───────────────────────────────────────────── */
+.md-view h1,
+.sf-td-block-content h1 {
+  font-size: 22px; font-weight: 700; margin: 20px 0 10px;
+  color: var(--text); border-bottom: 2px solid var(--primary);
+  padding-bottom: 4px;
+}
+.md-view h2,
+.sf-td-block-content h2 {
+  font-size: 18px; font-weight: 700; margin: 18px 0 8px;
+  color: var(--text); border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+}
+.md-view h3,
+.sf-td-block-content h3 {
+  font-size: 16px; font-weight: 600; margin: 16px 0 6px;
+  color: var(--text);
+}
+.md-view h4, .sf-td-block-content h4 {
+  font-size: 14px; font-weight: 600; margin: 14px 0 5px;
+  color: var(--text);
+}
+.md-view h5, .sf-td-block-content h5 {
+  font-size: 13px; font-weight: 600; margin: 12px 0 4px;
+  color: var(--text-secondary);
+}
+.md-view h6, .sf-td-block-content h6 {
+  font-size: 12px; font-weight: 600; margin: 10px 0 4px;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: .3px;
+}
+
+/* ─── Paragraphs ─────────────────────────────────────────── */
+.md-view p, .sf-td-block-content p { margin: 0 0 10px; }
+.md-view strong, .sf-td-block-content strong { font-weight: 700; color: var(--text); }
+.md-view em, .sf-td-block-content em { font-style: italic; }
+.md-view del, .md-view s { text-decoration: line-through; color: var(--text-muted); }
+
+/* ─── Code (inline + fenced) ─────────────────────────────── */
+.md-view code, .sf-td-block-content code {
+  background: var(--surface-hover);
+  color: #fca5a5;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.md-view pre, .sf-td-block-content pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid var(--border);
+}
+.md-view pre code, .sf-td-block-content pre code {
+  background: none; color: inherit; padding: 0; border-radius: 0; font-size: inherit;
+}
+
+/* ─── Lists ──────────────────────────────────────────────── */
+.md-view ul, .md-view ol,
+.sf-td-block-content ul, .sf-td-block-content ol {
+  margin: 6px 0 10px; padding-left: 22px;
+}
+.md-view li, .sf-td-block-content li { margin-bottom: 3px; }
+.md-view li > ul, .md-view li > ol,
+.sf-td-block-content li > ul, .sf-td-block-content li > ol { margin: 2px 0; }
+
+/* ─── Blockquotes ────────────────────────────────────────── */
+.md-view blockquote, .sf-td-block-content blockquote {
+  margin: 10px 0; padding: 8px 14px;
+  border-left: 4px solid var(--primary);
+  background: var(--surface);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+}
+.md-view blockquote p:last-child { margin-bottom: 0; }
+
+/* ─── Horizontal rule ────────────────────────────────────── */
+.md-view hr, .sf-td-block-content hr {
+  border: none; border-top: 2px dashed var(--border); margin: 18px 0;
+}
+
+/* ─── Links ─────────────────────────────────────────────── */
+.md-view a, .sf-td-block-content a {
+  color: var(--primary); text-decoration: underline; text-underline-offset: 2px;
+}
+.md-view a:hover, .sf-td-block-content a:hover { opacity: .8; }
+
+/* ─── Images ────────────────────────────────────────────── */
+.md-view img, .sf-td-block-content img {
+  max-width: 100%; height: auto; border-radius: 4px;
+  margin: 8px 0; display: block;
+}
+
+/* ─── Tables ─────────────────────────────────────────────── */
+.md-view table, .sf-td-block-content table,
+.md-preview table, .ct-preview table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  margin: 10px 0; display: block; overflow-x: auto;
+}
+.md-view th, .md-view td,
+.sf-td-block-content th, .sf-td-block-content td,
+.md-preview th, .md-preview td, .ct-preview th, .ct-preview td {
+  padding: 7px 10px; border: 1px solid var(--border);
+}
+.md-view th, .sf-td-block-content th,
+.md-preview th, .ct-preview th {
+  background: var(--surface); font-weight: 600; text-align: left;
+}
+.md-view tr:nth-child(even),
+.sf-td-block-content tr:nth-child(even),
+.md-preview tr:nth-child(even), .ct-preview tr:nth-child(even) {
+  background: var(--bg);
+}
+
+/* ─── Obsidian-style Callouts ────────────────────────────── */
+.md-view .callout, .sf-td-block-content .callout {
+  margin: 12px 0; padding: 0; border-radius: 6px;
+  border-left: 4px solid; background: var(--surface); overflow: hidden;
+}
+.md-view .callout .callout-title,
+.sf-td-block-content .callout .callout-title {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; font-weight: 600; font-size: 13px;
+  color: var(--text); border-bottom: 1px solid var(--border);
+}
+.md-view .callout .callout-body,
+.sf-td-block-content .callout .callout-body {
+  padding: 8px 12px 10px; font-size: 13px;
+  line-height: 1.6; color: var(--text-secondary);
+}
+.md-view .callout .callout-body p:last-child { margin-bottom: 0; }
+
+.callout-note     { border-left-color: var(--primary); }
+.callout-note .callout-title { background: rgba(79,140,255,.12); }
+.callout-abstract, .callout-summary { border-left-color: #8b5cf6; }
+.callout-abstract .callout-title, .callout-summary .callout-title { background: rgba(139,92,246,.12); }
+.callout-info     { border-left-color: #06b6d4; }
+.callout-info .callout-title { background: rgba(6,182,212,.12); }
+.callout-tip, .callout-hint { border-left-color: var(--green); }
+.callout-tip .callout-title, .callout-hint .callout-title { background: rgba(34,197,94,.12); }
+.callout-success, .callout-done { border-left-color: var(--green); }
+.callout-success .callout-title, .callout-done .callout-title { background: rgba(34,197,94,.12); }
+.callout-warning, .callout-caution { border-left-color: var(--amber); }
+.callout-warning .callout-title, .callout-caution .callout-title { background: rgba(245,158,11,.12); }
+.callout-danger   { border-left-color: var(--red); }
+.callout-danger .callout-title { background: rgba(239,68,68,.12); }
+.callout-question { border-left-color: #a855f7; }
+.callout-question .callout-title { background: rgba(168,85,247,.12); }
+.callout-example  { border-left-color: #8b5cf6; }
+.callout-example .callout-title { background: rgba(139,92,246,.12); }
+.callout-quote, .callout-cite { border-left-color: #6a7a9a; }
+.callout-quote .callout-title, .callout-cite .callout-title { background: rgba(106,122,154,.12); }
+
+/* ─── YouTube cards (click-to-load) ──────────────────────── */
+.yt-card {
+  display: flex; align-items: center; gap: 12px;
+  margin: 12px 0; padding: 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: inherit;
+  cursor: pointer; box-shadow: var(--shadow);
+}
+.yt-card:hover { border-color: var(--primary); }
+.yt-thumb {
+  flex: 0 0 auto; width: 132px; height: 74px;
+  border-radius: 6px; position: relative;
+  background: #111; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.7);
+}
+.yt-card-body { flex: 1; min-width: 0; }
+.yt-card-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; font-weight: 600; font-size: 14px; line-height: 1.35;
+  color: var(--text);
+}
+.yt-card-meta {
+  display: block; margin-top: 6px; font-size: 12px;
+  color: var(--text-muted); line-height: 1.4;
+}
+.yt-ext { color: var(--primary); text-decoration: none; font-weight: 600; }
+.yt-ext:hover { text-decoration: underline; }
+
+/* ─── Markdown toolbar (session overlay) ─────────────────── */
+.md-toolbar {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 6px; margin-bottom: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0; border-bottom: none;
+}
+.md-tb-btn {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+  min-width: 28px; font-family: var(--font);
+}
+.md-tb-btn:hover { background: var(--surface-hover); border-color: var(--primary); }
+.md-tb-sep {
+  width: 1px; background: var(--border); margin: 2px 4px;
+}
+textarea + .md-toolbar { border-top: 1px solid var(--border); border-radius: 6px 6px 0 0; }
+
+/* (re-applied for sessions textarea) */
+#so-notes { border-top-left-radius: 0; border-top-right-radius: 0; }

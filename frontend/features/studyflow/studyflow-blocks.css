@@ -1,0 +1,575 @@
+/* ─── Studyflow Blocks — block CRUD UI styles (S3) ──────────────
+   Split from courses.css to keep both files <500 LOC. Loaded after
+   courses.css. Dark-theme adapted to v3 tokens (variables.css). */
+
+/* ─── Topic detail — block CRUD (S3) ─────────────────────────── */
+.sf-td-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Each block card */
+.sf-td-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: border-color .12s;
+}
+.sf-td-block:hover { border-color: var(--border-light); }
+.sf-td-block.is-editing { border-color: var(--primary); }
+
+.sf-td-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sf-td-block-icon { font-size: 16px; flex-shrink: 0; }
+.sf-td-block-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* S4.7 — actions row is hidden when the block is nested inside a
+   .sf-block-card because the card head (sf-bc-head) already owns
+   the ✏️ / 🗑️ actions. This keeps ONE tidy button row per block. */
+.sf-td-block-head-inner .sf-td-block-actions { display: none; }
+
+.sf-td-block-body {
+  font-size: 13px;
+  color: var(--text);
+}
+.sf-td-block-body .sf-text-body {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+}
+/* Issue #9 — sanitized HTML inside content blocks (v2 parity):
+   responsive media, full-width audio/video, safe embeds. */
+.sf-td-block-body .sf-html-body {
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.sf-td-block-body .sf-html-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body audio,
+.sf-td-block-body .sf-html-body video {
+  width: 100%;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body iframe {
+  width: 100%;
+  max-width: 100%;
+  border: 0;
+  border-radius: 8px;
+}
+.sf-td-block-body .sf-html-body table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+.sf-td-block-body .sf-html-body th,
+.sf-td-block-body .sf-html-body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+/* Issue #11 — interactive blocks embed a full web page in a sandboxed
+   iframe (.sf-it-bin is the placeholder container; the iframe itself
+   is created by App.ContentBlocks.renderInteractive with inline
+   styles). Ensure the block card doesn't constrain the iframe. */
+.sf-td-block-body .sf-it-bin iframe {
+  max-width: 100%;
+}
+.sf-td-block-body .sf-link-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.sf-td-block-body .sf-link-body a {
+  color: var(--primary);
+}
+.sf-td-block-body .sf-sep-line {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
+.sf-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* Issue #10 — quiz por bloque (exercise). Embedded test cards. */
+.sf-quiz-bin { margin-top: 8px; }
+.sf-quiz-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.sf-q-stem { margin-bottom: 8px; }
+.sf-q-list { display: flex; flex-direction: column; gap: 12px; }
+.sf-q-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface);
+}
+.sf-q-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sf-q-index {
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+  border-radius: 50%;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.sf-q-text { flex: 1; }
+.sf-q-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.sf-btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+.sf-btn-ghost:hover { background: var(--border); }
+.sf-q-opts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.sf-q-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-light, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sf-q-opt:hover { background: color-mix(in srgb, var(--surface) 70%, var(--primary) 10%); }
+.sf-q-opt input { accent-color: var(--primary); }
+.sf-q-submit {
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.sf-q-submit:hover { filter: brightness(1.1); }
+.sf-q-feedback { margin-top: 8px; }
+.sf-q-fb {
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+}
+.sf-q-fb.ok { background: color-mix(in srgb, #22c55e 15%, transparent); color: #15803d; }
+.sf-q-fb.bad { background: color-mix(in srgb, #ef4444 15%, transparent); color: #b91c1c; }
+.sf-q-explain { margin-top: 4px; font-size: 12px; }
+.sf-q-correct { margin-top: 4px; font-size: 12px; font-weight: 600; }
+.sf-q-error { color: #b91c1c; font-size: 12px; margin-top: 4px; }
+.sf-q-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.sf-q-add {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+  border: 1px dashed var(--primary);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.sf-q-add:hover { background: color-mix(in srgb, var(--primary) 30%, transparent); }
+
+/* Edit form */
+.sf-td-edit-form {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.sf-td-edit-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sf-td-title-input,
+.sf-td-editor,
+.sf-td-url {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.sf-td-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  min-height: 120px;
+  resize: vertical;
+}
+.sf-td-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─── S4.7 — tidy mini button (port of v2 ht-btn-mini pattern) ─────
+   Replaces the old "raw browser button" look that v3 had by default
+   (4px radius, no padding control, no hover surface). Now 28×28,
+   transparent bg, surface-hover on hover, subtle border-radius,
+   emoji glyph sized at 14px so it doesn't crowd the card head. */
+.ht-btn-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.ht-btn-mini:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+.ht-btn-mini:active { background: var(--border); }
+.ht-btn-mini:disabled { opacity: .5; cursor: default; }
+.ht-btn {
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ht-btn:hover { filter: brightness(1.1); }
+.ht-btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* "+ Añadir bloque" bar */
+.sf-td-add-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+.sf-td-add-toggle {
+  align-self: flex-start;
+}
+.sf-td-add-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+}
+.sf-td-add-menu.open { display: block; }
+.sf-td-add-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+.sf-td-add-item:hover { background: var(--surface-hover); }
+.sf-td-add-icon { font-size: 14px; }
+
+/* ─── S4: SF-Card block visuals + reorder ─────────────────────── */
+.sf-block-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 6px 1fr;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .12s, box-shadow .12s;
+}
+.sf-block-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow);
+}
+.sf-block-card.is-collapsed .sf-bc-body { display: none; }
+
+.sf-bc-strip {
+  background: var(--primary);
+  /* Fallback colour is set inline per type via the inline style attribute
+     so CSS variables / dark-theme tokens stay consistent. */
+}
+
+.sf-bc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sf-bc-collapse {
+  width: 22px;
+  padding: 0;
+  text-align: center;
+  font-size: 10px;
+  opacity: 0.6;
+}
+.sf-bc-collapse:hover { opacity: 1; }
+.sf-bc-icon { font-size: 14px; flex-shrink: 0; }
+.sf-bc-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-bc-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sf-bc-body {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+/* Inside the SF-Card we wrap the S3 .sf-td-block — strip its redundant
+   padding/border so it nests cleanly. */
+.sf-bc-body > .sf-td-block {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.sf-bc-body > .sf-td-block .sf-td-block-head { margin-bottom: 4px; }
+
+/* ─── S4: per-topic notes drawer ───────────────────────────────── */
+.sf-notes-panel {
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sf-notes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sf-notes-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.sf-notes-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.sf-notes-preview {
+  padding: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.sf-notes-preview.sf-empty { color: var(--text-muted); font-style: italic; }
+
+.sf-notes-textarea {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 120px;
+  resize: vertical;
+}
+.sf-notes-panel.is-editing .sf-notes-textarea { display: block; }
+.sf-notes-panel.is-editing .sf-notes-preview { display: none; }
+
+.sf-notes-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+/* Fix: head+body viven en la columna 1fr (grid de 2 col, 3 hijos) */
+.sf-bc-head, .sf-bc-body { grid-column: 2; min-width: 0; }
+
+/* ─── Focus-mode hides every inner card-head toolbar (matches v2
+   courses.css:460-462). The escape exit button stays. (The S4.7
+   sticky floating toolbar was removed in V3 — see git history.) */
+.sf-focus-mode .sf-block-card .sf-bc-actions {
+  display: none !important;
+}
+
+/* ─── S7b: unified PDF + SCORM import popover ──────────────────
+   Fixed-position popover opened by the 📥 Importar button injected
+   into the pdf-ref edit form (App.PdfImport.open). Dark theme to
+   match studyflow-blocks; uses CSS variables defined elsewhere. */
+.sf-pdf-import-popover {
+  width: 360px;
+  max-width: 95vw;
+  background: var(--bg, #1a1f2e);
+  color: var(--text, #e5e7eb);
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 10px 12px 12px;
+  font-size: 12px;
+  font-family: var(--font, system-ui, sans-serif);
+}
+.sf-pdf-import-popover .sf-pdfi-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border, #2d3748);
+  padding-bottom: 6px;
+}
+.sf-pdf-import-popover .sf-pdfi-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted, #9ca3af);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sf-pdf-import-popover .sf-pdfi-tab.is-active {
+  background: var(--surface, #232938);
+  border-color: var(--border, #2d3748);
+  color: var(--text, #e5e7eb);
+}
+.sf-pdf-import-popover .sf-pdfi-tab:hover {
+  color: var(--text, #e5e7eb);
+}
+.sf-pdf-import-popover .sf-pdfi-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sf-pdf-import-popover .sf-pdfi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sf-pdf-import-popover .sf-pdfi-label {
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  min-width: 80px;
+}
+.sf-pdf-import-popover input[type="text"],
+.sf-pdf-import-popover input[type="file"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 4px;
+  background: var(--surface, #232938);
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.sf-pdf-import-popover input[type="text"]:focus,
+.sf-pdf-import-popover input[type="file"]:focus {
+  border-color: var(--primary, #4f46e5);
+}
+.sf-pdf-import-popover .sf-pdfi-status {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  min-height: 14px;
+}
+.sf-pdf-import-popover .sf-pdfi-hint {
+  font-size: 10px;
+  color: var(--text-muted, #9ca3af);
+  background: var(--surface, #232938);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px dashed var(--border, #2d3748);
+}
+.sf-pdf-import-popover .sf-pdfi-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sf-pdf-import-popover .sf-pdfi-close:hover {
+  background: var(--surface, #232938);
+  color: var(--text, #e5e7eb);
+}

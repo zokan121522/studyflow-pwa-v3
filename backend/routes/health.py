@@ -2,7 +2,7 @@
 """Health check route for StudyFlow PWA v3."""
 
 from flask import Blueprint, jsonify
-from backend.database import get_db
+from database import get_db
 
 
 bp = Blueprint('health', __name__)

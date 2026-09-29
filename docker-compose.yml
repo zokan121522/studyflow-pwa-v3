@@ -1,34 +1,110 @@
-version: '3.8'
+# studyflow-pwa-v3 — stack completa en Docker.
+#
+# Decisiones (ver doc de arquitectura):
+#   · La BD NO se publica al host: el Postgres nativo de brew ocupa el 5432
+#     y publicarlo provocaría el choque que ya tuvimos. Sólo se accede
+#     desde la red interna de compose, vía el alias `db`.
+#   · Todo artefacto generado por la app vive en un volumen nombrado, nunca
+#     en /tmp del contenedor (que se pierde en cada `docker compose down`).
+#   · Los secretos vienen de .env (ignorado por git), nunca en este fichero.
+#
+#   docker compose up -d --build
+#   docker compose exec db psql -U sf -d studyflow     # entrar a la BD
+
+name: studyflow-pwa-v3
 
 services:
-  api:
-    build: ./backend
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/studyflow
-      - SECRET_KEY=dev-secret-change-in-production
-      - JWT_SECRET_KEY=jwt-secret-change-in-production
-      - JWT_ACCESS_TOKEN_EXPIRES=3600
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
-      - PDF_UPLOAD_FOLDER=/app/uploads/pdfs
-    depends_on:
-      - db
-    volumes:
-      - ./backend:/app
-      - pdf_uploads:/app/uploads/pdfs
-
   db:
-    image: postgres:16
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: studyflow
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-studyflow}
+      POSTGRES_USER: ${POSTGRES_USER:-sf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Sin este healthcheck el app arranca antes de que Postgres acepte
+      # conexiones y se muere con "the database system is starting up".
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sf} -d ${POSTGRES_DB:-studyflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      # 8081 a propósito: 8082 lo ocupa el servidor nativo que aún.convive
+      # durante la transición. Al hacer el corte final se cambia aquí.
+      - "${APP_PORT:-8081}:8080"
+    environment:
+      # ── base de datos ──
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sf}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-studyflow}
+
+      # ── secretos (cifran las credenciales SCORM y OpenZen) ──
+      SECRET_KEY: ${SECRET_KEY:?falta SECRET_KEY en .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?falta JWT_SECRET_KEY en .env}
+      JWT_ACCESS_TOKEN_EXPIRES: ${JWT_ACCESS_TOKEN_EXPIRES:-3600}
+
+      # ── CORS: el propio contenedor + los puertos de desarrollo ──
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+
+      # ── almacenamiento: TODO dentro de volúmenes, nada en /tmp ──
+      PDF_UPLOAD_FOLDER: /srv/backend/uploads/pdfs
+      AUDIO_UPLOAD_FOLDER: /srv/backend/uploads/audio
+      INFOGRAPHIC_UPLOAD_FOLDER: /srv/backend/uploads/infographics
+      NOTEBOOKLM_DIR: /srv/backend/uploads/notebooklm
+      SCRAPED_DIR: /srv/backend/uploads/scraped_pdfs
+      INFOGRAPHIC_MAX_CHARS: ${INFOGRAPHIC_MAX_CHARS:-12000}
+
+      # ── PWA ──
+      # static_serve.py deduce "<backend>/../frontend"; con el repo montado
+      # en /srv eso ya cae en /srv/frontend. Se declara explícita para no
+      # depender de la deducción.
+      FRONTEND_DIR: /srv/frontend
+
+      # ── scraping de webs ──
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-false}
+      SCRAPING_USERNAME: ${SCRAPING_USERNAME:-}
+      SCRAPING_PASSWORD: ${SCRAPING_PASSWORD:-}
+
+      # ── IA ──
+      AI_PROVIDER: ${AI_PROVIDER:-opencode-acp}
+      AI_PERSONALITY: ${AI_PERSONALITY:-}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-1}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-52428800}
+    volumes:
+      # Se monta el REPO COMPLETO, no piezas sueltas. Motivo: el código
+      # mezcla dos estilos de import — "from database import ..." y
+      # "from backend.routes.auth import ..." (agenda.py, habits.py,
+      # agenda_categories.py). scripts/dev-server.sh lo resuelve con
+      # PYTHONPATH="$REPO_ROOT/backend:$REPO_ROOT"; el contenedor replica
+      # esa misma disposición en /srv para que ambos estilos funcionen.
+      - .:/srv
+      # Artefactos. Montados DENTRO del bind-mount: gana el más específico.
+      - pdf_uploads:/srv/backend/uploads/pdfs
+      - audio_uploads:/srv/backend/uploads/audio
+      - infographics:/srv/backend/uploads/infographics
+      - notebooklm:/srv/backend/uploads/notebooklm
+      - scraped_pdfs:/srv/backend/uploads/scraped_pdfs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health',timeout=5).status==200 else 1)\""]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
 
 volumes:
   pgdata:
   pdf_uploads:
+  audio_uploads:
+  infographics:
+  notebooklm:
+  scraped_pdfs:

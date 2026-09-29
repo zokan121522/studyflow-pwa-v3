@@ -6,10 +6,11 @@ import jwt
 import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
+from typing import Optional          # usado en la anotación de get_current_user (L72)
 from flask import Blueprint, request, jsonify, current_app
 
-from backend.database import execute, fetchone, fetchall
-from backend.models import User
+from database import execute, fetchone, fetchall
+from models import User
 
 
 bp = Blueprint('auth', __name__)
@@ -216,7 +217,3 @@ def change_password(current_user_id: int):
     execute('UPDATE users SET password_hash = %s, updated_at = NOW() WHERE id = %s', (new_hash, current_user_id))
 
     return jsonify({'message': 'Password changed successfully'})
-
-
-# Need to import Optional for type hints
-from typing import Optional

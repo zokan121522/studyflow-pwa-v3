@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "alvaro-openrouter",
+  "agent": {
+    "alvaro-openrouter": {
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "mode": "primary",
+      "description": "Álvaro principal — Nemotron 3 Ultra (gratis) para orquestar, razonar y decidir. Delega código al sub-agente Qwen Coder."
+    },
+    "qwen-coder": {
+      "model": "openrouter/qwen/qwen3.8-27b:free",
+      "mode": "subagent",
+      "description": "Qwen 3.8 27B (gratis) — implementa código delegado por Álvaro. Abre ventana Bigia para mostrar progreso."
+    }
+  },
+  "provider": {
+    "openrouter": {
+      "options": {
+        "apiKey": "{env:OPENROUTER_API_KEY}"
+      }
+    }
+  },
+  "skills": {
+    "paths": [".opencode/skills", "~/.config/opencode/skills"]
+  }
+}

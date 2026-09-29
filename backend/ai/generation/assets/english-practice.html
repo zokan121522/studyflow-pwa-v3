@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Practice — Simple Past Tense</title>
+<link rel="icon" href="data:,">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1f2937;line-height:1.6;min-height:100vh;padding:16px;}
+.practice-app{max-width:860px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;animation:slideUp .4s ease-out;}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.header{background:linear-gradient(135deg,#b91c1c 0%,#f87171 100%);color:#fff;padding:22px 28px 18px;}
+.header h1{font-size:1.6rem;font-weight:700;margin-bottom:4px;}
+.header .sub{color:rgba(255,255,255,.85);font-size:.9rem;line-height:1.5;}
+.header .concepts-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.concept-tag{background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:20px;font-size:.8rem;font-weight:600;}
+.progress-wrap{background:#e5e7eb;height:6px;}
+.progress-bar{height:100%;background:linear-gradient(90deg,#b91c1c,#f87171);width:0%;transition:width .4s ease;}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 24px;border-bottom:1px solid #f3f4f6;background:#fafbfc;}
+.btn{border:none;padding:9px 16px;border-radius:10px;font-size:.88rem;cursor:pointer;font-weight:600;transition:all .15s ease;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-primary{background:#b91c1c;color:#fff;}
+.btn-primary:hover{background:#991b1b;}
+.btn-success{background:#059669;color:#fff;}
+.btn-success:hover{background:#047857;}
+.btn-secondary{background:#e5e7eb;color:#374151;}
+.btn-secondary:hover{background:#d1d5db;}
+.round-info{font-size:.8rem;color:#6b7280;background:#f3f4f6;padding:5px 11px;border-radius:8px;margin-left:auto;white-space:nowrap;}
+/* ── selector tamaño ronda (N por apartado) ── */
+.size-selector{display:flex;align-items:center;gap:6px;}
+.size-selector .lbl{font-size:.78rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+.size-pill{display:inline-flex;border:1.5px solid #d1d5db;border-radius:10px;overflow:hidden;background:#fff;}
+.size-pill button{border:none;background:#fff;color:#374151;padding:7px 13px;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.size-pill button:hover{background:#f3f4f6;}
+.size-pill button.on{background:#b91c1c;color:#fff;}
+/* ── selector voz ── */
+.voice-selector{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.voice-selector .lbl{font-size:.78rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+.voice-pill{display:inline-flex;border:1.5px solid #d1d5db;border-radius:10px;overflow:hidden;background:#fff;}
+.voice-pill button{border:none;background:#fff;color:#374151;padding:7px 12px;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px;}
+.voice-pill button:hover{background:#f3f4f6;}
+.voice-pill button.on{background:#7c3aed;color:#fff;}
+.stats-pill{display:flex;align-items:center;gap:12px;font-size:.85rem;color:#6b7280;}
+.stats-pill .stat{display:flex;align-items:center;gap:4px;}
+.stats-pill .stat .num{font-weight:700;color:#111827;}
+.streak{display:flex;align-items:center;gap:6px;font-size:.85rem;color:#d97706;font-weight:600;padding:4px 10px;background:#fffbeb;border-radius:20px;border:1px solid #fde68a;}
+.streak .fire{font-size:1.1rem;}
+.timer{font-family:'SF Mono',Monaco,monospace;font-size:.95rem;color:#6b7280;background:#f3f4f6;padding:6px 12px;border-radius:8px;font-weight:600;min-width:60px;text-align:center;}
+.timer.running{color:#b91c1c;background:#fef2f2;}
+/* ── barra de feedback sticky ── */
+.score-strip{display:none;align-items:center;gap:12px;padding:10px 24px;background:#111827;color:#fff;position:sticky;top:0;z-index:50;border-bottom:1px solid #374151;}
+.score-strip.show{display:flex;}
+.score-strip .big{font-size:1.05rem;font-weight:800;}
+.score-strip .bar{flex:1;height:8px;background:#374151;border-radius:6px;overflow:hidden;}
+.score-strip .bar i{display:block;height:100%;background:linear-gradient(90deg,#059669,#34d399);border-radius:6px;transition:width .4s ease;}
+.score-strip .msg{font-size:.85rem;color:#9ca3af;font-weight:600;}
+.score-strip .msg.perfect{color:#34d399;}
+.score-strip .msg.great{color:#fbbf24;}
+.score-strip .msg.fail{color:#f87171;}
+/* ── pestañas por apartado ── */
+.tabbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 24px;background:#fff;border-bottom:1px solid #f3f4f6;position:sticky;top:0;z-index:40;}
+body.graded .tabbar{top:44px;}
+.tab{border:1.5px solid #e5e7eb;background:#fff;color:#374151;padding:6px 12px;border-radius:20px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;gap:5px;align-items:center;white-space:nowrap;}
+.tab:hover{border-color:#b91c1c;color:#991b1b;}
+.tab.on{background:#b91c1c;border-color:#b91c1c;color:#fff;}
+.tab .cnt{background:#f3f4f6;color:#6b7280;border-radius:10px;padding:1px 6px;font-size:.7rem;font-weight:700;}
+.tab.on .cnt{background:rgba(255,255,255,.25);color:#fff;}
+/* ── contenido ── */
+.content{padding:20px 24px;}
+.practice-section{display:none;margin-bottom:20px;padding:18px;border:1px solid #e5e7eb;border-radius:12px;background:#fafbfc;}
+.practice-section.show{display:block;}
+.practice-section h3{margin:0 0 14px;font-size:1rem;color:#374151;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.badge{display:inline-flex;align-items:center;justify-content:center;background:#fee2e2;color:#991b1b;border-radius:8px;padding:3px 10px;font-size:.74rem;font-weight:700;text-transform:uppercase;}
+.q{margin:12px 0;padding:14px 16px;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;transition:all .25s ease;position:relative;}
+.q:hover{border-color:#d1d5db;}
+.q.correct{border-color:#059669;background:#ecfdf5;}
+.q.incorrect{border-color:#dc2626;background:#fef2f2;}
+.q.answered{border-left:4px solid #b91c1c;}
+.q.correct.answered{border-left-color:#059669;}
+.q.incorrect.answered{border-left-color:#dc2626;}
+.q-text{font-weight:500;margin-bottom:10px;font-size:1rem;line-height:1.5;position:relative;padding-right:52px;}
+.q-number{position:absolute;top:0;right:0;font-size:.74rem;color:#9ca3af;font-weight:700;background:#f3f4f6;padding:2px 9px;border-radius:0 6px 0 10px;}
+.q.correct .q-number{background:#d1fae5;color:#059669;}
+.q.incorrect .q-number{background:#fee2e2;color:#dc2626;}
+.blank{display:inline-block;min-width:80px;border-bottom:2.5px dashed #94a3b8;text-align:center;font-weight:700;color:#6b7280;transition:all .2s ease;padding:0 4px;}
+.blank.filled{color:#b91c1c;border-bottom-color:#b91c1c;border-bottom-style:solid;}
+.blank.correct{color:#059669;border-bottom-color:#059669;}
+.blank.incorrect{color:#dc2626;border-bottom-color:#dc2626;text-decoration:line-through;}
+select,input[type="text"]{width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;background:#fff;color:#111827;}
+select:focus,input[type="text"]:focus{outline:none;border-color:#b91c1c;box-shadow:0 0 0 3px rgba(185,28,28,.15);}
+select:disabled{background:#f3f4f6;color:#9ca3af;}
+/* estado del select al corregir */
+select.good{border-color:#059669;background:#ecfdf5;color:#065f46;font-weight:700;}
+select.bad{border-color:#dc2626;background:#fef2f2;color:#991b1b;}
+/* ── word order / transformation ── */
+.order-tokens{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px;}
+.otoken{padding:8px 14px;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;font-size:.95rem;cursor:pointer;transition:all .15s ease;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.otoken:hover{border-color:#b91c1c;background:#fef2f2;transform:translateY(-1px);}
+.otoken.used{opacity:.35;pointer-events:none;transform:scale(.92);}
+.otoken.dimmed{opacity:.45;pointer-events:none;}
+.order-line{display:flex;flex-wrap:wrap;gap:6px;min-height:46px;padding:10px 12px;border:2px dashed #d1d5db;border-radius:10px;background:#fff;margin-bottom:10px;}
+.otoken.on-line{border-color:#b91c1c;background:#fee2e2;color:#991b1b;}
+.otoken.on-line.correct{border-color:#059669;background:#d1fae5;color:#065f46;}
+.otoken.on-line.incorrect{border-color:#dc2626;background:#fee2e2;color:#991b1b;}
+.order-instruction{font-size:.85rem;color:#6b7280;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.order-instruction .arrow{color:#b91c1c;font-weight:700;}
+/* ── match ── */
+.match-container{display:flex;gap:24px;flex-wrap:wrap;}
+.match-col{flex:1;min-width:240px;}
+.match-col h4{margin:0 0 10px;font-size:.8rem;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+.match-step{font-size:.78rem;color:#b91c1c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.match-step .step-num{background:#b91c1c;color:#fff;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;}
+.mchip{display:block;width:100%;text-align:left;padding:10px 13px;margin:6px 0;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;font-size:.92rem;cursor:pointer;transition:all .15s ease;color:#111827;position:relative;}
+.mchip:hover{border-color:#b91c1c;background:#fef2f2;transform:translateX(4px);}
+.mchip.active{border-color:#b91c1c;background:#fee2e2;box-shadow:0 0 0 3px rgba(185,28,28,.15);transform:scale(1.02);}
+.mchip.matched{border-color:#059669;background:#ecfdf5;cursor:default;transform:none;}
+.mchip.matched::after{content:" ✓";color:#059669;font-weight:700;}
+.mchip.done{opacity:.5;cursor:not-allowed;background:#f3f4f6;}
+.mchip.done:hover{border-color:#d1d5db;background:#f3f4f6;transform:none;}
+.mchip.error{border-color:#dc2626;background:#fef2f2;color:#b91c1c;font-weight:600;}
+.mchip .unlink{display:none;position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:#059669;color:#fff;font-size:.7rem;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;}
+.mchip.matched .unlink{display:flex;}
+.mchip.matched .unlink:hover{background:#dc2626;}
+/* ── true/false ── */
+.tf-btns{display:flex;gap:10px;}
+.tf-btn{flex:1;padding:12px;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;font-size:.95rem;font-weight:700;cursor:pointer;transition:all .15s;color:#374151;}
+.tf-btn:hover{border-color:#374151;transform:translateY(-1px);}
+.tf-btn.selected-true{border-color:#059669;background:#ecfdf5;color:#065f46;}
+.tf-btn.selected-false{border-color:#dc2626;background:#fef2f2;color:#991b1b;}
+.tf-btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.tf-wrong-sentence{font-size:.92rem;margin-bottom:10px;padding:10px 14px;background:#fff7ed;border-left:4px solid #d97706;border-radius:0 8px 8px 0;}
+.tf-wrong-sentence b{color:#dc2626;}
+/* ── listening ── */
+.listen-play{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.listen-btn{width:52px;height:52px;border-radius:50%;border:none;background:#7c3aed;color:#fff;font-size:1.3rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(124,58,237,.35);}
+.listen-btn:hover{transform:scale(1.08);background:#6d28d9;}
+.listen-btn.playing{background:#059669;animation:pulse 1s infinite;}
+.listen-btn.loading{opacity:.6;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+.listen-voice-note{font-size:.75rem;color:#9ca3af;display:flex;align-items:center;gap:5px;}
+/* ── explanation inline ── */
+.explanation{display:none;margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:.88rem;color:#166534;line-height:1.5;}
+.explanation.show{display:block;}
+.q.incorrect .explanation{background:#fef2f2;border-color:#fecaca;color:#991b1b;}
+.explanation b{color:#15803d;}
+.q.incorrect .explanation b{color:#b91c1c;}
+/* icono resultado inline */
+.inline-result{display:none;position:absolute;top:12px;right:12px;font-size:1.5rem;font-weight:800;}
+.q.correct .inline-result{display:block;color:#059669;}
+.q.incorrect .inline-result{display:block;color:#dc2626;}
+/* hint */
+.hint{font-size:.8rem;color:#6b7280;margin-top:8px;padding:6px 10px;background:#f9fafb;border-radius:6px;border-left:3px solid #d1d5db;}
+.hint.tip{border-left-color:#b91c1c;background:#fef2f2;color:#991b1b;}
+/* ── warmup status (TTS) ── */
+.tts-warmup{display:none;text-align:center;font-size:.82rem;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px 12px;margin:0 24px 12px;font-weight:600;}
+.tts-warmup.show{display:block;}
+/* confetti */
+.confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;}
+.confetti{position:absolute;width:10px;height:10px;top:-10px;animation:confettiFall linear forwards;}
+@keyframes confettiFall{0%{transform:translateY(0) rotateZ(0deg);opacity:1;}100%{transform:translateY(100vh) rotateZ(720deg);opacity:0;}}
+/* ── verdict (label textual visible tras Check) ── */
+.verdict{display:none;margin:10px 0 4px;padding:9px 13px;border-radius:9px;font-size:.9rem;font-weight:600;line-height:1.5;border:1.5px solid;word-break:break-word;}
+.verdict.show{display:block;}
+.verdict.correct{background:#ecfdf5;border-color:#059669;color:#065f46;}
+.verdict.incorrect{background:#fef2f2;border-color:#dc2626;color:#991b1b;}
+.verdict .ans{font-weight:700;}
+.verdict.incorrect .ans{color:#7f1d1d;}
+.q.correct .inline-result{display:block;color:#059669;}
+.q.incorrect .inline-result{display:block;color:#dc2626;}
+/* FIX 1 — distingue la explicación del veredicto con un prefijo claro */
+.explanation .why-label{font-size:.74rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.05em;display:block;margin:0 0 4px;}
+.q.incorrect .explanation .why-label{color:#b91c1c;}
+/* ── report inline panel (FIX 3 — sin position:fixed) ── */
+.rpt-inline{display:none;margin:14px 24px 8px;padding:18px 20px;border:1.5px solid #e5e7eb;border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.06);}
+.rpt-inline.show{display:block;}
+.rpt-inline header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.rpt-inline header h2{margin:0;font-size:1rem;color:#374151;display:flex;align-items:center;gap:8px;flex:1;}
+.rpt-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.rpt-md{color:#1f2937;font-size:.92rem;line-height:1.6;}
+.rpt-md h1{margin:0 0 10px;font-size:1.15rem;color:#b91c1c;border-bottom:2px solid #fee2e2;padding-bottom:6px;}
+.rpt-md h2{margin:18px 0 8px;font-size:1rem;color:#374151;display:flex;align-items:center;gap:6px;}
+.rpt-md p{margin:6px 0;}
+.rpt-md ul{margin:6px 0 6px 18px;padding:0;}
+.rpt-md li{margin:4px 0;}
+.rpt-md strong{color:#111827;}
+.rpt-md em{color:#6b7280;font-style:italic;}
+.rpt-md table{border-collapse:collapse;width:100%;margin:8px 0;font-size:.85rem;}
+.rpt-md th,.rpt-md td{border:1px solid #e5e7eb;padding:7px 11px;text-align:left;}
+.rpt-md th{background:#f9fafb;font-weight:700;color:#374151;}
+.rpt-md tr:nth-child(even) td{background:#fafbfc;}
+.rpt-md code{background:#f3f4f6;padding:1px 6px;border-radius:5px;font-size:.85em;color:#7c3aed;font-family:'SF Mono',Monaco,monospace;}
+@media(max-width:600px){body{padding:8px;}.practice-app{border-radius:12px;}.header{padding:16px 16px 12px;}.header h1{font-size:1.25rem;}.toolbar{padding:12px 16px;}.content{padding:16px;}.tabbar{padding:8px 16px;}.practice-section{padding:14px;}.match-container{flex-direction:column;}.match-col{min-width:100%;}.btn{padding:8px 12px;font-size:.83rem;}.stats-pill{display:none;}.round-info{margin-left:0;}.voice-selector{margin-left:0;}.q-text{padding-right:44px;}}
+</style>
+</head>
+<body>
+<div class="practice-app" id="app">
+  <div class="header">
+    <h1 id="appTitle">🎯 Practice</h1>
+    <p class="sub" id="appSub"></p>
+    <div class="concepts-list" id="conceptsList"></div>
+  </div>
+  <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+  <div class="tts-warmup" id="ttsWarmup">🎙️ Pre-generando audio con Bella…</div>
+  <div class="score-strip" id="scoreStrip">
+    <span class="big" id="scoreBig">0/0</span>
+    <div class="bar"><i id="scoreBar" style="width:0%"></i></div>
+    <span class="msg" id="scoreMsg">—</span>
+    <button class="btn btn-secondary" id="reportBtnScore" disabled style="padding:6px 12px;font-size:.8rem;">📋 Report</button>
+    <button class="btn btn-secondary" id="nextRoundFromScore" style="padding:6px 12px;font-size:.8rem;margin-left:auto;">🎲 Nueva ronda</button>
+  </div>
+  <div class="toolbar" id="toolbar">
+    <div class="size-selector">
+      <span class="lbl">Por apartado</span>
+      <div class="size-pill" id="sizePill"></div>
+    </div>
+    <button class="btn btn-secondary" id="newRoundBtn">🎲 New Round</button>
+    <button class="btn btn-success" id="checkBtn" disabled>✅ Check Answers</button>
+    <button class="btn btn-secondary" id="reportBtn" disabled>📋 Report</button>
+    <button class="btn btn-secondary" id="retryBtn" style="display:none;">🔄 Retry Missed</button>
+    <div class="stats-pill" id="statsPill">
+      <div class="stat"><span class="num" id="statCorrect">0</span> correct</div>
+      <div class="stat"><span class="num" id="statTotal">0</span> total</div>
+      <div class="streak" id="streakBadge" style="display:none;"><span class="fire">🔥</span> <span id="streakCount">0</span></div>
+    </div>
+    <button class="btn btn-secondary" id="timerToggle" title="Toggle timer">⏱️</button>
+    <span class="timer" id="timerDisplay" style="display:none;">0:00</span>
+    <span class="round-info" id="roundInfo">Round —</span>
+    <div class="voice-selector" id="voiceSelector">
+      <span class="lbl">Voz</span>
+      <div class="voice-pill">
+        <button data-voice="af_bella" title="Bella — American Female">👩 Bella</button>
+      </div>
+    </div>
+  </div>
+  <div class="rpt-inline" id="reportInline" role="region" aria-label="Practice report">
+    <header>
+      <h2>📋 Practice Report</h2>
+      <div class="rpt-actions">
+        <button class="btn btn-primary" id="rptCopyBtn">📋 Copy</button>
+        <button class="btn btn-secondary" id="rptDownloadBtn">⬇️ Download .md</button>
+        <button class="btn btn-secondary" id="rptCloseBtn" style="margin-left:auto;">✕ Close</button>
+      </div>
+    </header>
+    <div class="rpt-md" id="rptBody"></div>
+  </div>
+  <div class="tabbar" id="tabbar"></div>
+  <div class="content" id="sections"></div>
+</div>
+<div class="confetti-container" id="confetti"></div>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   CONFIG — POOL DE 66 EJERCICIOS (Simple Past)
+   type: "choose" | "order" | "match" | "error" | "tf" | "transform"
+   Cada ítem tiene un id único. La ronda construye N por APARTADO
+   (cada tipo de ejercicio), ciclando el pool si hace falta.
+   ════════════════════════════════════════════════════════════════ */
+var CONFIG={
+  title:"⏪ SIMPLE PAST TENSE — Completed Actions",
+  subtitle:"Master regular (-ed) and irregular verbs, usage rules, pronunciation, and reported speech.",
+  tags:["talked","started","ate","spoke","made","went","forgot","slept","brought","said","had","bought","visited","played","finished"],
+  SECTIONS:[
+    {type:"choose",   num:1, title:"Choose",          sub:"Choose the correct simple past form"},
+    {type:"order",    num:2, title:"Order",           sub:"Tap the words to build the sentence"},
+    {type:"match",    num:3, title:"Match",           sub:"Match each verb to its past form or meaning"},
+    {type:"error",    num:4, title:"Spot the Error",  sub:"Choose the correct sentence"},
+    {type:"tf",       num:5, title:"Correct?",        sub:"Is this sentence grammatically correct?"},
+    {type:"transform",num:6, title:"Transform",       sub:"Transform the sentence"},
+    {type:"listen",   num:7, title:"Listen",          sub:"Listen and choose what you heard"}
+  ],
+  POOL:[
+    /* ── CHOOSE (20) ── */
+    {id:0,type:"choose",s:"He ___ a towel and sunglasses to the beach.",a:"brought",opts:["brought","bringed","bring","was bringing"],tell:"He brought a towel and sunglasses to the beach.",explain:"Irregular verb: bring → brought. No -ed rule applies."},
+    {id:1,type:"choose",s:"They ___ to the gym every day last week.",a:"went",opts:["went","goed","go","were going"],tell:"They went to the gym every day last week.",explain:"Irregular verb: go → went. 'Every day last week' = repeated action with frequency indicator."},
+    {id:2,type:"choose",s:"I ___ to tell my boss about my schedule.",a:"forgot",opts:["forgot","forgeted","forget","was forgetting"],tell:"I forgot to tell my boss about my schedule.",explain:"Irregular verb: forget → forgot. 'Forgot to' = failed to remember to do something."},
+    {id:3,type:"choose",s:"We ___ junk food almost every day last month.",a:"ate",opts:["ate","eated","eat","were eating"],tell:"We ate junk food almost every day last month.",explain:"Irregular verb: eat → ate. 'Almost every day' = qualified frequency marker."},
+    {id:4,type:"choose",s:"She ___ she had a great time at the party.",a:"said",opts:["said","sayed","say","was saying"],tell:"She said she had a great time at the party.",explain:"Irregular verb: say → said (/sɛd/). Pronunciation is /sɛd/, NOT 'sayed'."},
+    {id:5,type:"choose",s:"Yesterday I ___ late, went shopping, and spoke to my mother.",a:"slept",opts:["slept","sleeped","sleep","was sleeping"],tell:"Yesterday I slept late, went shopping, and spoke to my mother.",explain:"Irregular verb: sleep → slept. Three irregular verbs chained with 'and'."},
+    {id:6,type:"choose",s:"I don't think they ___ a reservation.",a:"made",opts:["made","maked","make","did make"],tell:"I don't think they made a reservation.",explain:"Irregular verb: make → made. Negation is on 'don't think', embedded verb stays past."},
+    {id:7,type:"choose",s:"She ___ a lot of money last year.",a:"earned",opts:["earned","earn","was earning","earns"],tell:"She earned a lot of money last year.",explain:"Regular verb: earn → earned (+ /d/ sound). 'Last year' = specific time."},
+    {id:8,type:"choose",s:"We ___ to the cinema two days ago.",a:"went",opts:["went","goed","go","have gone"],tell:"We went to the cinema two days ago.",explain:"Irregular verb: go → went. 'Two days ago' = specific past time."},
+    {id:9,type:"choose",s:"He ___ English at school when he was a kid.",a:"studied",opts:["studied","studyed","study","studys"],tell:"He studied English at school when he was a kid.",explain:"Regular verb with spelling change: study → studied (y→ied). 'When he was a kid' = life-stage reference."},
+    {id:10,type:"choose",s:"We ___ the house yesterday.",a:"cleaned",opts:["cleaned","clean","was cleaning","cleans"],tell:"We cleaned the house yesterday.",explain:"Regular verb: clean → cleaned. 'Yesterday' = definite past time."},
+    {id:11,type:"choose",s:"He ___ me a call this morning.",a:"gave",opts:["gave","gived","give","was giving"],tell:"He gave me a call this morning.",explain:"Irregular verb: give → gave. 'This morning' (finished) = past."},
+    {id:12,type:"choose",s:"She ___ a taxi to the airport.",a:"took",opts:["took","taked","take","was taking"],tell:"She took a taxi to the airport.",explain:"Irregular verb: take → took. 'To the airport' — completed action."},
+    {id:13,type:"choose",s:"I ___ a great film last night.",a:"saw",opts:["saw","seed","see","was seeing"],tell:"I saw a great film last night.",explain:"Irregular verb: see → saw. 'Last night' = definite past time."},
+    {id:14,type:"choose",s:"They ___ a great time at the party last night.",a:"had",opts:["had","hadd","have","were having"],tell:"They had a great time at the party last night.",explain:"Irregular verb: have → had. 'Last night' = definite past time."},
+    {id:15,type:"choose",s:"He ___ his homework before dinner.",a:"finished",opts:["finished","finish","was finishing","finishes"],tell:"He finished his homework before dinner.",explain:"Regular verb: finish → finished (+ /t/ sound). 'Before dinner' = completed action."},
+    {id:16,type:"choose",s:"I ___ my grandmother last weekend.",a:"visited",opts:["visited","visitted","visit","was visiting"],tell:"I visited my grandmother last weekend.",explain:"Regular verb ending in 't': visit → visited (/ɪd/ sound). 'Last weekend' = specific past time."},
+    {id:17,type:"choose",s:"She ___ a new dress for the wedding.",a:"bought",opts:["bought","buyed","buy","was buying"],tell:"She bought a new dress for the wedding.",explain:"Irregular verb: buy → bought (/bɔːt/). Not 'buyed'."},
+    {id:18,type:"choose",s:"We ___ football in the park yesterday.",a:"played",opts:["played","plaied","play","plays"],tell:"We played football in the park yesterday.",explain:"Regular verb ending in vowel+y: play → played (y stays). 'Yesterday' = definite past time."},
+    {id:19,type:"choose",s:"He ___ his keys on the table.",a:"put",opts:["put","putted","puts","was putting"],tell:"He put his keys on the table.",explain:"Irregular verb: put → put (same form in past). No -ed rule applies."},
+    /* ── WORD ORDER (12) — pieces = sintagmas a ordenar ── */
+    {id:20,type:"order",pieces:["They","went","to the gym","every day","last week."],tell:"They went to the gym every day last week.",explain:"Order: Subject + irregular past (went) + complement + frequency marker at the end."},
+    {id:21,type:"order",pieces:["She","brought","a towel","to the beach."],tell:"She brought a towel to the beach.",explain:"Order: Subject + irregular past (brought) + direct object + place at the end."},
+    {id:22,type:"order",pieces:["I","forgot","to tell","my boss","about the schedule."],tell:"I forgot to tell my boss about the schedule.",explain:"Order: Subject + forgot + infinitive 'to tell' + indirect object + complement."},
+    {id:23,type:"order",pieces:["We","ate","junk food","almost every day","last month."],tell:"We ate junk food almost every day last month.",explain:"Order: Subject + irregular past (ate) + object + frequency phrase before the time marker."},
+    {id:24,type:"order",pieces:["He","slept","late","yesterday morning."],tell:"He slept late yesterday morning.",explain:"Order: Subject + irregular past (slept) + adverb (late) + time expression."},
+    {id:25,type:"order",pieces:["She","made","a lot of money","last year."],tell:"She made a lot of money last year.",explain:"Order: Subject + irregular past (made) + object + time expression at the end."},
+    {id:26,type:"order",pieces:["We","cleaned","the house","two days ago."],tell:"We cleaned the house two days ago.",explain:"Order: Subject + regular past (cleaned) + object + 'two days ago' at the end."},
+    {id:27,type:"order",pieces:["He","gave","me","a call","this morning."],tell:"He gave me a call this morning.",explain:"Order: Subject + gave + indirect object (me) + direct object + time expression."},
+    {id:28,type:"order",pieces:["They","visited","their grandparents","last Sunday."],tell:"They visited their grandparents last Sunday.",explain:"Order: Subject + regular past (visited) + object + time expression at the end."},
+    {id:29,type:"order",pieces:["She","bought","a new dress","for the wedding."],tell:"She bought a new dress for the wedding.",explain:"Order: Subject + irregular past (bought) + direct object + purpose phrase."},
+    {id:30,type:"order",pieces:["I","finished","my homework","before dinner."],tell:"I finished my homework before dinner.",explain:"Order: Subject + regular past (finished) + object + 'before dinner' at the end."},
+    {id:31,type:"order",pieces:["We","played","football","in the park","yesterday."],tell:"We played football in the park yesterday.",explain:"Order: Subject + regular past (played) + object + place + time expression."},
+    /* ── MATCH (12) — pares verbo ↔ forma/significado ── */
+    {id:32,type:"match",a:"talked",mean:"regular verb — talk + ed"},
+    {id:33,type:"match",a:"started",mean:"regular verb — start + ed (/ɪd/)"},
+    {id:34,type:"match",a:"ate",mean:"irregular — eat → ate"},
+    {id:35,type:"match",a:"went",mean:"irregular — go → went"},
+    {id:36,type:"match",a:"said",mean:"irregular — say → said (/sɛd/)"},
+    {id:37,type:"match",a:"slept",mean:"irregular — sleep → slept"},
+    {id:38,type:"match",a:"brought",mean:"irregular — bring → brought"},
+    {id:39,type:"match",a:"studied",mean:"regular + spelling — study → studied (y→ied)"},
+    {id:40,type:"match",a:"spoke",mean:"irregular — speak → spoke"},
+    {id:41,type:"match",a:"saw",mean:"irregular — see → saw"},
+    {id:42,type:"match",a:"took",mean:"irregular — take → took"},
+    {id:43,type:"match",a:"made",mean:"irregular — make → made"},
+    /* ── ERROR CORRECTION (8) — frase con error + 4 versiones ── */
+    {id:44,type:"error",wrong:"He goed to the cinema yesterday.",a:"He went to the cinema yesterday.",opts:["He went to the cinema yesterday.","He goed to the cinema yesterday.","He gone to the cinema yesterday.","He goes to the cinema yesterday."],tell:"He went to the cinema yesterday.",explain:"'Goed' no existe — go es irregular: go → went. Los verbos irregulares no siguen la regla -ed."},
+    {id:45,type:"error",wrong:"She sayed she was very tired.",a:"She said she was very tired.",opts:["She said she was very tired.","She sayed she was very tired.","She says she was very tired.","She was saying she was very tired."],tell:"She said she was very tired.",explain:"'Sayed' es un error común. say es irregular: say → said, pronunciado /sɛd/."},
+    {id:46,type:"error",wrong:"We eated pizza last night.",a:"We ate pizza last night.",opts:["We ate pizza last night.","We eated pizza last night.","We eaten pizza last night.","We were eating pizza last night."],tell:"We ate pizza last night.",explain:"'Eated' no existe — eat es irregular: eat → ate. La forma pasada es única, no -ed."},
+    {id:47,type:"error",wrong:"They bringed snacks to the party.",a:"They brought snacks to the party.",opts:["They brought snacks to the party.","They bringed snacks to the party.","They brang snacks to the party.","They were bringing snacks to the party."],tell:"They brought snacks to the party.",explain:"'Bringed' no existe — bring es irregular: bring → brought. Ni siquiera 'brang' es correcto."},
+    {id:48,type:"error",wrong:"He buyed a new phone last week.",a:"He bought a new phone last week.",opts:["He bought a new phone last week.","He buyed a new phone last week.","He has bought a new phone last week.","He buys a new phone last week."],tell:"He bought a new phone last week.",explain:"'Buyed' no existe — buy es irregular: buy → bought, pronunciado /bɔːt/."},
+    {id:49,type:"error",wrong:"We didn't saw the film last night.",a:"We didn't see the film last night.",opts:["We didn't see the film last night.","We didn't saw the film last night.","We didn't seen the film last night.","We don't saw the film last night."],tell:"We didn't see the film last night.",explain:"Tras 'didn't' el verbo vuelve a la base: 'didn't see'. Nunca 'didn't saw'."},
+    {id:50,type:"error",wrong:"She visit her grandmother yesterday.",a:"She visited her grandmother yesterday.",opts:["She visited her grandmother yesterday.","She visit her grandmother yesterday.","She visits her grandmother yesterday.","She was visit her grandmother yesterday."],tell:"She visited her grandmother yesterday.",explain:"Falta la terminación -ed: visit → visited (regular). 'Yesterday' pide pasado."},
+    {id:51,type:"error",wrong:"I have went to the store yesterday.",a:"I went to the store yesterday.",opts:["I went to the store yesterday.","I have went to the store yesterday.","I goed to the store yesterday.","I go to the store yesterday."],tell:"I went to the store yesterday.",explain:"'Have went' es incorrecto. Con 'yesterday' (tiempo definido) se usa Simple Past: go → went."},
+    /* ── TRUE / FALSE (10) ── */
+    {id:52,type:"tf",s:"We did went to the beach last summer.",a:false,tell:"We went to the beach last summer.",explain:"INCORRECTA. Con 'did' (auxiliar), el verbo principal vuelve a la base: 'did go', NUNCA 'did went'."},
+    {id:53,type:"tf",s:"She studied English at school.",a:true,tell:"She studied English at school.",explain:"CORRECTA. Regular verb: study → studied (y→ied). Perfecta en Simple Past."},
+    {id:54,type:"tf",s:"They didn't went to work yesterday.",a:false,tell:"They didn't go to work yesterday.",explain:"INCORRECTA. En negativa con didn't, el verbo va en base: 'didn't go', nunca 'didn't went'."},
+    {id:55,type:"tf",s:"He brought his umbrella because it was raining.",a:true,tell:"He brought his umbrella because it was raining.",explain:"CORRECTA. Irregular verb: bring → brought. Pasado bien usado."},
+    {id:56,type:"tf",s:"They visited their grandparents last Sunday.",a:true,tell:"They visited their grandparents last Sunday.",explain:"CORRECTA. Regular verb: visit → visited. 'Last Sunday' = tiempo definido."},
+    {id:57,type:"tf",s:"She buyed a new dress for the wedding.",a:false,tell:"She bought a new dress for the wedding.",explain:"INCORRECTA. 'Buyed' no existe — buy es irregular: buy → bought."},
+    {id:58,type:"tf",s:"He put his keys on the table.",a:true,tell:"He put his keys on the table.",explain:"CORRECTA. Irregular verb: put → put (forma invariable en pasado)."},
+    {id:59,type:"tf",s:"We didn't saw the film last night.",a:false,tell:"We didn't see the film last night.",explain:"INCORRECTA. Tras 'didn't' va el verbo en base: 'didn't see', nunca 'didn't saw'."},
+    {id:60,type:"tf",s:"I played football with my friends yesterday.",a:true,tell:"I played football with my friends yesterday.",explain:"CORRECTA. Regular verb: play → played (la y se mantiene tras vocal)."},
+    {id:61,type:"tf",s:"She finish her homework before dinner.",a:false,tell:"She finished her homework before dinner.",explain:"INCORRECTA. Falta el pasado: 'finished'. Con 'before dinner' se usa Simple Past."},
+    /* ── TRANSFORMATION (4) — convertir afirmativa ── */
+    {id:62,type:"transform",base:"She ate pizza last night.",instruction:"Transform to NEGATIVE",pieces:["She","didn't eat","pizza","last night."],a:["She","didn't eat","pizza","last night."],tell:"She didn't eat pizza last night.",explain:"Negativa pasada: didn't + verbo base (didn't eat). El verbo irregular pierde su forma pasada tras didn't."},
+    {id:63,type:"transform",base:"He went to the park.",instruction:"Transform to QUESTION",pieces:["Did","he","go","to the park?"],a:["Did","he","go","to the park?"],tell:"Did he go to the park?",explain:"Interrogativa pasada: Did + sujeto + verbo base (go). 'Went' vuelve a 'go' tras el auxiliar."},
+    {id:64,type:"transform",base:"They visited their grandparents.",instruction:"Transform to NEGATIVE",pieces:["They","didn't visit","their grandparents."],a:["They","didn't visit","their grandparents."],tell:"They didn't visit their grandparents.",explain:"Negativa pasada: didn't + verbo base (visit). El regular pierde la -ed tras didn't."},
+    {id:65,type:"transform",base:"He bought a new phone.",instruction:"Transform to QUESTION",pieces:["Did","he","buy","a new phone?"],a:["Did","he","buy","a new phone?"],tell:"Did he buy a new phone?",explain:"Interrogativa pasada: Did + sujeto + verbo base (buy). 'Bought' vuelve a 'buy'."}
+  ],
+  MEANINGS:{
+    "talked":"regular verb — talk + ed",
+    "started":"regular verb — start + ed (/ɪd/)",
+    "ate":"irregular — eat → ate",
+    "went":"irregular — go → went",
+    "said":"irregular — say → said (/sɛd/)",
+    "slept":"irregular — sleep → slept",
+    "brought":"irregular — bring → brought",
+    "studied":"regular + spelling — study → studied (y→ied)",
+    "spoke":"irregular — speak → spoke",
+    "saw":"irregular — see → saw",
+    "took":"irregular — take → took",
+    "made":"irregular — make → made"
+  }
+};
+
+/* ════════════════════════════════════════════════════════════════
+   TTS — DOBLE MOTOR
+   1) parent frame (vocab-tts-request) → edge-tts (Bella)
+   2) fallback local → Web Speech API (speechSynthesis, voz en-US)
+   El motor se detecta en el primer request: si no hay parent o no
+   responde en ~3s, conmuta a local y todo suena igual.
+   ════════════════════════════════════════════════════════════════ */
+var TTS_VOICE="af_bella";
+var TTS_ENGINE="pending";            /* "pending" | "parent" | "local" */
+var parentProbed=false,parentAlive=false;
+var localVoices=[],localVoicesReady=false;
+var currentAudio=null,audioUrls={},pendingByKey={},requestMap={};
+var warmupQueue=[],warmupRunning=false,WARMUP_CONCURRENCY=2;
+function ttsKey(text){return TTS_VOICE+"|"+text;}
+function loadLocalVoices(){
+  if(!("speechSynthesis" in window))return;
+  var v=window.speechSynthesis.getVoices();
+  if(v&&v.length){localVoices=v;localVoicesReady=true;}
+}
+function speakText(text,btn){stopAll();requestTTS(text,btn);}
+function requestTTS(text,btn){
+  var key=ttsKey(text);
+  if(audioUrls[key]){if(btn)playUrl(audioUrls[key],btn);return;}
+  if(TTS_ENGINE==="local"){localSpeak(text,btn);return;}
+  if(pendingByKey[key]){if(btn){pendingByKey[key].btns.push(btn);btn.classList.add("loading");}return;}
+  if(btn)btn.classList.add("loading");
+  var requestId=Date.now()+"_"+Math.random().toString(36).slice(2,8);
+  pendingByKey[key]={requestId:requestId,btns:btn?[btn]:[],done:false};
+  requestMap[requestId]=key;
+  /* timeout por request: si no llega respuesta, degradamos a local */
+  setTimeout(function(){
+    var p=pendingByKey[key];
+    if(p&&!p.done){p.done=true;delete pendingByKey[key];delete requestMap[requestId];
+      p.btns.forEach(function(b){if(b)b.classList.remove("loading");});
+      if(TTS_ENGINE!=="local"){markEngineLocal();p.btns.forEach(function(b){if(b)localSpeak(text,b);});}
+    }
+  },8000);
+  if(window.parent&&window.parent!==window){
+    window.parent.postMessage({type:"vocab-tts-request",requestId:requestId,text:text,voice:TTS_VOICE},"*");
+    if(!parentProbed){
+      parentProbed=true;
+      setTimeout(function(){
+        if(TTS_ENGINE==="pending"&&!parentAlive){markEngineLocal();flushPendingLocal();}
+      },3000);
+    }
+  }else{
+    markEngineLocal();localSpeak(text,btn);
+  }
+}
+function markEngineLocal(){
+  if(TTS_ENGINE==="local")return;
+  TTS_ENGINE="local";
+  warmupRunning=false;
+  var el=document.getElementById("ttsWarmup");
+  if(el)el.classList.remove("show");
+  document.querySelectorAll(".listen-btn.loading").forEach(function(b){b.classList.remove("loading");});
+}
+function flushPendingLocal(){
+  Object.keys(pendingByKey).forEach(function(key){
+    var p=pendingByKey[key];
+    if(!p||p.done)return;
+    p.done=true;delete pendingByKey[key];
+    var text=key.split("|").slice(1).join("|");
+    p.btns.forEach(function(b){localSpeak(text,b);});
+  });
+}
+window.addEventListener("message",function(event){
+  var data=event.data;
+  if(!data||data.type!=="vocab-tts-response")return;
+  parentAlive=true;
+  if(TTS_ENGINE==="pending")TTS_ENGINE="parent";
+  var key=requestMap[data.requestId];
+  if(!key)return;
+  var p=pendingByKey[key];
+  if(!p||p.done)return;
+  p.done=true;
+  delete pendingByKey[key];
+  delete requestMap[data.requestId];
+  if(data.error){console.error("[TTS] Parent error:",data.error);p.btns.forEach(function(b){if(b)b.classList.remove("loading");});checkWarmup();return;}
+  var binary=atob(data.audioBase64);
+  var bytes=new Uint8Array(binary.length);
+  for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  var blob=new Blob([bytes],{type:data.mimetype||"audio/wav"});
+  audioUrls[key]=URL.createObjectURL(blob);
+  p.btns.forEach(function(b){if(b)playUrl(audioUrls[key],b);});
+  checkWarmup();
+});
+/* ── motor local: Web Speech API (voz en-US) ── */
+function pickLocalVoice(){
+  if(!localVoicesReady){loadLocalVoices();}
+  var en=localVoices.filter(function(v){return v.lang&&v.lang.toLowerCase().indexOf("en")===0;});
+  if(!en.length)return null;
+  /* Bella: solo voces femeninas en-US */
+  var femaleRe=/(female|samantha|zira|aria|jenny|susan|karen|moira|tessa|hazel|libby|sonia|ava|allison|emma|joanna|kendra|kimberly|ivy|serena|michelle|alicia|victoria|lauren|Rebecca|Sonia|Zuzana|Ting-Ting|Google US English)/i;
+  for(var i=0;i<en.length;i++){if(femaleRe.test(en[i].name))return en[i];}
+  return en[0];
+}
+function localSpeak(text,btn){
+  if(btn){stopAll();btn.classList.add("playing");}
+  if(!("speechSynthesis" in window)){
+    console.warn("[TTS] speechSynthesis no disponible");
+    if(btn)btn.classList.remove("playing","loading");
+    return;
+  }
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang="en-US";
+  u.rate=0.95;u.pitch=1;
+  var v=pickLocalVoice();
+  if(v)u.voice=v;
+  u.onend=function(){if(btn)btn.classList.remove("playing","loading");};
+  u.onerror=function(){if(btn)btn.classList.remove("playing","loading");};
+  window.speechSynthesis.speak(u);
+}
+function playUrl(url,btn){
+  if(currentAudio){currentAudio.pause();currentAudio=null;}
+  var audio=new Audio(url);currentAudio=audio;
+  if(btn){btn.classList.add("playing");}
+  audio.onended=function(){if(btn)btn.classList.remove("playing","loading");currentAudio=null;};
+  audio.onerror=function(){if(btn)btn.classList.remove("playing","loading");currentAudio=null;};
+  audio.play().catch(function(){if(btn)btn.classList.remove("playing","loading");currentAudio=null;});
+}
+function stopAll(){
+  if(currentAudio){currentAudio.pause();currentAudio=null;}
+  if("speechSynthesis" in window){window.speechSynthesis.cancel();}
+  var b=document.querySelectorAll(".listen-btn");
+  for(var i=0;i<b.length;i++)b[i].classList.remove("playing","loading");
+}
+function startWarmup(){
+  if(warmupRunning)return;
+  if(TTS_ENGINE==="local"){warmupRunning=false;return;}
+  warmupRunning=true;warmupQueue=[];
+  state.round.forEach(function(it){
+    var t=speakableSentence(it.item,it.type);
+    if(t)warmupQueue.push({text:t});
+  });
+  state.listenItems.forEach(function(l){
+    if(l.text)warmupQueue.push({text:l.text});
+  });
+  for(var w=0;w<WARMUP_CONCURRENCY;w++)checkWarmup();
+}
+function checkWarmup(){
+  if(TTS_ENGINE==="local"){warmupRunning=false;return;}
+  var item=null;
+  while(warmupQueue.length){
+    var candidate=warmupQueue.shift();
+    var key=ttsKey(candidate.text);
+    if(!audioUrls[key]&&!pendingByKey[key]){item=candidate;break;}
+  }
+  if(item)requestTTS(item.text,null);
+  if(warmupQueue.length===0&&!anyPending()){
+    warmupRunning=false;
+    var el=document.getElementById("ttsWarmup");
+    if(el)el.classList.remove("show");
+    return;
+  }
+  showWarmupStatus();
+}
+function anyPending(){for(var k in pendingByKey){if(pendingByKey.hasOwnProperty(k))return true;}return false;}
+function showWarmupStatus(){
+  var el=document.getElementById("ttsWarmup");
+  if(!el)return;
+  if(TTS_ENGINE==="local"){el.classList.remove("show");return;}
+  var total=0;
+  state.round.forEach(function(it){if(it.item&&it.item.tell)total++;});
+  total+=state.listenItems.length;
+  var done=total-warmupQueue.length;
+  el.textContent="🎙️ Pre-generando audio con Bella… "+done+"/"+total;
+  el.classList.add("show");
+}
+function voiceDisplayName(){
+  return "👩 Bella";
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ENGINE — ronda N×tipo, render, grading, feedback inline
+   ════════════════════════════════════════════════════════════════ */
+var LS_KEY="englishPractice.v2";
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+/* Tokens sin puntuación final (punto, coma, ?, !, apóstrofo SOLO final). */
+function cleanToken(w){return String(w).replace(/[.,;:!?"']+$/,"");}
+/* Normalización de comparación: ignora puntuación y espacios extra. */
+function normAnswer(s){return String(s).toLowerCase().replace(/[.,;:!?"']/g,"").replace(/\s+/g," ").trim();}
+function $(id){return document.getElementById(id);}
+function saveLS(){try{localStorage.setItem(LS_KEY,JSON.stringify({size:state.size}));}catch(e){}}
+function loadLS(){try{var d=JSON.parse(localStorage.getItem(LS_KEY));if(d&&typeof d.size==="number"&&d.size%1===0&&isValidSize(d.size))return d;}catch(e){}return null;}
+
+/* ── selector tamaño: opciones según nivel (CONFIG.sizeOptions) ── */
+function sizeOptions(){return (CONFIG&&CONFIG.sizeOptions&&CONFIG.sizeOptions.length)?CONFIG.sizeOptions:[1,5,10,20,40];}
+function defaultSize(){var o=sizeOptions();return o[o.length-1];}
+function isValidSize(n){return sizeOptions().indexOf(n)>=0;}
+function renderSizePill(){
+  var pill=$("sizePill");
+  if(pill)pill.innerHTML=sizeOptions().map(function(n){return '<button data-size="'+n+'">'+n+'</button>';}).join("");
+  syncSizePill();
+}
+
+var _savedPref=loadLS(); /* solo lectura inicial; LS puede fallar en sandbox */
+var state={retryMode:false,size:(_savedPref&&_savedPref.size)?_savedPref.size:defaultSize(),round:[],listenItems:[],_lastMissed:null,sessionLog:[],roundNo:0};
+var activeChip=null,matchAns={},totalCorrect=0,totalAnswered=0,streak=0;
+var timerInterval=null,timerSeconds=0,timerEnabled=false;
+var orderState={};   /* inst -> {line:[],locked:false} */
+var activeTab="all"; /* pestaña seleccionada */
+
+/* ════════════════════════════════════════════════════════════════
+   HELPERS — FIX 1 (verdict), FIX 2 (speakableSentence), FIX 3 (mini-MD)
+   ════════════════════════════════════════════════════════════════ */
+
+/* speakableSentence: resuelve el texto a leer en voz alta (🔊).
+   Garantiza una frase NATURAL EN INGLÉS, nunca explicación ni español.
+   - error:     opts[0] (= a) o, si tell está limpio, tell
+   - tf:        tell limpio, si no s
+   - transform: tell limpio, si no a.join(' ')
+   - listen:    text (ya correcto); otros: tell limpio, si no a */
+function _isCleanEnglish(s){
+  if(!s || typeof s !== "string") return false;
+  var t = s.trim();
+  if(t.length < 6) return false;
+  /* Stopwords/explicaciones comunes que el LLM mete en tell por error. */
+  if(/\b(porque|ya que|debido|se usa|incorrecta|correcta|necesita|recuerda|explicaci[oó]n|nota:|tip:|atenci[oó]n|importante|tras|negativa|interrogativa|auxiliar|debido a|hace falta|se debe|recuerda que|irregular —)\b/i.test(t)) return false;
+  var letters = (t.match(/[A-Za-z]/g) || []).length;
+  if(letters < 4) return false;
+  return true;
+}
+function speakableSentence(item, type){
+  if(!item) return "";
+  if(type === "listen") return item.text || item.a || "";
+  if(type === "error"){
+    var a = (Array.isArray(item.opts) && item.opts[0]) || item.a || "";
+    if(_isCleanEnglish(item.tell)) return item.tell;
+    return a;
+  }
+  if(type === "tf"){
+    if(_isCleanEnglish(item.tell)) return item.tell;
+    return item.s || "";
+  }
+  if(type === "transform"){
+    if(_isCleanEnglish(item.tell)) return item.tell;
+    if(Array.isArray(item.a)) return item.a.join(" ");
+    return item.a || "";
+  }
+  if(_isCleanEnglish(item.tell)) return item.tell;
+  if(Array.isArray(item.a)) return item.a.join(" ");
+  return item.a || "";
+}
+
+/* correctTextFor: texto legible de la respuesta correcta (FIX 1). */
+function correctTextFor(it){
+  if(!it) return "";
+  if(it.type === "match") return it.item ? (it.item.mean || "") : "";
+  if(it.type === "listen") return it.a || "";
+  if(it.type === "tf"){
+    var a = it.item ? it.item.a : it.a;
+    var tell = it.item ? (it.item.tell || "") : (it.tell || "");
+    var s = it.item ? (it.item.s || "") : (it.s || "");
+    if(a === true) return "Yes — correct";
+    if(a === false) return tell || s || "No";
+    return String(a);
+  }
+  if(Array.isArray(it.a)) return it.a.join(" ");
+  return String(it.a || "");
+}
+
+/* renderVerdict: etiqueta textual grande y accesible (FIX 1).
+   Inserta después del último hijo interactivo y antes de .explanation. */
+function renderVerdict(qEl, isOk, correctText){
+  if(!qEl) return;
+  var prev = qEl.querySelector(":scope > .verdict");
+  if(prev) prev.remove();
+  var v = document.createElement("div");
+  v.className = "verdict " + (isOk ? "correct" : "incorrect") + " show";
+  v.setAttribute("role", "status");
+  if(isOk){
+    v.innerHTML = '<span aria-hidden="true">✅</span><span> Correcta</span>';
+  } else {
+    var txt = correctText || "(no disponible)";
+    v.innerHTML = '<span aria-hidden="true">❌</span><span> Incorrecta</span>'
+      + '<span> · Respuesta correcta: </span>'
+      + '<span class="ans">' + esc(txt) + '</span>';
+  }
+  var ex = qEl.querySelector(":scope > .explanation");
+  if(ex){
+    /* Marca la explicación para que se distinga del veredicto (FIX 1). */
+    if(!ex.querySelector(".why-label")){
+      var lbl = document.createElement("div");
+      lbl.className = "why-label";
+      lbl.textContent = "Por qué:";
+      ex.insertBefore(lbl, ex.firstChild);
+    }
+    qEl.insertBefore(v, ex);
+  } else {
+    qEl.appendChild(v);
+  }
+}
+
+/* miniRenderMarkdown: renderer seguro y minimalista (FIX 3).
+   Sin marked/DOMPurify. Escapa HTML primero y luego transforma por bloques:
+   - `#`/`##` encabezados, `**bold**`, `_italic_`, `code`
+   - tablas `| a | b |` con fila separadora `|---|---|`
+   - listas `- `
+   - párrafos */
+function miniRenderMarkdown(md){
+  if(md == null) return "";
+  var text = String(md);
+  var safe = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  function inline(s){
+    return s
+      .replace(/`([^`]+)`/g, function(m, c){ return "<code>" + c + "</code>"; })
+      .replace(/\*\*([^*]+)\*\*/g, function(m, c){ return "<strong>" + c + "</strong>"; })
+      .replace(/(^|[^\\])_([^_\n]+)_/g, function(m, p, c){ return p + "<em>" + c + "</em>"; });
+  }
+  var lines = safe.split(/\r?\n/);
+  var out = [];
+  var i = 0;
+  while(i < lines.length){
+    var line = lines[i];
+    var m1 = /^# (.+)$/.exec(line);
+    if(m1){ out.push("<h1>" + inline(m1[1]) + "</h1>"); i++; continue; }
+    var m2 = /^## (.+)$/.exec(line);
+    if(m2){ out.push("<h2>" + inline(m2[1]) + "</h2>"); i++; continue; }
+    if(/^\|.*\|$/.test(line) && i + 1 < lines.length && /^\|[-:\s|]+\|$/.test(lines[i + 1])){
+      var header = line;
+      var body = [];
+      i += 2;
+      while(i < lines.length && /^\|.*\|$/.test(lines[i])){
+        body.push(lines[i]); i++;
+      }
+      var cells = function(row){
+        return row.replace(/^\||\|$/g, "").split("|").map(function(c){ return inline(c.trim()); });
+      };
+      var h = cells(header);
+      out.push("<table><thead><tr>" + h.map(function(c){ return "<th>" + c + "</th>"; }).join("") + "</tr></thead><tbody>");
+      body.forEach(function(r){
+        var cs = cells(r);
+        out.push("<tr>" + cs.map(function(c){ return "<td>" + c + "</td>"; }).join("") + "</tr>");
+      });
+      out.push("</tbody></table>");
+      continue;
+    }
+    if(/^- .+$/.test(line)){
+      var items = [];
+      while(i < lines.length && /^- .+$/.test(lines[i])){
+        items.push(lines[i].replace(/^- /, "")); i++;
+      }
+      out.push("<ul>" + items.map(function(it){ return "<li>" + inline(it) + "</li>"; }).join("") + "</ul>");
+      continue;
+    }
+    if(line.trim() === ""){ out.push(""); i++; continue; }
+    var buf = [line];
+    i++;
+    while(i < lines.length && lines[i].trim() !== "" && !/^(# |## |- |\|\|)/.test(lines[i])){
+      buf.push(lines[i]); i++;
+    }
+    out.push("<p>" + inline(buf.join(" ")) + "</p>");
+  }
+  /* Compacta párrafos vacíos consecutivos (cosmético). */
+  return out.filter(function(x, idx, arr){
+    if(x === "" && arr[idx - 1] === "") return false;
+    return true;
+  }).join("\n");
+}
+
+/* ── crear instancia de un ítem (ids DOM únicos por instancia) ── */
+function createInst(item,k){
+  var inst=(item.type||"x")+"-"+(k+1)+"-"+Math.random().toString(36).slice(2,7);
+  var o={inst:inst,type:item.type,item:item};
+  if(item.type==="choose"||item.type==="error")o.opts=shuffle(item.opts.slice());
+  if(item.type==="order"||item.type==="transform"){
+    /* La respuesta canónica (a) es la ÚNICA referencia de corrección. Si el
+       LLM metió un typo o variante en 'pieces' (p. ej. "invidet" vs
+       "invited"), el usuario solo puede construir con los tokens mostrados:
+       por eso los tokens se derivan SIEMPRE de a (cuando existe). Así
+       "construir tal cual" acierta siempre. Si no hay a, se usan pieces;
+       si no hay pieces, se derivan de la frase base (s / a string).
+       Defensa adicional para 'order' sin 'a': si 'tell' es una frase de
+       4..6 palabras y 'pieces' es exactamente esa misma lista (mismo
+       conjunto, orden indiferente), derivamos el orden de 'tell' y
+       emitimos 'a' como lista — así la corrección usa el orden correcto. */
+    var canon=null;
+    if(Array.isArray(item.a)&&item.a.length)canon=item.a.slice();
+    else if(typeof item.a==="string"&&item.a.trim())canon=item.a.trim().split(/\s+/).filter(Boolean);
+    if(!canon&&item.type==="order"&&typeof item.tell==="string"&&item.tell.trim()&&Array.isArray(item.pieces)&&item.pieces.length){
+      var tt=item.tell.trim().split(/\s+/).map(cleanToken).filter(Boolean);
+      if(tt.length>=4&&tt.length<=6){
+        var pp=item.pieces.map(cleanToken).map(function(x){return x.toLowerCase();}).sort().join("|");
+        var tt2=tt.map(function(x){return x.toLowerCase();}).sort().join("|");
+        if(pp===tt2)canon=tt;
+      }
+    }
+    var src=canon
+      ?canon.slice()
+      :(Array.isArray(item.pieces)&&item.pieces.length?item.pieces.slice()
+        :String(item.s||item.a||"").trim().split(/\s+/).filter(Boolean));
+    o.pieces=shuffle(src.map(cleanToken).filter(Boolean));
+    o.a=canon?canon.slice():src.slice();
+  }
+  return o;
+}
+/* ── N ejercicios por tipo, ciclando el pool ── */
+function takePerType(arr,n){
+  var out=[];
+  if(!arr.length)return out;
+  var base=shuffle(arr.slice()),bi=0;
+  for(var k=0;k<n;k++){
+    if(bi>=base.length){base=shuffle(arr.slice());bi=0;}
+    out.push(createInst(base[bi++],k));
+  }
+  return out;
+}
+
+function buildRound(retryMissed){
+  /* R1: every buildRound counts as its own round n (incl. retry).
+     Decisión: retry = ronda nueva n (ver p69_batch.md R1 + spec p69). */
+  state.roundNo++;
+  /* El size se conserva en memoria (clic del selector lo actualiza antes
+     de llamar aquí). Solo se relee del LS si aún no hay un size válido:
+     dentro del iframe sandbox de la app, localStorage lanza SecurityError
+     (origen opaco) y loadLS() devuelve null; si buildRound pisara state.size
+     en cada ronda, el selector quedaría clavado en defaultSize(). */
+  if(typeof state.size!=="number"||!isValidSize(state.size)){
+    var saved=loadLS();
+    state.size=(saved&&saved.size)?saved.size:defaultSize();
+  }
+  renderSizePill();syncedSize=true;
+  if(retryMissed&&state._lastMissed&&state._lastMissed.length){
+    /* Los listening se regeneran siempre desde buildListenItems: no se
+       reintentan desde round para evitar doble conteo. */
+    var missed=state._lastMissed.filter(function(m){return m.type!=="listen";});
+    state.round=missed.map(function(prev,k){return createInst(prev.item,k);});
+    state.retryMode=true;
+    activeTab="all";
+  }else{
+    state.retryMode=false;
+    state.round=[];
+    ["choose","order","match","error","tf","transform"].forEach(function(t){
+      var arr=CONFIG.POOL.filter(function(p){return p.type===t;});
+      state.round=state.round.concat(takePerType(arr,state.size));
+    });
+  }
+  state.listenItems=buildListenItems(state.round);
+  state._lastMissed=null;activeChip=null;matchAns={};orderState={};activeTab="all";
+  stopTimer();if(timerEnabled){timerSeconds=0;updateTimer();startTimer();}
+  saveLS();render();
+  $("progressBar").style.width="0%";
+  $("scoreStrip").classList.remove("show");
+  document.body.classList.remove("graded");
+}
+var syncedSize=false;
+function syncSizePill(){
+  document.querySelectorAll("#sizePill button").forEach(function(x){
+    x.classList.toggle("on",parseInt(x.getAttribute("data-size"),10)===state.size);
+  });
+}
+
+/* ── RENDER ── */
+function render(){
+  $("appTitle").textContent=CONFIG.title;
+  $("appSub").textContent=CONFIG.subtitle;
+  $("conceptsList").innerHTML=CONFIG.tags.map(function(t){return '<span class="concept-tag">'+esc(t)+'</span>';}).join("");
+  var byType={};
+  state.round.forEach(function(it){byType[it.type]=(byType[it.type]||[]).concat([it]);});
+  byType.listen=state.listenItems||[];
+
+  /* pestañas */
+  var tabsHtml='<button class="tab'+(activeTab==="all"?" on":"")+'" data-sec="all">🗂️ All</button>';
+  CONFIG.SECTIONS.forEach(function(s){
+    var n=(byType[s.type]||[]).length;
+    if(n>0){
+      tabsHtml+='<button class="tab'+(activeTab===s.type?" on":"")+'" data-sec="'+s.type+'">'+s.num+' · '+esc(s.title)+' <span class="cnt">'+n+'</span></button>';
+    }
+  });
+  $("tabbar").innerHTML=tabsHtml;
+
+  /* secciones */
+  var html="";
+  CONFIG.SECTIONS.forEach(function(sec){
+    var items=byType[sec.type]||[];
+    if(!items.length)return;
+    html+=renderSection(sec,items);
+  });
+  $("sections").innerHTML=html;
+
+  var total=state.round.length+state.listenItems.length;
+  var ri=$("roundInfo");
+  if(ri)ri.textContent=(state.retryMode?"🔄 RETRY: ":"")+state.size+" por apartado · "+total+" ejercicios";
+  $("checkBtn").disabled=true;
+  $("retryBtn").style.display="none";
+  bindHandlers();
+  bindTabs();
+  updateProgress();
+  startWarmup();
+}
+
+function sectionTitle(sec,count){
+  return '<h3><span class="badge">'+sec.num+' · '+esc(sec.title)+'</span> '+esc(sec.sub)+(count>0?' <span style="font-size:.75rem;color:#9ca3af;font-weight:600">('+count+')</span>':'')+'</h3>';
+}
+
+function renderSection(sec,items){
+  var h="";
+  if(sec.type==="choose"){
+    h+='<section class="practice-section show" data-sec="choose">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      var parts=q.item.s.split("___");
+      h+='<div class="q" data-choose="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="q-text">'+esc(parts[0])+'<span class="blank" data-blank-c="'+q.inst+'">______</span>'+esc(parts[1])+'</div>'
+        +'<select name="choose-'+q.inst+'" data-sel-c="'+q.inst+'"><option value="">— choose —</option>';
+      q.opts.forEach(function(o){h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+      h+='</select>'
+        +'<button class="listen-btn" style="width:38px;height:38px;font-size:.95rem;margin-top:8px" data-listen="'+esc(speakableSentence(q.item,"choose"))+'" title="Escuchar frase correcta en inglés">🔊</button>'
+        +'<div class="explanation">'+esc(q.item.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  else if(sec.type==="order"){
+    h+='<section class="practice-section show" data-sec="order">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      orderState[q.inst]={line:[],locked:false};
+      h+='<div class="q" data-order="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="q-text">Build the sentence:</div>'
+        +'<div class="order-line" data-line="'+q.inst+'"></div>'
+        +'<div class="order-tokens" data-pool="'+q.inst+'">';
+      q.pieces.forEach(function(p){h+='<span class="otoken" data-ot="'+esc(p)+'" data-oi="'+q.inst+'">'+esc(p)+'</span>';});
+      h+='</div><div class="hint tip">💡 Listen to it:</div>'
+        +'<button class="listen-btn" style="width:38px;height:38px;font-size:.95rem;margin-top:4px" data-listen="'+esc(speakableSentence(q.item,"order"))+'" title="Escuchar frase correcta en inglés">🔊</button>'
+        +'<div class="explanation">'+esc(q.item.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  else if(sec.type==="match"){
+    var left=shuffle(items.slice());
+    var right=shuffle(items.slice());
+    h+='<section class="practice-section show" data-sec="match">'+sectionTitle(sec,items.length);
+    h+='<div class="match-step"><span class="step-num">1</span> Click a verb on the left</div><div class="match-step"><span class="step-num">2</span> Then click its meaning on the right</div>';
+    h+='<div class="match-container"><div class="match-col"><h4>Verbs</h4>';
+    left.forEach(function(m){
+      h+='<div class="mchip left" data-m="'+m.inst+'" data-mid="'+m.inst+'">'+esc(m.item.a)+'<button class="unlink" data-unlink="'+m.inst+'" title="Deshacer">✕</button></div>';
+    });
+    h+='</div><div class="match-col"><h4>Past Forms &amp; Meanings</h4>';
+    right.forEach(function(m){
+      h+='<div class="mchip right" data-mean="'+m.inst+'">'+esc(m.item.mean)+'</div>';
+    });
+    h+='</div></div></section>';
+  }
+  else if(sec.type==="error"){
+    h+='<section class="practice-section show" data-sec="error">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      h+='<div class="q" data-error="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="q-text">Find the correct version of:</div>'
+        +'<div class="tf-wrong-sentence">❌ <b>'+esc(q.item.wrong)+'</b></div>'
+        +'<select name="error-'+q.inst+'" data-sel-e="'+q.inst+'"><option value="">— choose —</option>';
+      q.opts.forEach(function(o){h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+      h+='</select>'
+        +'<button class="listen-btn" style="width:38px;height:38px;font-size:.95rem;margin-top:8px" data-listen="'+esc(speakableSentence(q.item,"error"))+'" title="Escuchar frase correcta en inglés">🔊</button>'
+        +'<div class="explanation">'+esc(q.item.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  else if(sec.type==="tf"){
+    h+='<section class="practice-section show" data-sec="tf">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      h+='<div class="q" data-tf="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="q-text">"'+esc(q.item.s)+'"</div>'
+        +'<div class="tf-btns">'
+        +'<button class="tf-btn" data-tf-btn="'+q.inst+'" data-val="true">✔ Correct</button>'
+        +'<button class="tf-btn" data-tf-btn="'+q.inst+'" data-val="false">✘ Incorrect</button>'
+        +'</div>'
+        +'<button class="listen-btn" style="width:38px;height:38px;font-size:.95rem;margin-top:8px" data-listen="'+esc(speakableSentence(q.item,"tf"))+'" title="Escuchar frase correcta en inglés">🔊</button>'
+        +'<div class="explanation">'+esc(q.item.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  else if(sec.type==="transform"){
+    h+='<section class="practice-section show" data-sec="transform">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      orderState[q.inst]={line:[],locked:false};
+      h+='<div class="q" data-order="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="order-instruction">🎯 '+esc(q.item.instruction||"Transform the sentence")+' <span class="arrow">←</span> <i>"'+esc(q.item.base||q.item.s||"")+'"</i></div>'
+        +'<div class="order-line" data-line="'+q.inst+'"></div>'
+        +'<div class="order-tokens" data-pool="'+q.inst+'">';
+      q.pieces.forEach(function(p){h+='<span class="otoken" data-ot="'+esc(p)+'" data-oi="'+q.inst+'">'+esc(p)+'</span>';});
+      h+='</div>'
+        +'<button class="listen-btn" style="width:38px;height:38px;font-size:.95rem;margin-top:4px" data-listen="'+esc(speakableSentence(q.item,"transform"))+'" title="Escuchar frase correcta en inglés">🔊</button>'
+        +'<div class="explanation">'+esc(q.item.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  else if(sec.type==="listen"){
+    h+='<section class="practice-section show" data-sec="listen">'+sectionTitle(sec,items.length);
+    items.forEach(function(q){
+      h+='<div class="q" data-listen-q="'+q.inst+'"><span class="q-number">Q'+(items.indexOf(q)+1)+'</span><span class="inline-result"></span>'
+        +'<div class="listen-play"><button class="listen-btn" data-listen="'+esc(q.text)+'" data-listen-idx="'+q.inst+'" title="Reproducir">🔊</button>'
+        +'<div><div style="font-weight:700;font-size:.92rem">Listen to the sentence</div>'
+        +'<div class="listen-voice-note">Voz: '+esc(voiceDisplayName())+'</div></div></div>'
+        +'<select name="listen-'+q.inst+'" data-sel-l="'+q.inst+'"><option value="">— what did you hear? —</option>';
+      q.opts.forEach(function(o){h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+      h+='</select><div class="explanation">'+esc(q.explain)+'</div></div>';
+    });
+    h+='</section>';
+  }
+  return h;
+}
+
+/* ── HANDLERS ── */
+function bindHandlers(){
+  document.querySelectorAll("[data-sel-c]").forEach(function(sel){
+    var id=sel.getAttribute("data-sel-c");
+    var blank=document.querySelector('[data-blank-c="'+id+'"]');
+    sel.addEventListener("change",function(){
+      var v=sel.value;
+      if(v){blank.textContent=v;blank.classList.add("filled");}
+      else{blank.textContent="______";blank.classList.remove("filled");}
+      updateProgress();
+    });
+  });
+  document.querySelectorAll("[data-sel-e]").forEach(function(sel){
+    sel.addEventListener("change",updateProgress);
+  });
+  document.querySelectorAll("[data-sel-l]").forEach(function(sel){
+    sel.addEventListener("change",updateProgress);
+  });
+  document.querySelectorAll("[data-tf-btn]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var inst=btn.getAttribute("data-tf-btn");
+      var qEl=document.querySelector('[data-tf="'+inst+'"]');
+      if(!qEl)return;
+      /* selección exclusiva dentro de la pregunta */
+      qEl.querySelectorAll(".tf-btn").forEach(function(b){b.classList.remove("selected-true","selected-false");});
+      var val=btn.getAttribute("data-val")==="true";
+      btn.classList.add(val?"selected-true":"selected-false");
+      updateProgress();
+    });
+  });
+  document.querySelectorAll("[data-pool]").forEach(function(poolEl){
+    var id=poolEl.getAttribute("data-pool");
+    poolEl.addEventListener("click",function(e){
+      var t=e.target;
+      if(!t.classList.contains("otoken")||t.classList.contains("used"))return;
+      if(orderState[id].locked)return;
+      t.classList.add("used");
+      orderState[id].line.push(t.getAttribute("data-ot"));
+      renderOrderLine(id);
+      updateProgress();
+    });
+  });
+  document.querySelectorAll("[data-line]").forEach(function(lineEl){
+    var id=lineEl.getAttribute("data-line");
+    lineEl.addEventListener("click",function(e){
+      var t=e.target;
+      if(!t.classList.contains("otoken")||!t.classList.contains("on-line"))return;
+      if(orderState[id].locked)return;
+      var text=t.getAttribute("data-ot");
+      var idx=orderState[id].line.indexOf(text);
+      if(idx>-1)orderState[id].line.splice(idx,1);
+      var poolEl=document.querySelector('[data-pool="'+id+'"]');
+      var poolToken=Array.prototype.find.call(poolEl.children,function(c){return c.getAttribute("data-ot")===text&&c.classList.contains("used");});
+      if(poolToken){poolToken.classList.remove("used");}
+      renderOrderLine(id);
+      updateProgress();
+    });
+  });
+  document.querySelectorAll(".mchip").forEach(function(chip){
+    chip.addEventListener("click",function(ev){
+      if(ev.target.classList.contains("unlink")){unlinkMatch(ev.target.getAttribute("data-unlink"));return;}
+      if(chip.classList.contains("done"))return;
+      if(chip.classList.contains("left")){
+        document.querySelectorAll(".mchip.left.active").forEach(function(c){c.classList.remove("active");});
+        chip.classList.add("active");
+        activeChip=chip.getAttribute("data-m");
+      }else if(chip.classList.contains("right")){
+        if(!activeChip)return;
+        if(chip.classList.contains("matched"))return;
+        var rightInst=chip.getAttribute("data-mean");
+        matchAns[activeChip]=rightInst;
+        var leftChip=document.querySelector('.mchip.left[data-m="'+activeChip+'"]');
+        if(leftChip){
+          leftChip.classList.remove("active");
+          leftChip.classList.add("matched","done");
+        }
+        chip.classList.add("matched","done");
+        activeChip=null;
+        updateProgress();
+      }
+    });
+  });
+  document.querySelectorAll("[data-listen]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var text=btn.getAttribute("data-listen");
+      speakText(text,btn.classList.contains("listen-btn")?btn:null);
+    });
+  });
+}
+function unlinkMatch(inst){
+  delete matchAns[inst];
+  var lc=document.querySelector('.mchip.left[data-m="'+inst+'"]');
+  if(lc){lc.classList.remove("matched","done","active");}
+  var rc=document.querySelector('.mchip.right[data-mean="'+inst+'"]');
+  if(rc){rc.classList.remove("matched","done");}
+  activeChip=null;updateProgress();
+}
+function renderOrderLine(id){
+  var lineEl=document.querySelector('[data-line="'+id+'"]');
+  if(!lineEl)return;
+  lineEl.innerHTML=orderState[id].line.map(function(p){
+    return '<span class="otoken on-line" data-ot="'+esc(p)+'">'+esc(p)+'</span>';
+  }).join("");
+  Array.prototype.forEach.call(lineEl.children,function(t){
+    t.addEventListener("click",function(){
+      if(orderState[id].locked)return;
+      var text=t.getAttribute("data-ot");
+      var idx=orderState[id].line.indexOf(text);
+      if(idx>-1)orderState[id].line.splice(idx,1);
+      var poolEl=document.querySelector('[data-pool="'+id+'"]');
+      var poolToken=Array.prototype.find.call(poolEl.children,function(c){return c.getAttribute("data-ot")===text&&c.classList.contains("used");});
+      if(poolToken)poolToken.classList.remove("used");
+      renderOrderLine(id);
+      updateProgress();
+    });
+  });
+}
+
+/* ── TABS ── */
+function bindTabs(){
+  $("tabbar").addEventListener("click",function(e){
+    var b=e.target.closest(".tab");
+    if(!b)return;
+    activeTab=b.getAttribute("data-sec");
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.toggle("on",x===b);});
+    document.querySelectorAll(".practice-section").forEach(function(s){
+      s.classList.toggle("show",activeTab==="all"||s.getAttribute("data-sec")===activeTab);
+    });
+  });
+}
+function selectTab(sec){
+  activeTab=sec;
+  document.querySelectorAll(".tab").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-sec")===sec);});
+  document.querySelectorAll(".practice-section").forEach(function(s){
+    s.classList.toggle("show",sec==="all"||s.getAttribute("data-sec")===sec);
+  });
+}
+
+/* ── PROGRESS ── */
+function updateProgress(){
+  var answered=0;
+  var total=state.round.length+state.listenItems.length;
+  document.querySelectorAll("[data-sel-c]").forEach(function(sel){if(sel.value)answered++;});
+  document.querySelectorAll("[data-sel-e]").forEach(function(sel){if(sel.value)answered++;});
+  document.querySelectorAll("[data-sel-l]").forEach(function(sel){if(sel.value)answered++;});
+  document.querySelectorAll("[data-tf]").forEach(function(q){
+    if(q.querySelector(".tf-btn.selected-true,.tf-btn.selected-false"))answered++;
+  });
+  state.round.forEach(function(it){
+    if(it.type==="order"||it.type==="transform"){
+      var st=orderState[it.inst];
+      if(st&&st.line.length===it.pieces.length)answered++;
+    }
+    if(it.type==="match"&&matchAns[it.inst])answered++;
+  });
+  $("progressBar").style.width=Math.round((total?answered/total*100:0))+"%";
+  $("checkBtn").disabled=(answered<total);
+}
+
+/* ── TIMER ── */
+function startTimer(){timerInterval=setInterval(function(){timerSeconds++;updateTimer();},1000);$("timerDisplay").classList.add("running");}
+function stopTimer(){if(timerInterval){clearInterval(timerInterval);timerInterval=null;}$("timerDisplay").classList.remove("running");}
+function updateTimer(){var m=Math.floor(timerSeconds/60);var s=timerSeconds%60;$("timerDisplay").textContent=m+":"+(s<10?"0":"")+s;}
+
+/* ── GRADE — feedback inline ── */
+/* ── R1: logCheck → append session entry on each Check ── */
+function logCheck(ok,total){
+  var ms=state._lastMissed||[],missedSet={};
+  ms.forEach(function(m){missedSet[m.inst]=true;});
+  var byType={},missedLog=[];
+  function addBt(t,isOk){if(!byType[t])byType[t]={ok:0,bad:0};if(isOk)byType[t].ok++;else byType[t].bad++;}
+  function yaChoose(inst){var s=document.querySelector('[data-sel-c="'+inst+'"]');return s?(s.value||"(blank)"):"(missing)";}
+  function yaError(inst){var s=document.querySelector('[data-sel-e="'+inst+'"]');return s?(s.value||"(blank)"):"(missing)";}
+  function yaTf(inst){var q=document.querySelector('[data-tf="'+inst+'"]');var b=q?q.querySelector(".tf-btn.selected-true,.tf-btn.selected-false"):null;return b?(b.getAttribute("data-val")==="true"?"✔ Correct":"✘ Incorrect"):"(blank)";}
+  function yaOrder(inst){var ls=orderState[inst]?orderState[inst].line:[];return ls.length?ls.join(" "):"(blank)";}
+  function yaMatch(inst){var ch=matchAns[inst];if(!ch)return"(no answer)";var rc=document.querySelector('.mchip.right[data-mean="'+ch+'"]');return rc?rc.textContent.replace(/\s*✓$/,"").trim():ch;}
+  function yaListen(inst){var s=document.querySelector('[data-sel-l="'+inst+'"]');return s?(s.value||"(blank)"):"(missing)";}
+  function corOf(it){
+    if(it.type==="match")return it.item.mean||"";
+    if(Array.isArray(it.a))return it.a.join(" ");
+    return String(it.a||"");
+  }
+  state.round.forEach(function(it){
+    var isOk=!missedSet[it.inst];
+    addBt(it.type,isOk);
+    if(!isOk){
+      var ya=it.type==="choose"?yaChoose(it.inst)
+        :it.type==="error"?yaError(it.inst)
+        :it.type==="tf"?yaTf(it.inst)
+        :(it.type==="order"||it.type==="transform")?yaOrder(it.inst)
+        :it.type==="match"?yaMatch(it.inst):String(it.inst);
+      missedLog.push({type:it.type,yourAnswer:ya,correct:corOf(it),explain:(it.item&&it.item.explain)||""});
+    }
+  });
+  state.listenItems.forEach(function(l){
+    var isOk=!missedSet[l.inst];
+    addBt(l.type,isOk);
+    if(!isOk)missedLog.push({type:l.type,yourAnswer:yaListen(l.inst),correct:l.a||"",explain:l.explain||""});
+  });
+  state.sessionLog.push({n:state.roundNo,date:new Date().toISOString().slice(0,16).replace("T"," "),correct:ok,total:total,byType:byType,missed:missedLog});
+  var rb=$("reportBtn");if(rb)rb.disabled=false;
+  var rbs=$("reportBtnScore");if(rbs)rbs.disabled=false;
+}
+function grade(){
+  var ok=0,total=state.round.length+state.listenItems.length,missed=[];
+  stopTimer();$("checkBtn").disabled=true;
+  document.body.classList.add("graded");
+  state.round.forEach(function(it){
+    var item=it.item;
+    switch(it.type){
+      case "choose":{
+        var sel=document.querySelector('[data-sel-c="'+it.inst+'"]');
+        var blank=document.querySelector('[data-blank-c="'+it.inst+'"]');
+        var qEl=document.querySelector('[data-choose="'+it.inst+'"]');
+        var ans=(sel.value||"").toLowerCase().trim();
+        var isOk=ans===item.a.toLowerCase();
+        sel.disabled=true;
+        if(isOk){ok++;sel.classList.add("good");blank.classList.add("correct");qEl.classList.add("correct","answered");
+          var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✓";
+          renderVerdict(qEl, true, item.a);}
+        else{missed.push(it);sel.classList.add("bad");blank.classList.add("incorrect","correct");blank.textContent=item.a;blank.style.textDecoration="none";qEl.classList.add("incorrect","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✗";
+          renderVerdict(qEl, false, item.a);}
+        var ex=qEl.querySelector(".explanation");
+        if(ex)ex.classList.add("show");
+        break;
+      }
+      case "error":{
+        var sel=document.querySelector('[data-sel-e="'+it.inst+'"]');
+        var qEl=document.querySelector('[data-error="'+it.inst+'"]');
+        var ans=sel.value||"";
+        var isOk=ans===item.a;
+        sel.disabled=true;
+        if(isOk){ok++;sel.classList.add("good");qEl.classList.add("correct","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✓";
+          renderVerdict(qEl, true, item.a);}
+        else{missed.push(it);sel.classList.add("bad");qEl.classList.add("incorrect","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✗";
+          var opt=Array.prototype.find.call(sel.options,function(o){return o.value===item.a;});
+          if(opt){opt.selected=true;}
+          renderVerdict(qEl, false, item.a);}
+        var ex=qEl.querySelector(".explanation");
+        if(ex){ex.classList.add("show");}
+        break;
+      }
+      case "tf":{
+        var qEl=document.querySelector('[data-tf="'+it.inst+'"]');
+        var selected=qEl.querySelector(".tf-btn.selected-true,.tf-btn.selected-false");
+        var val=selected?selected.getAttribute("data-val")==="true":null;
+        var isOk=(val===item.a);
+        var btns=qEl.querySelectorAll(".tf-btn");
+        btns.forEach(function(b){b.disabled=true;});
+        var tfCorrect=correctTextFor(it); /* "Yes — correct" / "Tell original..." */
+        if(isOk){ok++;qEl.classList.add("correct","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✓";
+          if(selected)selected.classList.add("selected-"+(item.a?"true":"false"));
+          renderVerdict(qEl, true, tfCorrect);}
+        else{
+          missed.push(it);qEl.classList.add("incorrect","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✗";
+          if(selected)selected.classList.add("selected-"+(val===true?"true":"false"));
+          qEl.querySelectorAll(".tf-btn").forEach(function(b){
+            if(b.getAttribute("data-val")===String(item.a)){b.classList.add("selected-"+(item.a?"true":"false"));}
+          });
+          renderVerdict(qEl, false, tfCorrect);}
+        var ex=qEl.querySelector(".explanation");
+        if(ex)ex.classList.add("show");
+        break;
+      }
+      case "order":case "transform":{
+        var qEl=document.querySelector('[data-order="'+it.inst+'"]');
+        orderState[it.inst].locked=true;
+        var line=orderState[it.inst].line;
+        /* normAnswer ignora puntuación: "me" == "me." — si a trae punto
+           final (p. ej. "He had invited me for coffee.") y el usuario
+           construye solo con los tokens (sin punto), acierta igual. */
+        var isOk=normAnswer(line.join(" "))===normAnswer(it.a.join(" "));
+        var orderCorrect=it.a.join(" ");
+        if(isOk){ok++;qEl.classList.add("correct","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✓";
+          var ls=document.querySelector('[data-line="'+it.inst+'"]');
+          if(ls)Array.prototype.forEach.call(ls.children,function(c){c.classList.add("correct");});
+          renderVerdict(qEl, true, orderCorrect);}
+        else{
+          missed.push(it);qEl.classList.add("incorrect","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✗";
+          var ls=document.querySelector('[data-line="'+it.inst+'"]');
+          if(ls)Array.prototype.forEach.call(ls.children,function(c){c.classList.add("incorrect");});
+          if(ls){ls.innerHTML=it.a.map(function(p){return '<span class="otoken on-line correct">'+esc(p)+'</span>';}).join("");}
+          renderVerdict(qEl, false, orderCorrect);}
+        var ex=qEl.querySelector(".explanation");
+        if(ex)ex.classList.add("show");
+        break;
+      }
+      case "match":{
+        var leftChip=document.querySelector('.mchip.left[data-m="'+it.inst+'"]');
+        var chosen=matchAns[it.inst]||null;
+        var isOk=(chosen===it.inst);
+        if(isOk){ok++;if(leftChip){
+          leftChip.classList.add("matched","done");
+          /* FIX 1: verdict textual hermano del chip (no dentro: el chip
+             correcto recibe opacity:.5 de .done y apagaría el veredicto). */
+          var okV=document.createElement("div");
+          okV.className="verdict correct show";
+          okV.innerHTML='<span aria-hidden="true">✅</span><span> Correcta</span>';
+          if(leftChip.insertAdjacentElement){
+            leftChip.insertAdjacentElement("afterend", okV);
+          } else if(leftChip.parentNode){
+            leftChip.parentNode.appendChild(okV);
+          }
+        }}
+        else{
+          missed.push(it);
+          if(leftChip){
+            var wrongMean=chosen?document.querySelector('.mchip.right[data-mean="'+chosen+'"]'):null;
+            var wrongText=wrongMean?wrongMean.textContent.replace(/\s*✓$/,"").trim():"(no answer)";
+            leftChip.classList.remove("matched","done","active");
+            leftChip.classList.add("error");
+            leftChip.innerHTML='<span class="q-text" style="padding:0">'+esc(it.item.a)+' → '+esc(wrongText)+' ✗ <b>('+esc(it.item.mean)+')</b></span>'
+              +'<div class="verdict incorrect show"><span aria-hidden="true">❌</span><span> Incorrecta</span><span> · Emparejado correcto: </span><span class="ans">'+esc(it.item.mean||"")+'</span></div>';
+          }
+        }
+        break;
+      }
+    }
+  });
+  /* listening */
+  state.listenItems.forEach(function(l){
+    var sel=document.querySelector('[data-sel-l="'+l.inst+'"]');
+    var qEl=document.querySelector('[data-listen-q="'+l.inst+'"]');
+    var ans=(sel.value||"").toLowerCase().trim();
+    var isOk=ans===l.a.toLowerCase();
+    sel.disabled=true;
+    if(isOk){ok++;sel.classList.add("good");qEl.classList.add("correct","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✓";
+      renderVerdict(qEl, true, l.a);}
+    else{missed.push({inst:l.inst,type:"listen",item:l});sel.classList.add("bad");qEl.classList.add("incorrect","answered");var ir=qEl.querySelector(".inline-result");if(ir)ir.textContent="✗";
+      renderVerdict(qEl, false, l.a);}
+    var ex=qEl.querySelector(".explanation");
+    if(ex)ex.classList.add("show");
+  });
+  var pct=Math.round(ok/total*100);
+  totalCorrect+=ok;totalAnswered+=total;
+  if(pct===100){streak++;}else{streak=0;}
+  $("statCorrect").textContent=totalCorrect;$("statTotal").textContent=totalAnswered;
+  if(streak>1){$("streakBadge").style.display="flex";$("streakCount").textContent=streak;}
+  else{$("streakBadge").style.display="none";}
+  state._lastMissed=missed;
+  showScoreStrip(ok,total,pct);
+  $("retryBtn").style.display=ok<total?"inline-flex":"none";
+  if(pct===100)launchConfetti();
+  if(missed.length){selectTab(missed[0].type);}
+  updateProgress();
+  logCheck(ok,total);
+}
+function showScoreStrip(ok,total,pct){
+  $("scoreStrip").classList.add("show");
+  $("scoreBig").textContent=ok+" / "+total;
+  $("scoreBar").style.width=pct+"%";
+  var msg,cls;
+  if(pct===100){msg="🥇 Perfect Score!";cls="perfect";}
+  else if(pct>=80){msg="🎉 Great Job!";cls="great";}
+  else if(pct>=60){msg="👍 Good Effort";cls="great";}
+  else{msg="📚 Keep Practicing";cls="fail";}
+  var m=$("scoreMsg");m.textContent=msg;m.className="msg "+cls;
+}
+function launchConfetti(){
+  var c=$("confetti");c.innerHTML="";
+  var colors=["#b91c1c","#f87171","#059669","#d97706","#7c3aed","#ec4899"];
+  for(var i=0;i<60;i++){
+    var el=document.createElement("div");el.className="confetti";
+    el.style.left=Math.random()*100+"%";
+    el.style.backgroundColor=colors[Math.floor(Math.random()*colors.length)];
+    el.style.animationDuration=(2+Math.random()*2)+"s";
+    el.style.animationDelay=(Math.random()*0.5)+"s";
+    el.style.width=(6+Math.random()*8)+"px";
+    el.style.height=(6+Math.random()*8)+"px";
+    el.style.borderRadius=Math.random()>.5?"50%":"2px";
+    c.appendChild(el);
+  }
+  setTimeout(function(){c.innerHTML="";},4000);
+}
+function currentSize(){
+  var b=document.querySelector("#sizePill button.on");
+  return b?parseInt(b.getAttribute("data-size"),10):defaultSize();
+}
+
+/* ── LISTENING derivado — N audios con 3 distractores cada uno ── */
+function buildListenItems(roundItems){
+  var n=state.size;
+  var tells=[];
+  var seen={};
+  roundItems.forEach(function(it){
+    var t=speakableSentence(it.item,it.type);
+    if(t&&!seen[t]){seen[t]=true;tells.push(t);}
+  });
+  if(tells.length<2)return[];
+  var picked=takePerTypeString(tells,n);
+  return picked.map(function(correct,idx){
+    var distractors=shuffle(tells.filter(function(t){return t!==correct;})).slice(0,3);
+    return {
+      inst:"listen-"+(idx+1)+"-"+Math.random().toString(36).slice(2,7),
+      type:"listen",
+      text:correct,
+      a:correct,
+      opts:shuffle([correct].concat(distractors)),
+      explain:"Esa era la frase pronunciada con "+voiceDisplayName()+". Presta atención a la pronunciación de los verbos irregulares."
+    };
+  });
+}
+function takePerTypeString(arr,n){
+  var out=[];if(!arr.length)return out;
+  var base=shuffle(arr.slice()),bi=0;
+  for(var k=0;k<n;k++){
+    if(bi>=base.length){base=shuffle(arr.slice());bi=0;}
+    out.push(base[bi++]);
+  }
+  return out;
+}
+
+/* ── eventos globales ── */
+$("newRoundBtn").addEventListener("click",function(){buildRound(false);});
+$("nextRoundFromScore").addEventListener("click",function(){buildRound(false);});
+$("checkBtn").addEventListener("click",grade);
+$("retryBtn").addEventListener("click",function(){buildRound(true);});
+$("sizePill").addEventListener("click",function(e){
+  var b=e.target.closest("button");
+  if(!b)return;
+  document.querySelectorAll("#sizePill button").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on");
+  state.size=currentSize();
+  saveLS();
+  buildRound(false);
+});
+$("voiceSelector").addEventListener("click",function(e){
+  var b=e.target.closest("button");
+  if(!b)return;
+  document.querySelectorAll("#voiceSelector .voice-pill button").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on");
+  TTS_VOICE=b.getAttribute("data-voice");
+  audioUrls={};
+  var wu=$("ttsWarmup");
+  if(wu)wu.classList.remove("show");
+  loadLocalVoices();
+  /* actualizar nota de voz del listening visible */
+  document.querySelectorAll(".listen-voice-note").forEach(function(n){n.textContent="Voz: "+voiceDisplayName();});
+  startWarmup();
+});
+$("timerToggle").addEventListener("click",function(){
+  timerEnabled=!timerEnabled;
+  $("timerToggle").textContent=timerEnabled?"⏱️ ✓":"⏱️";
+  if(timerEnabled){$("timerDisplay").style.display="inline-block";if(!timerInterval){timerSeconds=0;updateTimer();startTimer();}}
+  else{$("timerDisplay").style.display="none";stopTimer();}
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Enter"&&e.ctrlKey)grade();
+  if(e.key==="n"&&e.ctrlKey){e.preventDefault();buildRound(false);}
+});
+/* cargar voces locales cuando el navegador las tenga listas */
+if("speechSynthesis" in window){
+  loadLocalVoices();
+  window.speechSynthesis.onvoiceschanged=loadLocalVoices;
+  if(!localVoicesReady){setTimeout(loadLocalVoices,250);}
+}
+/* selector inicial de voz */
+(function(){
+  var dft=document.querySelector('#voiceSelector button[data-voice="af_bella"]');
+  if(dft)dft.classList.add("on");
+})();
+buildRound(false);
+
+/* ════════════════════════════════════════════════════════════════
+   REPORT (R3-R6) — markdown results report, fully client-side
+   Pure buildReportMarkdown(log) → ≤45L, exact R4 format.
+   Cero fetch/AI: solo clipboard + Blob download.
+   ════════════════════════════════════════════════════════════════ */
+function buildReportMarkdown(log){
+  if(!log||!log.length)return"# 📋 English Practice Report — "+esc(CONFIG.title)+"\n_No rounds yet._\n";
+  var totOk=0,totTotal=0,last=log[log.length-1];
+  log.forEach(function(r){totOk+=r.correct;totTotal+=r.total;});
+  var pct=totTotal?Math.round(totOk/totTotal*100):0;
+  var md="# 📋 English Practice Report — "+esc(CONFIG.title)+" — "+last.date+"\n";
+  md+="**Rounds:** "+log.length+" · **Cumulative:** "+totOk+"/"+totTotal+" ("+pct+"%)\n\n";
+  md+="| Round | Score |\n|---|---|\n";
+  log.forEach(function(r){md+="| "+r.n+" | "+r.correct+"/"+r.total+" |\n";});
+  md+="\n## Missed — Round "+last.n+"\n";
+  if(!last.missed.length){md+="_None — perfect round!_ 🎉\n";}
+  else last.missed.forEach(function(m){
+    var ex=(m.explain||"").toString();
+    if(ex.length>120)ex=ex.slice(0,117)+"...";
+    md+="- **"+esc(m.type)+"** your: \""+esc(m.yourAnswer)+"\" → ✅ \""+esc(m.correct)+"\" — "+esc(ex)+"\n";
+  });
+  md+="\n## Weak spots\n";
+  var byType={};
+  log.forEach(function(r){Object.keys(r.byType).forEach(function(t){
+    if(!byType[t])byType[t]={ok:0,bad:0};
+    byType[t].ok+=r.byType[t].ok;byType[t].bad+=r.byType[t].bad;
+  });});
+  var weak=[];
+  Object.keys(byType).forEach(function(t){
+    var s=byType[t],n=s.ok+s.bad,p=n?Math.round(s.ok/n*100):0;
+    if(p<70)weak.push({type:t,ok:s.ok,n:n,pct:p});
+  });
+  if(!weak.length){md+="No weak spots. 🎉\n";}
+  else weak.forEach(function(w){md+="- "+esc(w.type)+": "+w.ok+"/"+w.n+" ("+w.pct+"%)\n";});
+  return md;
+}
+function openReport(){
+  var md=buildReportMarkdown(state.sessionLog);
+  var body=$("rptBody");
+  if(body)body.innerHTML=miniRenderMarkdown(md);
+  var p=$("reportInline");if(p){
+    p.classList.add("show");
+    /* FIX 3: si quedaba fuera de viewport, lo llevamos al usuario. El panel
+       está en el flujo bajo el toolbar (sin position:fixed → inmune al iframe
+       autoexpansible de content-blocks.js). Aun así, scrollIntoView asegura
+       foco al abrir tras haber navegado a un type distinto. */
+    if(typeof p.scrollIntoView==="function"){
+      try{p.scrollIntoView({behavior:"smooth",block:"start"});}catch(_e){p.scrollIntoView();}
+    }
+  }
+}
+function closeReport(){var p=$("reportInline");if(p)p.classList.remove("show");}
+function copyReport(){
+  var md=buildReportMarkdown(state.sessionLog),btn=$("rptCopyBtn");
+  function done(){if(btn){var o=btn.textContent;btn.textContent="Copied ✅";setTimeout(function(){btn.textContent=o;},1500);}}
+  function fallback(){var ta=document.createElement("textarea");ta.value=md;ta.style.position="fixed";ta.style.left="-9999px";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(e){}document.body.removeChild(ta);}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(md).then(done,fallback);
+  }else{fallback();}
+}
+function downloadReport(){
+  var md=buildReportMarkdown(state.sessionLog);
+  var blob=new Blob([md],{type:"text/markdown"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");a.href=url;a.download="english-report-"+Date.now()+".md";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},200);
+}
+$("reportBtn").addEventListener("click",openReport);
+$("reportBtnScore").addEventListener("click",openReport);
+$("rptCopyBtn").addEventListener("click",copyReport);
+$("rptDownloadBtn").addEventListener("click",downloadReport);
+$("rptCloseBtn").addEventListener("click",closeReport);
+document.addEventListener("keydown",function(e){if(e.key==="Escape")closeReport();});
+</script>
+</body>
+</html>

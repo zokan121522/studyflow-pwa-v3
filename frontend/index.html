@@ -2,6 +2,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <!-- Theme bootstrap: apply saved theme BEFORE first paint (no flash).
+       Default (no data-theme attr) = dark. Light = v2 studyflow-hub palette. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("sf-theme") === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#16213e">
   <meta name="description" content="StudyFlow PWA - Planificación de estudio, cursos, hábitos y agenda">
@@ -33,6 +44,18 @@
   <link rel="stylesheet" href="/features/agenda/agenda-overlays.css">
   <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
   <link rel="stylesheet" href="/features/habits/habits.css">
+  <link rel="stylesheet" href="/features/studyflow/content-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/courses.css">
+  <link rel="stylesheet" href="/features/studyflow/studyflow-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/courses-sidebar-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/studyflow-editor.css">
+  <!-- S7: pdf viewer (App.PdfViewer + App.PdfAnnots) -->
+  <link rel="stylesheet" href="/features/studyflow/pdf-viewer.css">
+  <link rel="stylesheet" href="/features/studyflow/study-scheduler.css">
+  <link rel="stylesheet" href="/features/studyflow/ai.css">
+  <link rel="stylesheet" href="/features/studyflow/knowledge-pipeline.css">
+  <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
+  <link rel="stylesheet" href="/features/addons/addons.css">
   
   <!-- PWA Meta Tags -->
   <meta name="msapplication-TileColor" content="#16213e">
@@ -57,21 +80,28 @@
 
   <!-- App container (hidden until initialized) -->
   <div id="app" class="app hidden">
-    <!-- Header -->
+    <!-- Header (v2 parity: 3 flex sections, static, 48px) -->
     <header class="header">
       <div class="header-left">
         <button class="hamburger" id="hamburger-btn" aria-label="Menú">☰</button>
         <div class="header-logo">
           <span class="logo-icon">📚</span>
-          <span class="logo-text">StudyFlow</span>
+          <span class="logo-text">studyflow</span>
+          <!-- Server status — lives next to the logo (V3). Polled by
+               shared/server-status.js; dot + "API" pill. -->
+          <span id="server-status-wrap" class="server-status-wrap">
+            <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
+            <span class="server-status-label">API</span>
+          </span>
         </div>
       </div>
-      <div class="header-center" id="header-week">
-        <span class="week-nav" id="week-prev" aria-label="Semana anterior">◀</span>
+      <div class="header-week">
+        <span class="arr" id="week-prev" aria-label="Semana anterior">◀</span>
         <span id="week-label"><strong>Cargando...</strong></span>
-        <span class="week-nav" id="week-next" aria-label="Semana siguiente">▶</span>
+        <span class="arr" id="week-next" aria-label="Semana siguiente">▶</span>
       </div>
       <div class="header-right">
+        <!-- user-nav (v2 marker; hidden until auth lands) -->
         <div id="user-nav" class="user-nav" style="display:none;">
           <div id="user-nav-trigger" class="user-nav-trigger">
             <span id="user-avatar" class="user-avatar"></span>
@@ -89,6 +119,11 @@
             <button id="btn-logout" class="dropdown-item dropdown-danger">🚪 Cerrar sesión</button>
           </div>
         </div>
+        <!-- Theme toggle (dual dark/light, v2 palette) -->
+        <button id="btn-theme" class="hdr-btn" title="Cambiar tema (oscuro/claro)" aria-label="Cambiar tema">☀️</button>
+        <!-- Backup / Restore — local (ZIP on disk, issue #7) -->
+        <button id="btn-backup" class="hdr-btn" title="Backup — guardar datos locales (ZIP)">📦 Backup</button>
+        <button id="btn-restore" class="hdr-btn" title="Restore — restaurar desde un ZIP local">⬆️ Restore</button>
       </div>
     </header>
 
@@ -102,40 +137,45 @@
       </button>
     </div>
 
-    <!-- Main Content -->
-    <main class="main" role="main">
-      <!-- Dashboard View (welcome) -->
-      <div class="view-panel" id="view-dashboard">
-        <div class="dashboard-container">
-          <div class="dashboard-profile">
-            <div class="dashboard-avatar" id="dashboard-avatar">👤</div>
-            <div class="dashboard-greeting">
-              <h1 id="dashboard-title">Bienvenido a StudyFlow</h1>
-              <p id="dashboard-subtitle" class="dashboard-subtitle">Tu centro de planificación de estudio</p>
+    <!-- Dashboard View (welcome) — OUTSIDE .main (v2 architecture: it is a
+         full-width sibling of the grid, not a grid cell) -->
+    <div class="view-panel" id="view-dashboard">
+      <div class="dashboard-container">
+        <div class="dashboard-profile">
+          <div class="dashboard-avatar" id="dashboard-avatar">👤</div>
+          <div class="dashboard-greeting">
+            <h1 id="dashboard-title">Bienvenido a StudyFlow</h1>
+            <p id="dashboard-subtitle" class="dashboard-subtitle">Tu centro de planificación de estudio</p>
+          </div>
+        </div>
+        <div class="dashboard-badges">
+          <span class="badge badge-base">🏛️ Cuenta BASE</span>
+        </div>
+        <!-- Issue #12: favourites row on the dashboard (v2 fase 72 F2).
+             Populated by courses-dashboard.js; hidden when empty so the
+             home does not grow a dead heading for users with no stars. -->
+        <div id="dashboard-favorites" class="dashboard-favorites hidden"></div>
+        <div class="dashboard-nav-grid">
+          <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
+            <div class="dnc-icon">📅</div>
+            <div class="dnc-text">
+              <div class="dnc-label">Agenda</div>
+              <div class="dnc-desc">Planificar sesiones, hábitos, calendario semanal</div>
             </div>
           </div>
-          <div class="dashboard-badges">
-            <span class="badge badge-base">🏛️ Cuenta BASE</span>
-          </div>
-          <div class="dashboard-nav-grid">
-            <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
-              <div class="dnc-icon">📅</div>
-              <div class="dnc-text">
-                <div class="dnc-label">Agenda</div>
-                <div class="dnc-desc">Planificar sesiones, hábitos, calendario semanal</div>
-              </div>
-            </div>
-            <div class="dashboard-nav-card" data-tab="studyflow" data-accent="green">
-              <div class="dnc-icon">📖</div>
-              <div class="dnc-text">
-                <div class="dnc-label">Studyflow</div>
-                <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
-              </div>
+          <div class="dashboard-nav-card" data-tab="studyflow" data-accent="green">
+            <div class="dnc-icon">📖</div>
+            <div class="dnc-text">
+              <div class="dnc-label">Studyflow</div>
+              <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
+    <!-- Main Content: v2 grid (340px 1fr) — only the tab views live here -->
+    <main class="main" role="main">
       <!-- Agenda View -->
       <div class="view-panel hidden" id="view-agenda">
         <div class="col col-left" id="agenda-left" role="complementary" aria-label="Navegación agenda"></div>
@@ -357,11 +397,86 @@
 
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
+  <!-- Issue #9: allowlist HTML sanitizer for v2 content blocks (infographic
+       <img>, audio <audio>, NotebookLM HTML). Loads right after ui-common so
+       any feature can use App.UI.sanitizeHtml. -->
+  <script src="/shared/html-sanitizer.js"></script>
   <script src="/shared/load-partial.js"></script>
+  <!-- Studyflow (S1 S2 sub-phase port):
+       content-blocks.js — self-contained safe markdown engine
+         (replaces the agenda-glue.js fallback; loads BEFORE agenda-glue
+          so App.ContentBlocks._renderMd is the FULL one).
+       courses-api.js / courses-sidebar.js / courses.js — sidebar tree +
+         course/topic landing (read-only shell, S1).
+       agenda-glue.js — defines STATE, App.Auth.authHeaders,
+         App.UI.displayTitle, App.Courses.applyMarkdown; uses the content-
+         blocks _renderMd if already present, otherwise its fallback
+         small-subset renderer. -->
+  <script src="/features/studyflow/content-blocks.js"></script>
+  <script src="/features/studyflow/courses-api.js"></script>
+  <!-- Issue #10: quiz por bloque (exercise) — embeds the block's test
+       after the panel paints (patrón PdfViewer). -->
+  <script src="/features/studyflow/quiz-embed.js"></script>
+  <!-- Issue #12: courses-dnd.js must load BEFORE courses-sidebar.js, which
+       calls CoursesDND.attach() when it wires the sidebar events. -->
+  <script src="/features/studyflow/courses-dnd.js"></script>
+  <script src="/features/studyflow/courses-dashboard.js"></script>
+  <script src="/features/studyflow/courses-sidebar.js"></script>
+  <!-- S4.5: markdown-editor.js (toolbar + color + split) loads BEFORE
+       courses-blocks.js so the courses-blocks rewire can delegate to
+       App.MarkdownEditor.editForm / attachLivePreview. -->
+  <script src="/features/studyflow/markdown-editor.js"></script>
+  <!-- S7: pdf viewer — loads before courses-blocks.js so pdf-ref
+       blocks rendered by _renderBlock can be wired by App.PdfViewer.init
+       after courses.js mounts them into the center panel. -->
+  <script src="/features/studyflow/pdf-viewer-annots.js"></script>
+  <script src="/features/studyflow/pdf-viewer.js"></script>
+  <!-- S7b: unified PDF + SCORM import popover (App.PdfImport). Loads
+       before courses-blocks.js so the chip-create handler can open the
+       popover the moment a pdf-ref block is created. -->
+  <script src="/features/studyflow/pdf-import-stream.js"></script>
+  <script src="/features/studyflow/pdf-import.js"></script>
+  <script src="/features/studyflow/courses-blocks.js"></script>
+  <script src="/features/studyflow/courses.js"></script>
+  <!-- S7b-B — floating study menu (⋯ FAB) + SCORM/Moodle credentials
+       settings panel. study-scheduler.js self-mounts on DOMContentLoaded
+       and its menu item calls App.ScormSettings.open(). -->
+  <script src="/features/studyflow/scorm-settings.js"></script>
+  <!-- Phase 7.2 — NotebookLM settings panel (🧠 FAB menu item + modal). -->
+  <script src="/features/studyflow/notebooklm-settings.js"></script>
+  <script src="/features/studyflow/openzen-settings.js"></script>
+  <script src="/features/studyflow/study-scheduler.js"></script>
+  <!-- SA: Addons Foundation — registry + management UI. Loads AFTER courses.js
+       so the courses module's defensive isEnabled() hooks see App.Addons on
+       first updateCenter(). S5/S6/S9 modules load AFTER this so their manifests
+       register() into App.Addons in time for the marketplace grid. -->
+  <script src="/features/addons/addons-core.js"></script>
+  <script src="/features/addons/addons-manager.js"></script>
+  <!-- Phase 7.7 — AI ✨ Generate (v2 port): ai-tasks (streaming poll +
+       modal), ai-notebooklm (generators → v3 AI endpoints), ai.js
+       (manifests + toolbar render + click wiring + usage counters +
+       result-block insert via CoursesAPI.addBlock/moveBlock). Loads
+       AFTER addons-core so App.Addons.register exists when ai.js starts.
+       ai-tasks/ai-notebooklm MUST come before ai.js (ai.js references
+       window.App.AI.Tasks / App.AI.Generation). -->
+  <script src="/features/studyflow/ai-tasks.js"></script>
+  <script src="/features/studyflow/ai-notebooklm.js"></script>
+  <!-- Phase 7.7 — config modals: ai-config-modal.js (template/length/
+       language), ai-modals.js (test/audio/infographic). MUST load before
+       ai.js because its click wiring opens these overlays. -->
+  <script src="/features/studyflow/ai-config-modal.js"></script>
+  <script src="/features/studyflow/ai-modals.js"></script>
+  <!-- Phase 38/61 addons — knowledge-pipeline.js (Gen. Contenido modal +
+       polling, NotebookLM provider) and english-grammar.js (English
+       Exercises config overlay + interactive block insert). MUST load
+       before ai.js because its click wiring opens these addons. -->
+  <script src="/features/studyflow/knowledge-pipeline.js"></script>
+  <script src="/features/studyflow/english-grammar.js"></script>
+  <script src="/features/studyflow/ai.js"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
-       App.ContentBlocks._renderMd, App.Courses.applyMarkdown, plus stubs for
-       deferred sub-phases (Habits, AgendaTimeline, AgendaMind). -->
+       App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,
+       plus stubs for deferred sub-phases (Habits, AgendaTimeline, AgendaMind). -->
   <script src="/features/agenda/agenda-glue.js"></script>
   <script src="/features/agenda/agenda-timer.js"></script>
   <script src="/features/agenda/agenda-quicknote.js"></script>
@@ -386,7 +501,9 @@
   <script src="/features/agenda/agenda-calendars.js"></script>
   <script src="/features/agenda/agenda.js"></script>
   <script src="/features/agenda/agenda-handlers.js"></script>
-  <script src="/features/courses/courses.js"></script>
   <script src="/app.js"></script>
+  <script src="/shared/backup-restore.js"></script>
+  <script src="/shared/v2-restore-modal.js"></script>
+  <script src="/shared/server-status.js"></script>
 </body>
 </html>
