@@ -25,20 +25,50 @@ BACKUP_VERSION = 1
 
 # ─── serialization helpers ────────────────────────────────────────────
 def load_zip(file_storage):
-    """Validate an uploaded ZIP; return parsed backup dict (or None)."""
+    """Validate an uploaded ZIP; return parsed v3 backup dict (or None).
+
+    Reads ``backup.json`` BY NAME. An earlier version read ``names[0]``,
+    which made every v2 backup look like a valid (but empty) v3 one: the
+    first entry of a v2 ZIP is its manifest.json, and that manifest also
+    carries ``version: 1``, so it passed the BACKUP_VERSION check. The
+    user then got a review modal reading "no subjects in this backup"
+    instead of the v2 migration prompt.
+    """
     try:
         buf = io.BytesIO(file_storage.read())
         with zipfile.ZipFile(buf, "r") as zf:
-            names = zf.namelist()
-            if not names:
+            if not zf.namelist():
                 return None
-            with zf.open(names[0]) as f:
+            with zf.open("backup.json") as f:
                 payload = json.loads(f.read().decode("utf-8"))
         if not isinstance(payload, dict) or payload.get("version") != BACKUP_VERSION:
             return None
         return payload
     except Exception:
         return None
+
+
+def peek_format(file_storage) -> str:
+    """Classify an upload as "v3" | "v2" | "unknown" without eating it.
+
+    The stream is rewound so the caller can still hand the same
+    FileStorage to load_zip(). Only the archive directory plus the small
+    JSON header are read — never the multi-hundred-MB payload.
+    """
+    from v2_parser import detect_format
+
+    try:
+        file_storage.seek(0)
+        buf = io.BytesIO(file_storage.read())
+        with zipfile.ZipFile(buf, "r") as zf:
+            return detect_format(zf)
+    except Exception:
+        return "unknown"
+    finally:
+        try:
+            file_storage.seek(0)
+        except Exception:
+            pass
 
 
 def make_zip(backup: dict) -> io.BytesIO:

@@ -175,5 +175,49 @@ window.V2Restore = (function () {
     el._t = setTimeout(() => el.classList.remove("show"), 4500);
   }
 
-  return { open, toast };
+  // ─── transport (issue #8) ───────────────────────────────────────────
+  // Lives here rather than in backup-restore.js so the whole v2 path
+  // (scan, show, import) stays in one module.
+  function _headers() {
+    const t = localStorage.getItem("token");
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  }
+
+  async function scan(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`${window.API_URL}/backup/v2/scan`, {
+      method: "POST",
+      headers: _headers(),
+      credentials: "include",
+      body: fd,
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.ok ? data.plan || {} : null;
+  }
+
+  async function runImport(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`${window.API_URL}/backup/v2/import`, {
+      method: "POST",
+      headers: _headers(),
+      credentials: "include",
+      body: fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+    const n = (data.report || {}).counts || {};
+    toast(
+      `✅ Migrado: ${n.courses || 0} cursos, ${n.topics || 0} temas, ` +
+      `${n.blocks || 0} bloques, ${n.sessions || 0} sesiones`
+    );
+    setTimeout(() => window.location.reload(), 1200);
+    return data;
+  }
+
+  return { open, toast, scan, runImport };
 })();

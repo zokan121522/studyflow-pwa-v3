@@ -107,6 +107,7 @@
     const fd = new FormData();
     fd.append("file", file);
     toast("⬆️ Analizando backup…");
+    let triedV2 = false;
     try {
       const resp = await fetch(`${window.API_URL}/backup/upload`, {
         method: "POST",
@@ -115,6 +116,15 @@
         body: fd,
       });
       const data = await resp.json();
+      // v2 dumps are answered 415 + format:"v2". Branch explicitly rather
+      // than relying on the catch: a v2 ZIP used to be read as a valid but
+      // EMPTY v3 backup, so nothing threw and the modal showed "0 items".
+      if (data.format === "v2") {
+        triedV2 = true;
+        if (await tryV2Scan(file)) return;
+        toast(data.error || "No se pudo leer el backup v2", true);
+        return;
+      }
       if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
       _zipFile = file;
       _isV2 = false;
@@ -125,7 +135,7 @@
     } catch (e) {
       // A v2 backup is not a v3 backup.json. Rather than showing an error,
       // try the v2 endpoint: the user may simply have grabbed an old ZIP.
-      if (await tryV2Scan(file)) return;
+      if (!triedV2 && (await tryV2Scan(file))) return;
       toast(`Error de análisis: ${e.message}`, true);
     }
   }
@@ -133,55 +143,17 @@
   // ─── v2 restore (issue #8) ───────────────────────────────────────────
   // Returns true when the file is a v2 dump and the modal was shown.
   async function tryV2Scan(file) {
-    const fd = new FormData();
-    fd.append("file", file);
+    if (!window.V2Restore) return false;
     try {
-      const resp = await fetch(`${window.API_URL}/backup/v2/scan`, {
-        method: "POST",
-        headers: _uploadHeaders(),
-        credentials: "include",
-        body: fd,
-      });
-      if (!resp.ok) return false;
-      const data = await resp.json();
-      if (!data.ok) return false;
+      const plan = await window.V2Restore.scan(file);
+      if (!plan) return false;
       _zipFile = file;
       _isV2 = true;
-      openV2Modal(data.plan || {}, file);
+      window.V2Restore.open(plan, file, () => window.V2Restore.runImport(file));
       return true;
     } catch (err) {
       return false;
     }
-  }
-
-  function openV2Modal(plan, file) {
-    if (!window.V2Restore) {
-      toast("El soporte de v2 no está cargado", true);
-      return;
-    }
-    window.V2Restore.open(plan, file, runV2Import);
-  }
-
-  async function runV2Import(file) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const resp = await fetch(`${window.API_URL}/backup/v2/import`, {
-      method: "POST",
-      headers: _uploadHeaders(),
-      credentials: "include",
-      body: fd,
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.ok) {
-      throw new Error(data.error || `HTTP ${resp.status}`);
-    }
-    const r = data.report || {};
-    const n = r.counts || {};
-    window.V2Restore.toast(
-      `✅ Migrado: ${n.courses || 0} cursos, ${n.topics || 0} temas, ` +
-      `${n.blocks || 0} bloques, ${n.sessions || 0} sesiones`
-    );
-    setTimeout(() => window.location.reload(), 1200);
   }
 
   function preselectAll(tree) {

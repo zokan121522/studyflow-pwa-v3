@@ -32,6 +32,7 @@ from backup_core import (
     import_studyflow_tree,
     load_zip,
     make_zip,
+    peek_format,
 )
 from v2_import import migrate_v2
 from v2_parser import detect_format, parse_copy_sections
@@ -81,6 +82,19 @@ def backup_upload(user_id):
     file_storage = request.files.get("file")
     if not file_storage:
         return jsonify({"error": "file is required"}), 400
+
+    # Issue #8: a v2 backup is not a v3 one. Say so explicitly so the UI can
+    # offer the migration, instead of returning an empty selection tree that
+    # reads as "this backup has nothing in it".
+    fmt = peek_format(file_storage)
+    if fmt == "v2":
+        return jsonify({
+            "ok": False,
+            "format": "v2",
+            "error": "Este es un backup de StudyFlow v2 y necesita migración",
+            "use": "/backup/v2/scan",
+        }), 415
+
     backup = load_zip(file_storage)
     if backup is None:
         return jsonify({"error": "invalid backup zip"}), 400
