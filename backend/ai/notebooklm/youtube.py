@@ -56,6 +56,7 @@ def _sync_run(coro):
     return asyncio.run(coro)
 
 
+from ai.notebooklm.utils import _new_task_id
 from ai.notebooklm.utils import get_active_profile as _get_active_profile
 
 
@@ -255,6 +256,20 @@ def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
         )
 
 
+def _norm_topic_id(topic_id) -> int | None:
+    """Normalise a topic id for the ``ai_tasks.topic_id`` INTEGER column.
+
+    The frontend launches the YouTube dialog from a topic-less context too
+    (and the stub dialog passes ``""``), which psycopg2 rejects with
+    ``invalid input syntax for type integer: ""`` — a 500 before the task is
+    even created. An empty/absent topic simply means "not attached", which is
+    what NULL expresses.
+    """
+    if topic_id is None or topic_id == "":
+        return None
+    return int(topic_id)
+
+
 def create_youtube_md_task(url: str, topic_id: str, block_id: str, user_id: str) -> dict:
     """Create a YouTube → Markdown background task.
 
@@ -275,10 +290,10 @@ def create_youtube_md_task(url: str, topic_id: str, block_id: str, user_id: str)
 
     task_row = execute_returning(
         """INSERT INTO ai_tasks
-           (user_id, topic_id, task_type, format, source_type, source_id, status)
-           VALUES (%s, %s, 'youtube', 'markdown', 'youtube', %s, 'pending')
+           (id, user_id, topic_id, task_type, format, source_type, source_id, status)
+           VALUES (%s, %s, %s, 'youtube', 'markdown', 'youtube', %s, 'pending')
            RETURNING id""",
-        (user_id, topic_id, block_id),
+        (_new_task_id(), user_id, _norm_topic_id(topic_id), block_id),
     )
     task_id = task_row["id"]
 
@@ -312,10 +327,10 @@ def create_youtube_html_task(url: str, topic_id: str, block_id: str, user_id: st
 
     task_row = execute_returning(
         """INSERT INTO ai_tasks
-           (user_id, topic_id, task_type, format, source_type, source_id, status)
-           VALUES (%s, %s, 'youtube', 'html', 'youtube', %s, 'pending')
+           (id, user_id, topic_id, task_type, format, source_type, source_id, status)
+           VALUES (%s, %s, %s, 'youtube', 'html', 'youtube', %s, 'pending')
            RETURNING id""",
-        (user_id, topic_id, block_id),
+        (_new_task_id(), user_id, _norm_topic_id(topic_id), block_id),
     )
     task_id = task_row["id"]
 
