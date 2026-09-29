@@ -32,6 +32,15 @@ window.App.StudyScheduler = (function () {
         label: "NotebookLM",
         run: () => window.App.NotebookLmSettings.open(),
       },
+      // OpenZen (opencode-acp) — the v2 "⛅ OpenZen" config tab. Must be
+      // reachable from here: YouTubeZen and "Gen. Contenido" cannot run
+      // without a key, so the panel is the gate to those generators.
+      {
+        id: "openzen-settings",
+        icon: "⛅",
+        label: "OpenZen",
+        run: () => window.App.OpenZenSettings.open(),
+      },
     ];
   }
 

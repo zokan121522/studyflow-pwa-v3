@@ -24,6 +24,7 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses-notes.js',
   '/features/studyflow/courses-dnd.js',
   '/features/studyflow/courses-dashboard.js',
+  '/features/studyflow/openzen-settings.js',
   '/features/studyflow/courses-sidebar.js',
   '/features/studyflow/markdown-editor.js',
   '/features/studyflow/courses.css',

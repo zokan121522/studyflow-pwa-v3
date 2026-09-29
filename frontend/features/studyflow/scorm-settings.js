@@ -17,6 +17,11 @@ window.App.ScormSettings = (function () {
     const node = document.createElement(tag);
     Object.entries(attrs || {}).forEach(([k, v]) => {
       if (k === "class") node.className = v;
+      // Event handlers must be assigned as properties. setAttribute
+      // ("onclick", fn) stores the function's SOURCE as a string, which
+      // silently does nothing on click — that is why the Cerrar button
+      // never worked before.
+      else if (k.startsWith("on") && typeof v === "function") node[k] = v;
       else node.setAttribute(k, v);
     });
     (children || []).forEach((c) => node.appendChild(c));

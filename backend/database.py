@@ -426,6 +426,20 @@ _TABLE_DDL = [
         updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
     """,
+    # OpenZen (opencode-acp) subscription — the personal key that lets the
+    # YouTubeZen / Gen. Contenido generators reach the sidecar. Same shape
+    # as scorm_credentials: api_key_enc is a Fernet token from
+    # backend/secret_box.py, never stored in clear. server_url / model
+    # are NULLable so "not set" is distinguishable from "set to default".
+    """
+    CREATE TABLE IF NOT EXISTS openzen_credentials (
+        user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        api_key_enc  TEXT NOT NULL,
+        server_url   VARCHAR(255),
+        model        VARCHAR(128),
+        updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS courses (
         id SERIAL PRIMARY KEY,
