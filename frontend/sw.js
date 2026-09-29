@@ -1,10 +1,10 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
-// v17 (Backup/Restore): bumped ASSET_CACHE so the activate handler evicts v16.
-//  - local backup/restore buttons (ZIP export/import, issue #7)
-//  - new shared/backup-restore.js + review modal with conflict resolution
-const ASSET_CACHE = 'studyflow-assets-v17';
+// v18 (#8): bump ASSET_CACHE so the activate handler evicts v17.
+//  - precache shared/backup-restore.js + shared/v2-restore-modal.js so
+//    Backup/Restore work offline, not just on first network use
+const ASSET_CACHE = 'studyflow-assets-v18';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -57,6 +57,11 @@ const PRECACHE_ASSETS = [
   '/features/addons/addons-core.js',
   '/features/addons/addons-manager.js',
   '/features/addons/addons.css',
+  // #7/#8: local Backup (ZIP export) + Restore (v3 and v2 migration).
+  // These were missing from the precache, so the toolbar buttons only worked
+  // while online — unacceptable for a headline feature of an offline PWA.
+  '/shared/backup-restore.js',
+  '/shared/v2-restore-modal.js',
 ];
 
 // Maximum age for cached API responses (5 minutes)

@@ -5,6 +5,12 @@
  *                  tree) → review modal with hierarchical checkboxes +
  *                  per-conflict inline select (rename/replace/cancel) →
  *                  POST /api/backup/import → reload.
+ *
+ * v2 backups (issue #8) are a different format: a PostgreSQL COPY dump
+ * instead of backup.json. They carry no per-item selection tree, so they
+ * take a separate path: POST /api/backup/v2/scan previews the counts and
+ * what will be skipped, then /api/backup/v2/import migrates everything in
+ * one transaction. Both formats use the same file picker.
  * Loaded after app.js (needs window.API_URL, window.Auth).
  */
 (function () {
@@ -22,6 +28,7 @@
     courses: new Set(), topics: new Set(), blocks: new Set(), rest: new Set(),
   };
   let _conflicts = {};      // temp_id → rename|replace|cancel
+  let _isV2 = false;        // current file is a v2 dump, not backup.json
 
   // ─── tiny toast ─────────────────────────────────────────────────────
   function toast(msg, isError) {
@@ -110,13 +117,71 @@
       const data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
       _zipFile = file;
+      _isV2 = false;
       _tree = data.tree;
       _conflicts = {};
       preselectAll(data.tree);
       openReviewModal(data.meta || {}, data.conflicts || []);
     } catch (e) {
+      // A v2 backup is not a v3 backup.json. Rather than showing an error,
+      // try the v2 endpoint: the user may simply have grabbed an old ZIP.
+      if (await tryV2Scan(file)) return;
       toast(`Error de análisis: ${e.message}`, true);
     }
+  }
+
+  // ─── v2 restore (issue #8) ───────────────────────────────────────────
+  // Returns true when the file is a v2 dump and the modal was shown.
+  async function tryV2Scan(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const resp = await fetch(`${window.API_URL}/backup/v2/scan`, {
+        method: "POST",
+        headers: _uploadHeaders(),
+        credentials: "include",
+        body: fd,
+      });
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      if (!data.ok) return false;
+      _zipFile = file;
+      _isV2 = true;
+      openV2Modal(data.plan || {}, file);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function openV2Modal(plan, file) {
+    if (!window.V2Restore) {
+      toast("El soporte de v2 no está cargado", true);
+      return;
+    }
+    window.V2Restore.open(plan, file, runV2Import);
+  }
+
+  async function runV2Import(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`${window.API_URL}/backup/v2/import`, {
+      method: "POST",
+      headers: _uploadHeaders(),
+      credentials: "include",
+      body: fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+    const r = data.report || {};
+    const n = r.counts || {};
+    window.V2Restore.toast(
+      `✅ Migrado: ${n.courses || 0} cursos, ${n.topics || 0} temas, ` +
+      `${n.blocks || 0} bloques, ${n.sessions || 0} sesiones`
+    );
+    setTimeout(() => window.location.reload(), 1200);
   }
 
   function preselectAll(tree) {
