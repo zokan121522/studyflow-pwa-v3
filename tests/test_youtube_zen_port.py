@@ -170,6 +170,18 @@ def test_zen_dialog_is_reachable_from_the_ui():
     )
 
 
+def test_zen_action_is_rendered_by_a_manifest():
+    """A handler with no manifest entry is dead code: nothing ever emits
+    `data-ai-action="youtube"`, so the button never appears in the toolbar."""
+    src = AI_JS_MAIN.read_text()
+    # The manifest entry that maps an action value to data-ai-action="youtube"
+    # must exist, and must be distinct from the native notebooklm one.
+    entry = re.search(
+        r'\{\s*id:\s*"youtube-zen".{0,220}?md:\s*"youtube"', src, re.S
+    )
+    assert entry, "el manifest no declara una entrada que emita la accion Zen"
+
+
 def test_index_html_loads_yt_modules_after_ai_js():
     """youtube-queue.js reads App.AI._onContentSuccess at insert time, so it
     must be loaded after ai.js defines it (v2's ordering does not apply)."""

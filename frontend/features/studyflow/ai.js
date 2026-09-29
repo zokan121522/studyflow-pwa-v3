@@ -148,6 +148,11 @@ window.App.AI = Object.assign(window.App.AI, (function () {
           task: { md: "notebooklm_total", pdf: "notebooklm" } },
         { id: "youtube", label: "YouTube", icon: "🎬", cat: "generate", order: 16,
           md: "notebooklm-youtube", pdf: "notebooklm-youtube" },
+        // Phase 8 — YouTubeZen: local yt-dlp + OpenZEN structuring. Distinct
+        // from the native NotebookLM entry above: this one opens the full zen
+        // dialog (template / depth / mode / language + FIFO queue for batches).
+        { id: "youtube-zen", label: "YouTube Zen", icon: "🎥", cat: "generate", order: 17,
+          md: "youtube", pdf: "youtube" },
         { id: "html", label: "HTML", icon: "🌐", cat: "generate", order: 20,
           md: "nb-html-content", pdf: "notebooklm-html",
           task: { md: "notebooklm_total", pdf: "notebooklm_md_to_html" } },
