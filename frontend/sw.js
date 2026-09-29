@@ -11,7 +11,10 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v20 (#8 fix): v2Restore modal had `onConfirm` vs `onDone` typo — the
 // "Migrar a v3" button threw on click. Fixed + added a deferred-data
 // warning. Bump so installed PWAs stop serving the broken modal.
-const ASSET_CACHE = 'studyflow-assets-v28';
+// v29: course cards are flex rows again, so the drag grip sits beside the
+// title instead of above it. Both CSS files are precached, so installed
+// PWAs would keep serving the broken layout until the cache is rebuilt.
+const ASSET_CACHE = 'studyflow-assets-v29';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
