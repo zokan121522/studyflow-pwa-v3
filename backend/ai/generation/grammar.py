@@ -36,6 +36,7 @@ from pathlib import Path
 import database as db
 from ai.generation.helpers import provenance_banner, inject_provenance, _PROV_DEPTH
 from ai.providers import get_provider
+from ai.notebooklm.utils import _new_task_id
 
 ASSET_TEMPLATE = Path(__file__).resolve().parent / "assets" / "english-practice.html"
 
@@ -764,11 +765,12 @@ def create_grammar_task(
     if not source_content.strip():
         raise ValueError("Source content is empty")
 
+    # v3's ai_tasks.id has NO default; without it this INSERT always 500s.
     task_row = db.execute_returning(
-        """INSERT INTO ai_tasks (user_id, topic_id, task_type, source_type, source_id, model_used, status)
-           VALUES (%s, %s, 'generate_grammar', %s, %s, %s, 'pending')
+        """INSERT INTO ai_tasks (id, user_id, topic_id, task_type, source_type, source_id, model_used, status)
+           VALUES (%s, %s, %s, 'generate_grammar', %s, %s, %s, 'pending')
            RETURNING id""",
-        (user_id, topic_id, source_type, source_id, provider),
+        (_new_task_id(), user_id, topic_id, source_type, source_id, provider),
     )
     task_id = task_row["id"]
 

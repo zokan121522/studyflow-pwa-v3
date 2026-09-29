@@ -17,6 +17,7 @@ import database as db
 from ai.providers import get_provider
 from ai.notebooklm.md_templates_catalog import MD_TEMPLATES
 from ai.notebooklm.md_templates import get_md_template_role, _length_instruction
+from ai.notebooklm.utils import _new_task_id
 
 logger = logging.getLogger(__name__)
 
@@ -400,12 +401,13 @@ def create_knowledge_pipeline_task(
     topic_id_val = topic_id or ""
     course_id_val = course_id or ""
 
+    # v3's ai_tasks.id has NO default; without it this INSERT always 500s.
     task_row = db.execute_returning(
         """INSERT INTO ai_tasks
-               (user_id, topic_id, task_type, source_type, source_id, status, template_id)
-           VALUES (%s, %s, 'knowledge_pipeline', 'topic', %s, 'pending', %s)
-           RETURNING id""",
-        (user_id, topic_id_val, course_id_val, template_id_val),
+               (id, user_id, topic_id, task_type, source_type, source_id, status, template_id)
+            VALUES (%s, %s, %s, 'knowledge_pipeline', 'topic', %s, 'pending', %s)
+            RETURNING id""",
+        (_new_task_id(), user_id, topic_id_val, course_id_val, template_id_val),
     )
     task_id = task_row["id"]
 

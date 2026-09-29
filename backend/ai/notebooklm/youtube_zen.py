@@ -22,6 +22,7 @@ import time
 import database as db
 from ai.providers import get_provider
 from ai.generation.prompts import MD_TEMPLATES, get_md_template_role, _length_instruction
+from ai.notebooklm.utils import _new_task_id
 
 logger = logging.getLogger(__name__)
 
@@ -2138,13 +2139,17 @@ def create_youtube_zen_task(
     # order. url/mode go into coverage_data so the worker can reconstruct the
     # full parameter set from the row; depth lives in the `length` column,
     # language in the `language` column (both exist in ai_tasks).
+    # v3's ai_tasks.id has NO default (v2 generated it server-side), so the
+    # INSERT must supply it or the row dies with a NotNullViolation — the
+    # same trap already fixed in youtube.py.
     task_row = db.execute_returning(
         """INSERT INTO ai_tasks
-           (user_id, topic_id, task_type, format, source_type, source_id, status,
+           (id, user_id, topic_id, task_type, format, source_type, source_id, status,
             template_id, language, length, coverage_data)
-           VALUES (%s, %s, 'youtube_zen', %s, 'youtube', %s, 'queued', %s, %s, %s, %s)
+           VALUES (%s, %s, %s, 'youtube_zen', %s, 'youtube', %s, 'queued', %s, %s, %s, %s)
            RETURNING id""",
         (
+            _new_task_id(),
             user_id, topic_id, fmt, block_id or "", template_id,
             language, depth,
             json.dumps({"url": url, "mode": mode}, ensure_ascii=False),
