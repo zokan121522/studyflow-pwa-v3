@@ -1,0 +1,65 @@
+/* ─── YouTube embed — floating PiP chrome (document-level) ──────────
+   La card .yt-card lleva sus estilos inline (funciona dentro de shadow
+   DOM); aquí solo vive la UI del PiP flotante (document.body). */
+
+/* Phase 8 — modal de entrada de URLs: necesita más ancho que el kp-modal
+   por defecto para la rejilla plantilla + vista previa. */
+.kp-modal-yt-wide {
+  max-width: 720px;
+  width: 92vw;
+}
+
+.yt-pip-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+
+.yt-pip-bar:active {
+  cursor: grabbing;
+}
+
+.yt-pip-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ddd;
+}
+
+.yt-pip-close {
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.yt-pip-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.yt-pip-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.75) 50%);
+  border-bottom-right-radius: 12px;
+  z-index: 2;
+}

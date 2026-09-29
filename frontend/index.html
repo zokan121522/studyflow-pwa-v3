@@ -45,6 +45,7 @@
   <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
   <link rel="stylesheet" href="/features/habits/habits.css">
   <link rel="stylesheet" href="/features/studyflow/content-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/youtube-embed.css">
   <link rel="stylesheet" href="/features/studyflow/courses.css">
   <link rel="stylesheet" href="/features/studyflow/studyflow-blocks.css">
   <link rel="stylesheet" href="/features/studyflow/courses-sidebar-blocks.css">
@@ -473,6 +474,11 @@
   <script src="/features/studyflow/knowledge-pipeline.js"></script>
   <script src="/features/studyflow/english-grammar.js"></script>
   <script src="/features/studyflow/ai.js"></script>
+  <!-- Phase 8 — YouTubeZen: PiP markdown embed card + floating queue panel.
+       youtube-queue.js reads window.App.AI._onContentSuccess, so it MUST come
+       AFTER ai.js (unlike v2's placement). youtube-embed.js is self-contained. -->
+  <script src="/features/studyflow/youtube-embed.js?v=2"></script>
+  <script src="/features/studyflow/youtube-queue.js?v=1"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
        App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,

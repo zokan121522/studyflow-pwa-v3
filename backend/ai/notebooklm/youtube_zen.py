@@ -22,7 +22,7 @@ import time
 import database as db
 from ai.providers import get_provider
 from ai.generation.prompts import MD_TEMPLATES, get_md_template_role, _length_instruction
-from ai.notebooklm.utils import _new_task_id
+from ai.notebooklm.utils import _new_task_id, _coerce_id
 
 logger = logging.getLogger(__name__)
 
@@ -2134,6 +2134,11 @@ def create_youtube_zen_task(
     if template_id is not None and template_id not in MD_TEMPLATES:
         raise ValueError(f"Plantilla no válida: {template_id}")
 
+    # v3 topics/blocks are SERIAL integers — a "" from the frontend would hit
+    # the integer column as an empty string and raise InvalidTextRepresentation.
+    topic_id = _coerce_id(topic_id, "topic_id")
+    block_id = _coerce_id(block_id, "block_id")
+
     # Phase 58 (issue #225): tasks are no longer processed by a per-task
     # thread — a single FIFO daemon worker (youtube_queue) picks them up in
     # order. url/mode go into coverage_data so the worker can reconstruct the
@@ -2150,7 +2155,7 @@ def create_youtube_zen_task(
            RETURNING id""",
         (
             _new_task_id(),
-            user_id, topic_id, fmt, block_id or "", template_id,
+            user_id, topic_id, fmt, block_id, template_id,
             language, depth,
             json.dumps({"url": url, "mode": mode}, ensure_ascii=False),
         ),

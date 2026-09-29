@@ -134,6 +134,70 @@ window.App.AI.Generation = (function () {
     }
   }
 
+  // ─── YouTubeZen — local yt-dlp + OpenZEN structuring (Phase 8) ──────
+
+  /**
+   * Single-URL YouTubeZen: yt-dlp extracts subtitles locally, OpenZEN
+   * structures them into markdown. Legacy flow → stream modal + insert.
+   *
+   * @param {string} blockId    — block to update ("" for a new one)
+   * @param {string} topicId    — topic to associate
+   * @param {string} url        — YouTube video URL
+   * @param {string} fmt        — 'markdown' | 'html'
+   * @param {string} depth      — 'concise' | 'standard' | 'detailed'
+   * @param {string} mode       — 'unitema' | 'por_tema'
+   * @param {string} language   — 'es' | 'en'
+   * @param {string} templateId — optional MD_TEMPLATES template id
+   */
+  async function youtubeZen(blockId, topicId, url, fmt, depth, mode, language, templateId) {
+    Status(blockId, "⏳ YouTubeZen: extrayendo subtítulos…");
+    try {
+      const resp = await window.API.post("/ai/notebooklm/youtube-zen", {
+        url,
+        block_id: blockId || "",
+        topic_id: topicId || "",
+        format: fmt || "markdown",
+        depth: depth || "standard",
+        mode: mode || "unitema",
+        language: language || "es",
+        template_id: templateId || null,
+      });
+      const tasks = Tasks();
+      if (tasks) {
+        const label = fmt === "html" ? "🤖 YouTubeZen → HTML" : "🤖 YouTubeZen → Markdown";
+        tasks.showStreamModal(label, "OpenZEN");
+        tasks.startStreamPoll(resp.task_id, blockId, "ytd_zen", topicId || "", depth);
+      }
+    } catch (err) {
+      Status(blockId, `❌ Error: ${err.message}`, true);
+    }
+  }
+
+  /**
+   * Enqueue multiple YouTube URLs as FIFO tasks. A single backend worker
+   * processes them one at a time; the floating queue panel
+   * (youtube-queue.js) shows progress and inserts each block on completion.
+   *
+   * @param {string[]} urls — up to 20 YouTube video URLs
+   */
+  async function youtubeZenQueue(urls, topicId, fmt, depth, mode, language, templateId) {
+    try {
+      const resp = await window.API.post("/ai/notebooklm/youtube-zen/queue", {
+        urls,
+        topic_id: topicId || "",
+        format: fmt || "markdown",
+        depth: depth || "standard",
+        mode: mode || "unitema",
+        language: language || "es",
+        template_id: templateId || null,
+      });
+      const queue = window.App.YoutubeQueue;
+      if (queue && queue.open) queue.open(resp.task_ids || []);
+    } catch (err) {
+      Status("", `❌ Error encolando: ${err.message}`, true);
+    }
+  }
+
   // ─── NotebookLM Test (Gemini Chat API) ─────────────────────────
   async function generateNbTest(blockIds, topicId, numQuestions = 10) {
     const ids = Array.isArray(blockIds) ? blockIds : [blockIds];
@@ -260,6 +324,8 @@ window.App.AI.Generation = (function () {
     generateNbHtmlFromContent,
     youtubeToMd,
     youtubeToHtml,
+    youtubeZen,
+    youtubeZenQueue,
     generateNbTest,
     generateInfographic,
     generateAudio,

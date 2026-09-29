@@ -306,6 +306,13 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
     } else if (action === "notebooklm-youtube") {
       _showYoutubeDialog(tid, cid, { provider: "notebooklm" });
+    } else if (action === "youtube") {
+      // Phase 8 — YouTubeZen dialog (full zen controls: template/depth/mode).
+      if (tid) {
+        _showYoutubeDialog(tid, cid);
+      } else {
+        _showStatus(bid, "⚠️ No se pudo determinar el tema", true);
+      }
     } else if (action === "nb-test" || action === "notebooklm-test") {
       // Phase 7.7 — test config modal (10/20/30 questions)
       const modals = window.App.AiModals;
@@ -367,13 +374,268 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
   /** Minimal YouTube URL dialog (native NotebookLM ingestion). */
   function _showYoutubeDialog(topicId, courseId, opts = {}) {
-    const url = prompt("🎬 Pega la URL de YouTube:");
-    if (!url || !url.trim()) return;
-    const gen = window.App.AI.Generation;
-    if (!gen) return;
-    const norm = url.trim();
-    // md scope when launched from md toolbar; format = markdown
-    gen.youtubeToMd("", topicId, norm);
+    // Phase 64 (#255) — notebooklm provider hides zen-only controls (native
+    // endpoint accepts only url + topic_id). Default call is byte-identical.
+    const nbNative = !!(opts && opts.provider === "notebooklm");
+
+    // Remove any existing panel
+    const existing = document.getElementById("youtube-dialog-overlay");
+    if (existing) existing.remove();
+
+    const html = `
+      <div class="kp-overlay" id="youtube-dialog-overlay">
+        <div class="kp-modal kp-modal-yt-wide" id="yt-dialog-modal">
+          <div class="kp-modal-header">
+            <span class="kp-modal-icon">🎬</span>
+            <span class="kp-modal-title">${nbNative ? "YouTube → Contenido · NotebookLM" : "YouTube → Contenido"}</span>
+            <button class="kp-modal-close" id="yt-dialog-close" title="Cerrar">✕</button>
+          </div>
+          <div class="kp-modal-body">
+            <label class="kp-label" for="yt-url-input">🔗 URLs de vídeos (una por línea):</label>
+            <textarea
+              id="yt-url-input"
+              class="kp-textarea"
+              rows="3"
+              style="padding:10px 14px;"
+              placeholder="https://youtube.com/watch?v=...&#10;https://youtu.be/... (máx 20)"
+            ></textarea>
+            ${!nbNative ? `
+            <label class="kp-label">🎛️ Plantilla de prompt (opcional):</label>
+            <div class="ozmd-grid">
+              <div class="ozmd-templates" id="yt-templates">
+                <div style="color:#aaa;padding:6px 2px;">Cargando plantillas…</div>
+              </div>
+              <div class="ozmd-preview">
+                <div class="ozmd-preview-title">👁️ Vista previa</div>
+                <div class="ozmd-preview-body" id="yt-preview-body">
+                  <div style="color:#aaa;padding:6px 2px;">Sin plantilla — prompt estándar YouTube</div>
+                </div>
+              </div>
+            </div>
+            <label class="kp-label">Profundidad:</label>
+            <div class="kp-depth-row">
+              <button class="kp-depth-btn" data-depth="concise">
+                <span class="kp-depth-icon">📄</span>
+                <span class="kp-depth-name">Conciso</span>
+                <span class="kp-depth-desc">1-3 párrafos</span>
+              </button>
+              <button class="kp-depth-btn selected" data-depth="standard">
+                <span class="kp-depth-icon">📝</span>
+                <span class="kp-depth-name">Estándar</span>
+                <span class="kp-depth-desc">Def + ejemplos</span>
+              </button>
+              <button class="kp-depth-btn" data-depth="detailed">
+                <span class="kp-depth-icon">📚</span>
+                <span class="kp-depth-name">Detallado</span>
+                <span class="kp-depth-desc">Curso completo</span>
+              </button>
+            </div>
+            <label class="kp-label">Modo:</label>
+            <div class="kp-mode-row">
+              <button class="kp-mode-btn selected" data-mode="unitema">
+                <span class="kp-mode-icon">📄</span>
+                <span class="kp-mode-name">Un tema</span>
+                <span class="kp-mode-desc">Todo en un bloque</span>
+              </button>
+              <button class="kp-mode-btn" data-mode="por_tema">
+                <span class="kp-mode-icon">📑</span>
+                <span class="kp-mode-name">Por tema</span>
+                <span class="kp-mode-desc">Sección = bloque nuevo</span>
+              </button>
+            </div>
+            <label class="kp-label">Idioma:</label>
+            <div class="kp-lang-row">
+              <button class="kp-lang-btn selected" data-lang="es">🇪🇸 Español</button>
+              <button class="kp-lang-btn" data-lang="en">🇬🇧 English</button>
+            </div>
+            ` : ""}
+            <div id="yt-dialog-status" style="font-size:12px;color:var(--text-muted,#888);display:none;padding:8px 12px;border-radius:6px;background:var(--surface-raised,#252535);margin-top:12px;"></div>
+          </div>
+          <div class="kp-modal-footer">
+            <button class="kp-btn kp-btn-cancel" id="yt-dialog-cancel">Cancelar</button>
+            <button class="kp-btn kp-btn-submit" id="yt-dialog-generate">${nbNative ? "📥 Generar (NotebookLM)" : "📥 Encolar vídeos"}</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML("beforeend", html);
+
+    const overlay = document.getElementById("youtube-dialog-overlay");
+    const input = document.getElementById("yt-url-input");
+    const status = document.getElementById("yt-dialog-status");
+    const generateBtn = document.getElementById("yt-dialog-generate");
+
+    let selectedDepth = "standard";
+    let selectedLang = "es";
+    let selectedMode = "unitema";
+    let selectedTemplate = ""; // '' = generic YT prompt (backward compatible)
+
+    const escHtml = (s) => String(s == null ? "" : s);
+
+    // ── Helpers ──────────────────────────────────────────────────
+    function _setStatus(msg, isError) {
+      status.textContent = msg;
+      status.style.display = "block";
+      status.style.color = isError ? "#e74c3c" : "#f0c040";
+    }
+
+    function _hideStatus() {
+      status.style.display = "none";
+    }
+
+    // ── Templates grid + live preview (same pattern as OpenZEN md) ──
+    const templatesEl = document.getElementById("yt-templates");
+    const previewBody = document.getElementById("yt-preview-body");
+
+    // The FULL backend catalog is shown (10 templates), in insertion order
+    // from GET /api/ai/openzen-md-templates.
+    const YT_TEMPLATE_IDS = null;
+
+    (async () => {
+      let templates = [];
+      try {
+        const resp = await window.API.get("/ai/openzen-md-templates");
+        const src = resp.templates || [];
+        // Preserve backend insertion order when no allow-list is configured.
+        templates = YT_TEMPLATE_IDS
+          ? src
+              .filter((t) => YT_TEMPLATE_IDS.includes(t.id))
+              .sort((a, b) => YT_TEMPLATE_IDS.indexOf(a.id) - YT_TEMPLATE_IDS.indexOf(b.id))
+          : src.slice();
+      } catch (err) {
+        templatesEl.innerHTML = `<div style="color:#e57373;padding:6px 2px;">❌ No se pudieron cargar plantillas</div>`;
+        return;
+      }
+      const renderPreview = (tpl) => {
+        const cb = window.App.ContentBlocks;
+        previewBody.innerHTML = cb && cb._renderMd ? cb._renderMd(tpl.mock || "") : `<pre>${escHtml(tpl.mock || "")}</pre>`;
+      };
+
+      const cardEls = [];
+      const cards = templates.map((t, i) => {
+        const elId = `yt-tpl-${i}`;
+        cardEls.push({ elId, tpl: t });
+        return `<div class="inf-config-style-opt ozmd-tpl-opt" id="${elId}" data-template-id="${t.id}" title="${escHtml(t.description)}" data-tpl-idx="${i}">
+          <div class="inf-config-style-label">${t.emoji} ${escHtml(t.name)}</div>
+          <div class="inf-config-style-desc">${escHtml(t.description)}</div>
+        </div>`;
+      }).join("");
+      templatesEl.innerHTML =
+        `<div class="inf-config-style-opt ozmd-tpl-opt ozmd-tpl-none selected" data-template-id="" data-tpl-idx="-1">
+          <div class="inf-config-style-label">⚡ Sin plantilla</div>
+          <div class="inf-config-style-desc">Prompt estándar YouTube (comportamiento actual)</div>
+        </div>${cards}`;
+
+      templatesEl.querySelectorAll(".ozmd-tpl-opt").forEach((el) => {
+        el.addEventListener("click", () => {
+          templatesEl.querySelectorAll(".ozmd-tpl-opt").forEach((o) => o.classList.remove("selected"));
+          el.classList.add("selected");
+          selectedTemplate = el.dataset.templateId || "";
+          const idx = parseInt(el.dataset.tplIdx, 10);
+          const tpl = idx >= 0 ? templates[idx] : null;
+          if (tpl) renderPreview(tpl);
+          else previewBody.innerHTML = `<div style="color:#aaa;padding:6px 2px;">Sin plantilla — prompt estándar YouTube</div>`;
+        });
+      });
+    })();
+
+    function _getUrls() {
+      const urls = input.value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (!urls.length) {
+        _setStatus("⚠️ Introduce al menos una URL de YouTube", true);
+        input.focus();
+        return [];
+      }
+      const bad = urls.find((u) => !u.match(/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//));
+      if (bad) {
+        _setStatus(`⚠️ URL de YouTube no válida: ${bad}`, true);
+        return [];
+      }
+      if (urls.length > 20) {
+        _setStatus("⚠️ Máximo 20 URLs por lote", true);
+        return [];
+      }
+      return urls;
+    }
+
+    function _launchGeneration() {
+      const urls = _getUrls();
+      if (!urls.length) return;
+
+      _hideStatus();
+      overlay.remove();
+
+      const gen = window.App.AI.Generation;
+      if (!gen) return;
+      if (nbNative) {
+        // Native NotebookLM: one backend task per URL (sequential).
+        (async () => {
+          for (const url of urls) {
+            try { await gen.youtubeToMd("", topicId, url); }
+            catch (err) { _showStatus("", `❌ YouTube: ${err.message}`, true); }
+          }
+        })();
+        return;
+      }
+      if (urls.length === 1) {
+        // Single URL → legacy flow (stream modal + manual insert)
+        gen.youtubeZen("", topicId, urls[0], "markdown", selectedDepth, selectedMode, selectedLang, selectedTemplate);
+      } else {
+        // Multiple URLs → FIFO queue + floating panel
+        gen.youtubeZenQueue(urls, topicId, "markdown", selectedDepth, selectedMode, selectedLang, selectedTemplate);
+      }
+    }
+
+    // ── Wire events ──────────────────────────────────────────────
+
+    // Close button
+    document.getElementById("yt-dialog-close").addEventListener("click", () => overlay.remove());
+    document.getElementById("yt-dialog-cancel").addEventListener("click", () => overlay.remove());
+
+    // Click backdrop to close
+    overlay.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) overlay.remove();
+    });
+
+    // Depth / Mode / Language selectors (same wiring as Content Generator)
+    overlay.querySelectorAll(".kp-depth-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-depth-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedDepth = btn.dataset.depth;
+      });
+    });
+    overlay.querySelectorAll(".kp-mode-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-mode-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedMode = btn.dataset.mode;
+      });
+    });
+    overlay.querySelectorAll(".kp-lang-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-lang-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedLang = btn.dataset.lang;
+      });
+    });
+
+    // Generate button
+    generateBtn.addEventListener("click", _launchGeneration);
+
+    // Ctrl+Enter → enqueue (Enter alone adds a new line in the textarea)
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        _launchGeneration();
+      }
+    });
+
+    // Focus input
+    setTimeout(() => input.focus(), 100);
   }
 
   function initSectionEvents(container) {
