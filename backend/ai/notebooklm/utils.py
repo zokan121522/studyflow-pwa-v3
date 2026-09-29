@@ -176,7 +176,7 @@ def _resolve_blocks_content(block_ids: str | list[str], user_id: str) -> tuple[s
            LEFT JOIN courses c ON c.id = b.course_id AND c.user_id = b.user_id
            LEFT JOIN topics t ON t.id = b.topic_id AND t.user_id = b.user_id
            WHERE b.id = ANY(%s) AND b.user_id = %s
-           ORDER BY b."order" """,
+           ORDER BY b."order_index" """,
         (ids, user_id),
     )
     if not rows:
@@ -227,7 +227,7 @@ def _resolve_blocks_content_per_block(block_ids: str | list[str], user_id: str) 
            LEFT JOIN courses c ON c.id = b.course_id AND c.user_id = b.user_id
            LEFT JOIN topics t ON t.id = b.topic_id AND t.user_id = b.user_id
            WHERE b.id = ANY(%s) AND b.user_id = %s
-           ORDER BY b."order" """,
+           ORDER BY b."order_index" """,
         (ids, user_id),
     )
     if not rows:

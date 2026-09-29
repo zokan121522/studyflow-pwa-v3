@@ -458,12 +458,12 @@ TEST_GENERATION_PROMPT = (
     "Return a valid JSON array of question objects. "
     "NO markdown, NO code fences, NO extra text — ONLY the JSON array.\n\n"
     "Each question object:\n"
-    "{\n"
+    "{{\n"
     '  "question": "Question text?",\n'
     '  "options": ["Option A", "Option B", "Option C", "Option D"],\n'
     '  "correct": 0,\n'
     '  "explanation": "Why this is correct"\n'
-    "}\n\n"
+    "}}\n\n"
     "- `correct` is the 0-based index of the correct option.\n"
     "- `explanation` explains WHY the answer is correct.\n\n"
     "## COVERAGE RULES\n\n"

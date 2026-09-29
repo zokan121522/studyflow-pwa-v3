@@ -11,9 +11,12 @@ Exports:
 
 import asyncio
 import json
+import logging
 import os
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 
 from database import execute, execute_returning
 
@@ -164,6 +167,9 @@ def _run_notebooklm_test_task(task_id: str, blocks: list[dict]) -> None:
         )
 
     except Exception as e:
+        # Surface the real traceback in the container log: `str(e)` alone
+        # ("'\\n  \"question\"'") hides which line actually failed.
+        logger.exception("[NotebookLM] test task %s failed", task_id)
         execute(
             """UPDATE ai_tasks
                SET status = 'error', error_message = %s,
