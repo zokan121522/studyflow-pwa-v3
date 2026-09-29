@@ -22,6 +22,7 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses-api.js',
   '/features/studyflow/courses-blocks.js',
   '/features/studyflow/courses-notes.js',
+  '/features/studyflow/courses-dnd.js',
   '/features/studyflow/courses-sidebar.js',
   '/features/studyflow/markdown-editor.js',
   '/features/studyflow/courses.css',

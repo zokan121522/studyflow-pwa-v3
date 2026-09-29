@@ -413,6 +413,9 @@
   <!-- Issue #10: quiz por bloque (exercise) — embeds the block's test
        after the panel paints (patrón PdfViewer). -->
   <script src="/features/studyflow/quiz-embed.js"></script>
+  <!-- Issue #12: courses-dnd.js must load BEFORE courses-sidebar.js, which
+       calls CoursesDND.attach() when it wires the sidebar events. -->
+  <script src="/features/studyflow/courses-dnd.js"></script>
   <script src="/features/studyflow/courses-sidebar.js"></script>
   <!-- S4.5: markdown-editor.js (toolbar + color + split) loads BEFORE
        courses-blocks.js so the courses-blocks rewire can delegate to
