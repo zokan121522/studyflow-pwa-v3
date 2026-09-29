@@ -37,6 +37,7 @@ AI_JS = ROOT / "frontend" / "features" / "studyflow" / "ai-notebooklm.js"
 AI_JS_MAIN = ROOT / "frontend" / "features" / "studyflow" / "ai.js"
 INDEX_HTML = ROOT / "frontend" / "index.html"
 YT_ZEN_PY = ROOT / "backend" / "ai" / "notebooklm" / "youtube_zen.py"
+YT_EMBED_CSS = ROOT / "frontend" / "features" / "studyflow" / "youtube-embed.css"
 
 
 # ── 1. Integer coercion of topic_id / block_id ────────────────────────
@@ -174,12 +175,72 @@ def test_zen_action_is_rendered_by_a_manifest():
     """A handler with no manifest entry is dead code: nothing ever emits
     `data-ai-action="youtube"`, so the button never appears in the toolbar."""
     src = AI_JS_MAIN.read_text()
-    # The manifest entry that maps an action value to data-ai-action="youtube"
-    # must exist, and must be distinct from the native notebooklm one.
-    entry = re.search(
-        r'\{\s*id:\s*"youtube-zen".{0,220}?md:\s*"youtube"', src, re.S
-    )
+    entry = re.search(r'\{\s*id:\s*"youtube-zen".{0,220}?md:\s*"youtube"', src, re.S)
     assert entry, "el manifest no declara una entrada que emita la accion Zen"
+
+
+def test_zen_action_lives_under_the_openzen_addon():
+    """YouTubeZen runs `get_provider("opencode-acp")` — it is an OpenZen
+    feature, not a NotebookLM one. Grouping it under NotebookLM would both
+    mislabel it and hide it from the 🤖 OpenZen group the user looks at."""
+    src = AI_JS_MAIN.read_text()
+    idx_entry = src.index('id: "youtube-zen"')
+    # the opencode manifest must be the nearest preceding register() call
+    opencode_idx = src.rindex('slug: "opencode"', 0, idx_entry)
+    notebooklm_idx = src.rindex('slug: "notebooklm"', 0, idx_entry)
+    assert opencode_idx > notebooklm_idx, (
+        "youtube-zen quedo registrado antes del manifest de opencode "
+        "(o sea, en el grupo de NotebookLM)"
+    )
+
+
+def test_zen_manifest_entry_maps_the_usage_counter_to_youtube_zen():
+    """The (0/10) counter reads ai_tasks.task_type, so a wrong mapping shows
+    an always-zero counter next to the button."""
+    src = AI_JS_MAIN.read_text()
+    entry = re.search(r'\{\s*id:\s*"youtube-zen".{0,260}?\},\n', src, re.S)
+    assert entry, "no se encuentra la entrada del manifest"
+    assert "youtube_zen" in entry.group(0), (
+        "la entrada no mapea task: youtube_zen — el contador quedaria a 0"
+    )
+
+
+def test_zen_modal_width_beats_the_base_modal():
+    """`.kp-modal` sets `width: 480px` in knowledge-pipeline.css, which loads
+    AFTER youtube-embed.css. A single-class override ties on specificity
+    (0,1,0) and loses on source order, so the width was silently dropped and
+    the dialog rendered at 480px. The override must use two classes."""
+    css = YT_EMBED_CSS.read_text()
+    rule = re.search(r"(\S*kp-modal\S*)\s*\{[^}]*width:", css)
+    assert rule, "no hay regla de ancho para el modal Zen"
+    assert rule.group(1).count(".") >= 2, (
+        f"el override '{rule.group(1)}' tiene especificidad 0,1,0: "
+        "empata con .kp-modal y pierde por orden de carga"
+    )
+    # the dialog must be visibly wider than the 480px base
+    m = re.search(r"kp-modal-yt-wide\s*\{[^}]*width:\s*(\d+)px", css)
+    assert m and int(m.group(1)) > 480, "el modal Zen no es mas ancho que la base"
+
+
+def test_zen_template_list_is_a_grid_not_a_narrow_column():
+    """The template list is `.ozmd-templates`, which ai.css lays out as a
+    single 1-column flex with max-height 300px. Inside a 900px dialog that
+    leaves the sides empty and forces scrolling through 11 stacked rows.
+    A selector like `.ozmd-tpl-grid` matches nothing — verify against the
+    class the template actually renders with."""
+    ai_js = AI_JS_MAIN.read_text()
+    assert 'class="ozmd-templates"' in ai_js or 'ozmd-templates' in ai_js, (
+        "el contenedor de plantillas cambio de clase"
+    )
+    css = YT_EMBED_CSS.read_text()
+    grid = re.search(
+        r"kp-modal-yt-wide\s+\.(ozmd-[\w-]+)\s*\{[^}]*display:\s*grid", css, re.S
+    )
+    assert grid, "la lista de plantillas no se maqueta como rejilla en el modal Zen"
+    assert grid.group(1) == "ozmd-templates", (
+        f"la rejilla apunta a '.{grid.group(1)}' pero el contenedor real es "
+        "'.ozmd-templates' — la regla no se aplica a nada"
+    )
 
 
 def test_index_html_loads_yt_modules_after_ai_js():

@@ -3,10 +3,42 @@
    DOM); aquí solo vive la UI del PiP flotante (document.body). */
 
 /* Phase 8 — modal de entrada de URLs: necesita más ancho que el kp-modal
-   por defecto para la rejilla plantilla + vista previa. */
-.kp-modal-yt-wide {
-  max-width: 720px;
-  width: 92vw;
+   por defecto (480px) para la rejilla de plantillas + la vista previa de
+   la cola.
+
+   Doble clase a propósito: `.kp-modal` fija `width: 480px; max-width: 92vw`
+   y vive en knowledge-pipeline.css, que se carga DESPUÉS de esta hoja.
+   Con una sola clase la especificidad empata (0,1,0) y gana la última,
+   así que el ancho se descartaba en silencio. Con (0,2,0) gana esta
+   regla sin depender del orden de carga. */
+.kp-modal.kp-modal-yt-wide {
+  width: 900px;
+  max-width: 94vw;
+}
+
+/* La rejilla de plantillas vive en la primera columna de `.ozmd-grid`,
+   que en ai.css reparte 1fr / 1.2fr — con 900px eso deja la lista en
+   ~382px, demasiado estrecho para dos columnas. Se le da más peso. */
+.kp-modal.kp-modal-yt-wide .ozmd-grid {
+  grid-template-columns: minmax(300px, 1.35fr) minmax(240px, 1fr);
+}
+
+/* Rejilla de plantillas: a 900px caben 2 columnas cómodas en escritorio
+   y 1 en móvil. El contenedor real es `.ozmd-templates` (columna en
+   ai.css) — no existía ningún `.ozmd-tpl-grid` al que aplicar esto. */
+.kp-modal.kp-modal-yt-wide .ozmd-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  max-height: 340px;
+  align-content: start;
+}
+
+.kp-modal.kp-modal-yt-wide .ozmd-tpl-opt {
+  text-align: left;
+  white-space: normal;
+  min-height: 56px;
+  cursor: pointer;
 }
 
 .yt-pip-bar {
