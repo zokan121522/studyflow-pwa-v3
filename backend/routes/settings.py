@@ -65,8 +65,15 @@ def get_scorm_credentials(user_id):
 
 @bp.route('/settings/scorm-credentials', methods=['POST'])
 @token_required
-def save_scorm_credentials(user_id):
-    """Upsert the SCORM credentials. Request JSON: {username, password}."""
+def post_scorm_credentials(user_id):
+    """Upsert the SCORM credentials. Request JSON: {username, password}.
+
+    Named post_… on purpose. A handler named `save_scorm_credentials` rebinds
+    the module-level alias imported from scorm_credentials, so the call below
+    resolved to the handler itself and blew up with
+    `save_scorm_credentials() takes 1 positional argument but 4 were given`
+    → HTTP 500 for every Moodle save. The URL is unaffected by the name.
+    """
     body = request.get_json(silent=True) or {}
     username = (body.get('username') or '').strip()
     password = body.get('password') or ''
