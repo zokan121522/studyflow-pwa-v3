@@ -237,14 +237,30 @@ def test_oversized_rpc_error_is_not_verbatim():
     raw = "RPC response exceeded 52428800 bytes (read 52449345 bytes before aborting)"
     out = yt._humanise_task_error(RuntimeError(raw))
     assert "52428800" not in out and "52449345" not in out
-    assert "YouTube Zen" in out, "the message must point at the path that works"
+    assert "YouTube" in out, "the message must point at the path that works"
+    # the working path is the chunked one — saying so is the whole point
+    assert "chunk" in out, "the advice must say which path actually chunks"
 
 
 def test_error_message_is_actionable_not_just_longer():
     src = _src(YOUTUBE_PY)
     message = src.split('_LONG_VIDEO_MESSAGE = (', 1)[1].split("\n)", 1)[0]
-    for hint in ("3 horas", "corto", "YouTube Zen"):
+    for hint in ("3 horas", "50 MB", "YouTube", "chunk"):
         assert hint in message, f"the advice should mention {hint!r}"
+
+
+def test_error_message_explains_why_chunking_is_impossible_here():
+    """A user who knows the chunked flow exists must be told why this path
+    cannot offer it — otherwise the refusal reads as a brush-off.
+
+    The reason is concrete: a YouTube URL is one source, and the chat call
+    takes no time range, so there is nothing to slice.
+    """
+    src = _src(YOUTUBE_PY)
+    message = src.split('_LONG_VIDEO_MESSAGE = (', 1)[1].split("\n)", 1)[0]
+    assert "no se puede" in message and "trocear" in message
+    assert "URL de YouTube es una única fuente" in message
+    assert "tramo de tiempo" in message
 
 
 def test_raise_does_not_leave_a_notebook_behind():

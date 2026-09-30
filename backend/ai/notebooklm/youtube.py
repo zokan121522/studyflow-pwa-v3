@@ -300,11 +300,14 @@ def _fetch_video_title(url: str) -> str:
 _LONG_VIDEO_SECONDS = 3 * 3600  # 3 h
 
 _LONG_VIDEO_MESSAGE = (
-    "El vídeo dura más de 3 horas: NotebookLM no puede devolverlo en una sola "
-    "consulta (el límite es 50 MB por respuesta) y el trabajo se perdería. "
-    "Opciones: usa un vídeo más corto, elige la longitud «corto», o usa el "
-    "botón de YouTube Zen, que extrae los subtítulos localmente y los "
-    "estructura por partes sin gastar cuota de consultas."
+    "Este vídeo dura más de 3 horas y NotebookLM lo devuelve entero en una "
+    "sola respuesta (tope de 50 MB), así que no cabe y además no se puede "
+    "trocear: una URL de YouTube es una única fuente, y la consulta no "
+    "admite un tramo de tiempo.\n\n"
+    "Para vídeos largos usa el botón YouTube (☁️ OpenZen): ahí sí se trocea "
+    "en un chunk por sección, y si un chunk falla puedes reintentarlo o "
+    "saltarlo y seguir con el resto sin perder lo ya generado. No gasta "
+    "cuota de NotebookLM."
 )
 
 
