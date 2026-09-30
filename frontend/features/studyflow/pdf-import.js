@@ -82,7 +82,20 @@ window.App.PdfImport = (function () {
         body: JSON.stringify(payload) }
     );
     if (!r.ok) throw new Error(`HTTP ${r.status} al guardar bloque`);
+    // This uses a raw fetch instead of CoursesAPI.updateBlock, so the
+    // per-session course cache keeps serving the block as it was BEFORE the
+    // import — the imported PDF never showed up until the user reloaded.
+    // Clear it here; the re-render the event triggers reads through it.
+    _dropCourseCache(courseId);
     return r.json();
+  }
+
+  function _dropCourseCache(courseId) {
+    try {
+      if (window.App.CoursesAPI && window.App.CoursesAPI.clearDetailCache) {
+        window.App.CoursesAPI.clearDetailCache(courseId);
+      }
+    } catch (_) { /* cache is best-effort */ }
   }
 
   // ── Capability snapshot (cached per-session, refreshed on demand) ──
@@ -346,6 +359,10 @@ await _patchBlock(
   }
 
   function _onScormImported(ctx, data) {
+    // A SCORM package lands server-side as new blocks/URLs; nothing on this
+    // path touches CoursesAPI, so the cache has to be dropped explicitly or
+    // the re-render below repaints the same stale tree.
+    _dropCourseCache(ctx.courseId);
     _close();
     window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
       detail: { courseId: ctx.courseId, topicId: ctx.topicId },

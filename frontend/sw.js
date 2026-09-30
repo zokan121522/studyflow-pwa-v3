@@ -12,9 +12,13 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // "Migrar a v3" button threw on click. Fixed + added a deferred-data
 // warning. Bump so installed PWAs stop serving the broken modal.
 // v29: course cards are flex rows again, so the drag grip sits beside the
-// title instead of above it. Both CSS files are precached, so installed
+// title instead of above it. Both stylesheets are precached, so installed
 // PWAs would keep serving the broken layout until the cache is rebuilt.
-const ASSET_CACHE = 'studyflow-assets-v29';
+// v30: imported/generated courses rendered stale until a full reload.
+// courses-api.js now expires its per-session cache (TTL + revalidate on
+// tab focus) and pdf-import.js stops bypassing the cache layer, but both are
+// precached, so installed PWAs need the bump to pick any of it up.
+const ASSET_CACHE = 'studyflow-assets-v30';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
