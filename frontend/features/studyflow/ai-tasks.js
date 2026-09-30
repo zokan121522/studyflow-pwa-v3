@@ -40,9 +40,11 @@ window.App.AI.Tasks = (function () {
     startTime: 0,
     fullContent: "",
     pollTimer: null,
-    done: false,        // completion reached (close = plain close, no cancel)
-    lastChecklist: "",  // dedupe terminal lines from task.error_message
-  };
+      done: false,        // completion reached (close = plain close, no cancel)
+      lastChecklist: "",  // dedupe terminal lines from task.error_message
+      restartPoll: null,  // re-arms the poll of the CURRENT task (chunk resume)
+      chunkPending: false,// a recoverable chunk failure awaits a decision
+    };
 
   function _esc(s) {
     return String(s == null ? "" : s)
@@ -67,8 +69,9 @@ window.App.AI.Tasks = (function () {
       </div>
       <div class="sf-ai-p-body">
         <div class="sf-ai-last" id="sf-ai-last"></div>
-        <div class="sf-ai-log" id="sf-ai-log"></div>
-        <div class="sf-ai-actions">
+          <div class="sf-ai-log" id="sf-ai-log"></div>
+          <div class="sf-ai-chunkbar" id="sf-ai-chunkbar" style="display:none"></div>
+          <div class="sf-ai-actions">
           <button class="sf-ai-btn sf-ai-btn-danger" id="stream-cancel-btn">⏹ Cancelar</button>
           <span class="sf-ai-actions-right">
             <span class="sf-ai-timer" id="stream-timer">⏱️ 0:00</span>
@@ -160,8 +163,10 @@ window.App.AI.Tasks = (function () {
     if (spinner) spinner.hidden = false;
     const cancelBtn = document.getElementById("stream-cancel-btn");
     if (cancelBtn) cancelBtn.style.display = "inline-block";
-    const insBtn = document.getElementById("stream-insert-btn");
-    if (insBtn) { insBtn.style.display = "none"; insBtn._onInsert = null; }
+      const insBtn = document.getElementById("stream-insert-btn");
+      if (insBtn) { insBtn.style.display = "none"; insBtn._onInsert = null; }
+      _clearChunkBar();
+      _streamState.restartPoll = null;
     const timerEl = document.getElementById("stream-timer");
     if (timerEl) timerEl.textContent = "⏱️ 0:00";
     _streamState.done = false;
@@ -182,12 +187,15 @@ window.App.AI.Tasks = (function () {
     }, 1000);
   }
 
-  function _hideStreamModal() {
-    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
-    _streamState.startTime = 0;
-    _streamState.fullContent = "";
-    _streamState.done = false;
-    _streamState.lastChecklist = "";
+    function _hideStreamModal() {
+      if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+      _streamState.startTime = 0;
+      _streamState.fullContent = "";
+      _streamState.done = false;
+      _streamState.lastChecklist = "";
+      _streamState.restartPoll = null;
+      _streamState.chunkPending = false;
+      _clearChunkBar();
     const panel = document.getElementById("sf-ai-panel");
     if (panel) panel.style.display = "none";
     if (_streamState.pollTimer) {
@@ -197,15 +205,147 @@ window.App.AI.Tasks = (function () {
     _streamState.taskId = null;
   }
 
-  /** Cancel a running task via the backend. */
-  async function _cancelTask(taskId) {
-    if (!taskId) return;
-    try {
-      await window.API.post(`/ai/tasks/${taskId}/cancel`);
-    } catch (err) {
-      console.warn(`[AI] cancel ${taskId}:`, err.message);
+    /** Cancel a running task via the backend. */
+    async function _cancelTask(taskId) {
+      if (!taskId) return;
+      try {
+        await window.API.post(`/ai/tasks/${taskId}/cancel`);
+      } catch (err) {
+        console.warn(`[AI] cancel ${taskId}:`, err.message);
+      }
     }
-  }
+
+    // ─── Chunk recovery (YouTubeZen detailed mode) ────────────────────
+    // A detailed youtube_zen task generates one chunk per plan section.
+    // When a chunk comes back empty the backend keeps the healthy parts,
+    // the plan and the failed index (coverage_data.state === "chunk_error")
+    // and exposes retry-chunk / continue-without. Without this the user saw
+    // a red error box and silently lost the 20 chunks that already worked.
+    // The backend has had both endpoints all along; nothing called them.
+
+    const _CHUNK_PREFIX = "CHUNK_ERROR|";
+
+    /**
+     * Read the recoverable-chunk details out of a failed task.
+     * @returns {?{idx:number, total:number, tries:number, maxTries:number,
+     *             kept:number, reason:string}} null when the failure is fatal
+     */
+    function _chunkFailureInfo(task) {
+      if (!task) return null;
+      const msg = task.error_message || "";
+      const cov = task.coverage_data;
+      if (cov && cov.state === "chunk_error") {
+        const reason = msg.indexOf(_CHUNK_PREFIX) === 0
+          ? msg.split("|").slice(2).join("|")
+          : msg;
+        return {
+          idx: (cov.failed_chunk || 0) + 1,   // stored 0-based, shown 1-based
+          total: cov.num_chunks || 0,
+          tries: cov.retry_count || 0,
+          maxTries: cov.max_retries || 0,
+          kept: (cov.parts || []).length,
+          reason: reason || "respuesta vacía",
+        };
+      }
+      // Fallback: the marker alone is enough to know it is resumable, e.g.
+      // a task resumed from another tab whose coverage_data we did not get.
+      if (msg.indexOf(_CHUNK_PREFIX) === 0) {
+        const bits = msg.split("|");
+        return {
+          idx: (parseInt(bits[1], 10) || 0) + 1,
+          total: 0, tries: 0, maxTries: 0, kept: 0,
+          reason: bits.slice(2).join("|") || "respuesta vacía",
+        };
+      }
+      return null;
+    }
+
+    function _clearChunkBar() {
+      const bar = document.getElementById("sf-ai-chunkbar");
+      if (bar) bar.style.display = "none";
+      _streamState.chunkPending = false;
+    }
+
+    /** Render the retry / skip / discard row for a failed chunk. */
+    function _showChunkBar(info) {
+      const bar = document.getElementById("sf-ai-chunkbar");
+      if (!bar) return;
+      const where = info.total
+        ? `chunk ${info.idx} de ${info.total}`
+        : `chunk ${info.idx}`;
+      const tries = info.maxTries
+        ? ` <span class="sf-ai-chunkbar-tries">(intento ${info.tries + 1} de ${info.maxTries})</span>`
+        : "";
+      const kept = info.kept
+        ? `<div class="sf-ai-chunkbar-kept">✅ ${info.kept === 1
+            ? "La sección ya generada se conserva"
+            : `Las ${info.kept} secciones ya generadas se conservan`} — no se vuelve a empezar el vídeo.</div>`
+        : "";
+      bar.innerHTML = `
+        <div class="sf-ai-chunkbar-msg">
+          <strong>⚠️ Falló el ${where}${tries}</strong>
+          <span class="sf-ai-chunkbar-reason">${_esc(info.reason)}</span>
+        </div>
+        ${kept}
+        <div class="sf-ai-chunkbar-btns">
+          <button class="sf-ai-btn sf-ai-btn-primary" data-chunk="retry-chunk">🔁 Reintentar el chunk</button>
+          <button class="sf-ai-btn" data-chunk="continue-without">⏭ Saltar y continuar</button>
+          <button class="sf-ai-btn sf-ai-btn-danger" data-chunk="discard">✕ Descartar</button>
+        </div>`;
+      bar.style.display = "block";
+      _streamState.chunkPending = true;
+      bar.querySelectorAll("[data-chunk]").forEach((btn) => {
+        btn.addEventListener("click", () => _onChunkAction(btn.dataset.chunk));
+      });
+    }
+
+    /** Retry a single chunk, skip it, or abandon the task. */
+    async function _onChunkAction(action) {
+      const taskId = _streamState.taskId;
+      if (!taskId) return;
+      const bar = document.getElementById("sf-ai-chunkbar");
+      const lock = (off) => {
+        if (!bar) return;
+        bar.querySelectorAll("button").forEach((b) => { b.disabled = off; });
+      };
+      lock(true);
+
+      try {
+        if (action === "discard") {
+          _log("🚫", "Tarea descartada");
+          _setLast("Descartado — nada se ha insertado en el curso", "warn");
+          _clearChunkBar();
+          return;
+        }
+        const isRetry = action === "retry-chunk";
+        _log("▶", isRetry
+          ? "🔁 Reintentando el chunk (se reutiliza el plan ya generado)…"
+          : "⏭ Saltando el chunk y continuando con el resto…");
+        _setLast(isRetry ? "Reintentando el chunk…" : "Continuando sin ese chunk…", "running");
+        const titleEl = document.getElementById("stream-title");
+        if (titleEl) titleEl.textContent = "▶ Reanudando la tarea…";
+        const spinner = document.getElementById("stream-spinner");
+        if (spinner) spinner.hidden = false;
+
+        await window.API.post(`/ai/notebooklm/youtube-zen/${taskId}/${action}`);
+
+        // The SAME task_id went back to "processing": reuse the original poll
+        // closure so the captured courseId, format and insert callback survive.
+        _clearChunkBar();
+        if (_streamState.restartPoll) {
+          _streamState.restartPoll();
+        } else {
+          _log("⚠️", "No se pudo reanudar el seguimiento; recarga el panel");
+        }
+      } catch (err) {
+        console.error("[AI] chunk action failed:", err);
+        const reason = err && err.message ? err.message : err;
+        _log("❌", "No se pudo reanudar: " + reason);
+        _setLast("No se pudo reanudar: " + reason, "err");
+        lock(false);
+      }
+    }
+
 
   /** Kill any remaining poll timers (session teardown). */
   function stopAllPolls() {
@@ -309,19 +449,35 @@ window.App.AI.Tasks = (function () {
           _setLast("Cancelado", "warn");
           return;
         }
-        if (task.status === "error") {
-          clearInterval(_streamState.pollTimer);
-          _streamState.pollTimer = null;
-          const errMsg = task.error_message || "Error desconocido";
-          if (spinner) spinner.hidden = true;
-          if (cancelBtn) cancelBtn.style.display = "none";
-          _streamState.done = true;
-          if (titleEl) titleEl.textContent = "❌ Error en la tarea";
-          _log("❌", errMsg);
-          _setLast("Error en la tarea", "err");
-          if (ai && ai._showStatus) ai._showStatus(blockId, `❌ ${errMsg}`, true);
-          return;
-        }
+          if (task.status === "error") {
+            clearInterval(_streamState.pollTimer);
+            _streamState.pollTimer = null;
+            const errMsg = task.error_message || "Error desconocido";
+            if (spinner) spinner.hidden = true;
+            _streamState.done = true;
+
+            // Recoverable chunk failure → offer retry / skip instead of a
+            // dead end. The healthy chunks survive in coverage_data.
+            const chunkInfo = _chunkFailureInfo(task);
+            if (chunkInfo) {
+              if (cancelBtn) cancelBtn.style.display = "none";
+              if (titleEl) titleEl.textContent = "⚠️ Chunk fallido — decide cómo continuar";
+              _log("⚠️", `El ${chunkInfo.total ? `chunk ${chunkInfo.idx} de ${chunkInfo.total}` : `chunk ${chunkInfo.idx}`} devolvió una respuesta vacía`);
+              _showChunkBar(chunkInfo);
+              _setLast("Chunk fallido — reinténtalo o sáltalo", "warn");
+              if (ai && ai._showStatus) {
+                ai._showStatus(blockId, `⚠️ Chunk ${chunkInfo.idx} sin respuesta — reintenta o sáltalo`, true);
+              }
+              return;
+            }
+
+            if (cancelBtn) cancelBtn.style.display = "none";
+            if (titleEl) titleEl.textContent = "❌ Error en la tarea";
+            _log("❌", errMsg);
+            _setLast("Error en la tarea", "err");
+            if (ai && ai._showStatus) ai._showStatus(blockId, `❌ ${errMsg}`, true);
+            return;
+          }
         if (task.status === "processing") {
           // Backend feeds the current step in error_message (checklist) —
           // log each NEW step once, keep the last-state line updated.
@@ -383,9 +539,25 @@ window.App.AI.Tasks = (function () {
       }
     };
 
-    _streamState.pollTimer = setInterval(poll, 2500);
-    poll(); // first tick immediately
-  }
+      // Re-arm the poll of THIS task. A retry-chunk / continue-without puts
+      // the same task_id back into "processing", so resuming the same closure
+      // keeps the captured courseId, the insert callback and the format — and
+      // the checklist dedupe restarts, since the backend writes a fresh one.
+      _streamState.restartPoll = () => {
+        if (_streamState.pollTimer) {
+          clearInterval(_streamState.pollTimer);
+          _streamState.pollTimer = null;
+        }
+        _streamState.lastChecklist = "";
+        _streamState.done = false;
+        _streamState.chunkPending = false;
+        const sp = document.getElementById("stream-spinner");
+        if (sp) sp.hidden = false;
+        _streamState.pollTimer = setInterval(poll, 2500);
+        poll(); // first tick immediately
+      };
+      _streamState.restartPoll();
+    }
 
   // ─── Public exports ─────────────────────────────────────────────
   return {

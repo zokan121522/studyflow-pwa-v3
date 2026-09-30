@@ -37,7 +37,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // matched a hand-written list of eight emoji, and real titles proved it
 // incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
 // off Unicode Extended_Pictographic, so no future title prefix can outrun it.
-const ASSET_CACHE = 'studyflow-assets-v37';
+const ASSET_CACHE = 'studyflow-assets-v39';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

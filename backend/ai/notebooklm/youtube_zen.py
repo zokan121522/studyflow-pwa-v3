@@ -1989,7 +1989,14 @@ def _resume_detailed_task(
     """
     try:
         db.execute(
-            "UPDATE ai_tasks SET status = 'processing', updated_at = NOW() WHERE id = %s",
+            # error_message must be cleared as well: while processing, the
+            # poll reads it as the step checklist, so the stale
+            # "CHUNK_ERROR|2|..." from the failure would be logged as if it
+            # were a live step. The first _set_progress below writes the real
+            # checklist. coverage_data (parts / plan / failed_chunk) is what
+            # the resume actually reads, and it is left untouched.
+            "UPDATE ai_tasks SET status = 'processing', error_message = NULL, "
+            "updated_at = NOW() WHERE id = %s",
             (task_id,),
         )
         row = db.query_one(
@@ -2077,7 +2084,7 @@ def _resume_detailed_task(
     except Exception as e:
         if "Cancelado por el usuario" in str(e):
             db.execute(
-                "UPDATE ai_tasks SET status = 'cancelled', error_message = NULL, updated_at = NOW() WHERE id = %s",
+                "UPDATE ai_tasks SET status = 'cancelled', updated_at = NOW() WHERE id = %s",
                 (task_id,),
             )
             return
