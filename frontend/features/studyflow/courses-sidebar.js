@@ -43,6 +43,12 @@ window.App.CoursesSidebar = (function () {
 
   function getBlockIcon(block) {
     if (hasTitleEmojiPrefix(block.title)) return "";
+    // Markdown blocks get no automatic type icon. The 📝 was the one icon the
+    // user could never remove: it is painted here, not stored in the title, so
+    // editing the title to get rid of the AI's 🎥 only handed the screen over
+    // to this one — the two swapped places instead of disappearing. A
+    // hand-written title is the whole point of a block, so it is left alone.
+    if (block.type === "markdown") return "";
     if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
     // content-type title prefixes from v2 AI blocks
     if (block.type === "content" && block.title) {

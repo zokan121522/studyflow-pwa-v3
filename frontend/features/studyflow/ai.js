@@ -794,6 +794,81 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     return sections;
   }
 
+  // ─── Provenance header (who generated this, from what, and the source) ──
+  //
+  // A generated block looks like any other once it lands in a course, and a
+  // 40-chunk course is impossible to audit later. Two lines travel with the
+  // content: what produced it, and where it came from. Both are already on
+  // the task row — coverage_data holds url / template_id / depth / video_title
+  // on both the NotebookLM and the YouTube Zen paths — so this reads rather
+  // than invents.
+
+  const _PROV_TEMPLATES = {
+    "notas-estandar": ["📝", "Notas estándar"],
+    "transcripcion": ["🧠", "Reconstrucción de transcripción"],
+    "tutorial": ["⚙️", "Tutorial / How-To"],
+    "comparativa": ["🔀", "Comparativa"],
+    "glosario": ["📚", "Glosario / Términos"],
+    "resumen-ejecutivo": ["🎯", "Resumen ejecutivo"],
+    "por-temas": ["🧩", "Por temas"],
+    "faq": ["❓", "FAQ"],
+    "arquitectura-tecnica": ["🏗️", "Arquitectura técnica"],
+    "infografia-textual": ["📊", "Infografía textual"],
+  };
+
+  const _PROV_DEPTH = {
+    concise: "resumido",
+    standard: "estándar",
+    detailed: "detallado",
+  };
+
+  /**
+   * Identify the engine behind a finished task.
+   * The notebook format only exists on the native NotebookLM path; the zen
+   * formats only on YouTube Zen. `model_used` is the tiebreaker and the
+   * fallback when the format is unknown.
+   */
+  function _provenanceProvider(task, format) {
+    if (format === "ytd_zen") return { name: "OpenZen", emoji: "☁️" };
+    if (format === "markdown" || format === "md" || format === "html") {
+      return { name: "NotebookLM", emoji: "🧠" };
+    }
+    const model = String((task && task.model_used) || "");
+    if (/zen|openzen/i.test(model)) return { name: "OpenZen", emoji: "☁️" };
+    if (/notebook/i.test(model)) return { name: "NotebookLM", emoji: "🧠" };
+    return null;
+  }
+
+  /**
+   * Build the two provenance lines for a generated block.
+   *
+   * @returns {{chip:?string, link:?string, url:string, provider:?object}}
+   *   chip — "🧠 NotebookLM · 📝 Notas estándar · 🎯 detallado"
+   *   link — "[Título del vídeo](https://…)" or null when there is no URL
+   */
+  function _provenance(task, format) {
+    const cov = (task && task.coverage_data) || {};
+    const provider = _provenanceProvider(task, format);
+    const url = cov.video_url || cov.url || "";
+
+    if (provider) {
+      const tpl = cov.template_id && _PROV_TEMPLATES[cov.template_id];
+      const tplLabel = tpl ? `${tpl[0]} ${tpl[1]}` : "📄 Por defecto";
+      const depth = _PROV_DEPTH[cov.depth] || cov.depth || "estándar";
+      var chip = `${provider.emoji} ${provider.name} · ${tplLabel} · 🎯 ${depth}`;
+    } else {
+      var chip = null;
+    }
+
+    var link = null;
+    if (url) {
+      const title = (cov.video_title || cov.title || "").trim() || "Vídeo de origen";
+      // Guard against a title that would break out of the markdown link
+      link = `[${title.replace(/[[\]]/g, "")}](${url})`;
+    }
+    return { chip: chip, link: link, url: url, provider: provider };
+  }
+
   // ─── Content success callback ──────────────────────────────────
   async function _onContentSuccess(task, blockId, topicId, format, courseIdHint) {
     // Resolve the owning course from the topic when the caller has no hint:
@@ -805,24 +880,30 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       return;
     }
 
-    let blockType, label, emoji;
+    // Titles are left exactly as generated — no emoji prefix. The user asked for
+    // this: the 🎥 was a "this came from YouTube" marker they could delete by
+    // hand, and deleting it only made the sidebar's 📝 type icon reappear, so
+    // the icon they could remove was trading places with the one they could
+    // not. The block's origin is recorded in the content instead (see
+    // _provenance), which travels with the block and can be edited.
+    let blockType, label;
     if (format === "markdown" || format === "md") {
-      blockType = "markdown"; label = "NotebookLM"; emoji = "📚";
+      blockType = "markdown"; label = "NotebookLM";
     } else if (format === "ytd_zen") {
       // Phase 8 — youtube-zen queue. Must be handled explicitly: without it
       // it falls through to the generic branch and the block is titled
-      // "🤖 Markdown", hiding which tool produced it.
-      blockType = "markdown"; label = "YouTube Zen"; emoji = "🎥";
+      // "Markdown", hiding which tool produced it.
+      blockType = "markdown"; label = "YouTube Zen";
     } else if (format === "html") {
-      blockType = "content"; label = "NotebookLM HTML"; emoji = "📚";
+      blockType = "content"; label = "NotebookLM HTML";
     } else if (format === "audio") {
-      blockType = "content"; label = "Audio"; emoji = "🎵";
+      blockType = "content"; label = "Audio";
     } else if (format === "infographic") {
-      blockType = "content"; label = "Infografía"; emoji = "📊";
+      blockType = "content"; label = "Infografía";
     } else if (format === "knowledge_pipeline") {
-      blockType = "markdown"; label = "Gen. Contenido"; emoji = "🧠";
+      blockType = "markdown"; label = "Gen. Contenido";
     } else {
-      blockType = "markdown"; label = "Markdown"; emoji = "🤖";
+      blockType = "markdown"; label = "Markdown";
     }
 
     // Title the block after WHAT WAS GENERATED, not after the generic tool
@@ -848,7 +929,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
           for (let i = 0; i < sections.length; i++) {
             await _addBlockAfterSource(courseId, blockId, {
               type: "markdown",
-              title: `${emoji} ${sections[i].title}`,
+              title: sections[i].title,
               content: sections[i].body,
               topic_id: topicId,
             }, i);
@@ -878,7 +959,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     try {
       const newId = await _addBlockAfterSource(courseId, blockId, {
         type: blockType,
-        title: `${emoji} ${sourceTitle}`,
+        title: sourceTitle,
         content: blockContent,
         topic_id: topicId,
       });
@@ -1061,6 +1142,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     _onContentSuccess,
     _onTestSuccess,
     _addBlockAfterSource,
+    _provenance,
   };
 })());
 

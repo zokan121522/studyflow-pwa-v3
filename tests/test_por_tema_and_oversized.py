@@ -94,13 +94,38 @@ def test_every_emoji_that_reaches_a_title_is_recognised(emoji):
     assert out.stdout.strip() == "true", f"{emoji} not recognised as an emoji prefix"
 
 
-def test_plain_markdown_block_keeps_its_type_icon():
-    """A hand-made block has no emoji, so it must keep its 📝."""
+def test_markdown_blocks_get_no_automatic_icon():
+    """Markdown gets no painted icon — it was the one the user could not remove.
+
+    It is not stored in the title, so editing the title to drop the AI's
+    emoji only made this icon reappear in its place. The two swapped seats
+    instead of going away.
+    """
     body = _src(SIDEBAR).split("function getBlockIcon(block) {", 1)[1].split("\n  }", 1)[0]
-    assert 'return TYPE_ICONS[block.type]' in body
-    assert "Nuevo Markdown" not in body, (
-        "the icon must be decided from the title, not special-cased per name"
+    assert 'if (block.type === "markdown") return "";' in body, (
+        "markdown must short-circuit to no icon before the TYPE_ICONS lookup"
     )
+    assert body.index('block.type === "markdown"') < body.index(
+        "TYPE_ICONS[block.type]"
+    ), "the markdown check must run before the type table is consulted"
+
+
+def test_other_block_types_keep_their_icon():
+    """The user's complaint was about markdown; the rest still get a marker."""
+    body = _src(SIDEBAR).split("function getBlockIcon(block) {", 1)[1].split("\n  }", 1)[0]
+    assert 'if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type]' in body
+
+
+def test_ai_titles_carry_no_emoji_prefix():
+    """The insert must not decorate the title; the AI leaves it as generated."""
+    src = _src(AI_JS)
+    assert 'title: `${emoji} ${sourceTitle}`' not in src, (
+        "the 🎥 / 📚 prefix is back — that is the icon the user deletes by hand"
+    )
+    assert 'title: `${emoji} ${sections[i].title}`' not in src, (
+        "the por_tema split re-added the same prefix"
+    )
+    assert "title: sourceTitle," in src
 
 
 def test_empty_icon_does_not_leave_a_gap_in_the_layout():
