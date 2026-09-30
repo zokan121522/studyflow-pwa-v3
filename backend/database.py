@@ -41,6 +41,15 @@ def init_db() -> None:
     from addons_seed import seed_addon_catalog
     seed_addon_catalog()
 
+    # Phase 9 — calendar import notices. The DDL lives in the feature
+    # package; database.py is already over the size limit and must not grow
+    # a table definition (see Phase 9 out-of-scope).
+    from calendar_import.schema import create_calendar_import_tables
+    with get_db() as c2:
+        with c2.cursor() as cur2:
+            create_calendar_import_tables(cur2)
+        c2.commit()
+
 
 def _seed_local_user() -> None:
     """Ensure the implicit local user (id=1) exists so single-user mode works.
