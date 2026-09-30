@@ -385,14 +385,8 @@ window.App.CoursesSidebar = (function () {
         }
 
         // Click elsewhere on header → toggle expand/collapse
-        const s = window.STATE || {};
-        s._expandedTopics = s._expandedTopics || {};
-        const expanded = s._expandedTopics[topicId] === true;
-        s._expandedTopics[topicId] = !expanded;
-        const blocksDiv = topicItem.querySelector(".topic-blocks");
-        if (blocksDiv) blocksDiv.style.display = !expanded ? "block" : "none";
-        const arrow = topicItem.querySelector(".topic-arrow");
-        if (arrow) arrow.textContent = !expanded ? "▼" : "▶";
+        const currentlyExpanded = (window.STATE?._expandedTopics || {})[topicId] === true;
+        setTopicExpanded(topicId, !currentlyExpanded);
         return;
       }
 
@@ -445,11 +439,33 @@ window.App.CoursesSidebar = (function () {
     if (window.App.CoursesDND) window.App.CoursesDND.attach(leftEl);
   }
 
+  // ── setTopicExpanded(topicId, expanded) → bool ──────────────────
+  // Single place that decides whether a topic shows its blocks in the nav.
+  // Flips the state flag AND the DOM, so both the chevron and "open this
+  // topic from the body" can drive it without one path updating state and
+  // the other only the markup. Returns false if the topic is not in the
+  // nav (course collapsed), which is not an error — a later re-render reads
+  // the flag and will show it expanded.
+  function setTopicExpanded(topicId, expanded) {
+    const s = window.STATE || (window.STATE = {});
+    s._expandedTopics = s._expandedTopics || {};
+    s._expandedTopics[topicId] = !!expanded;
+    const item = document.querySelector(`.topic-item[data-topic-id="${topicId}"]`);
+    if (item) {
+      const blocksDiv = item.querySelector(".topic-blocks");
+      if (blocksDiv) blocksDiv.style.display = expanded ? "block" : "none";
+      const arrow = item.querySelector(".topic-arrow");
+      if (arrow) arrow.textContent = expanded ? "▼" : "▶";
+    }
+    return !!item;
+  }
+
   // ── Public API ───────────────────────────────────────────────
   return {
     renderCourseTree,
     attachSidebarEvents,
     updateSelection,
+    setTopicExpanded,
   };
 })();
 

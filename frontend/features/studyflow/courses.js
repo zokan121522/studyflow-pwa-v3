@@ -469,6 +469,14 @@ window.App.Courses = (function () {
       const full = await fetchCourseDetail(courseId);
       s._expandedCourseTopics = (full && full.topics) || [];
     }
+    // Opening a topic also unfolds it in the nav. Otherwise you click a topic
+    // in the body and the sidebar keeps it folded behind a ▶, so the blocks you
+    // just opened look absent from the outline. The flag survives any re-render
+    // (renderCourseTree reads _expandedTopics), and setTopicExpanded also flips
+    // the live markup, so the nav is correct before the tree is rebuilt.
+    if (window.App.CoursesSidebar && window.App.CoursesSidebar.setTopicExpanded) {
+      window.App.CoursesSidebar.setTopicExpanded(topicId, true);
+    }
     await updateCenter();
   }
 

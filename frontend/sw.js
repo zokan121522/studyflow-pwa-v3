@@ -18,7 +18,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // courses-api.js now expires its per-session cache (TTL + revalidate on
 // tab focus) and pdf-import.js stops bypassing the cache layer, but both are
 // precached, so installed PWAs need the bump to pick any of it up.
-const ASSET_CACHE = 'studyflow-assets-v32';
+const ASSET_CACHE = 'studyflow-assets-v33';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
