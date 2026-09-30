@@ -249,7 +249,10 @@ def _bulk_move_init_pos(cur, target_date, user_id):
         (target_date, user_id),
     )
     row = cur.fetchone()
-    return int(row[0]) if row and row[0] is not None else 0
+    # get_connection() sets RealDictCursor, so rows are dicts keyed by the
+    # SQL alias — row[0] raises KeyError: 0 and 500s the whole bulk move.
+    next_pos = (row or {}).get("next_pos")
+    return int(next_pos) if next_pos is not None else 0
 
 
 def _bulk_move_check(cur, sid, target_date, user_id):

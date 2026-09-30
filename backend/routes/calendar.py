@@ -448,7 +448,10 @@ def _process_one_vevent(cur, component, today, window_end,
         fields["summary"], fields["notes"],
     ))
     row = cur.fetchone()
-    counters["imported" if (row and row[0]) else "updated"] += 1
+    # get_connection() sets RealDictCursor, so the row is a dict keyed by the
+    # RETURNING alias — row[0] raises KeyError: 0 and 500s the import.
+    is_insert = bool(row and row.get("is_insert"))
+    counters["imported" if is_insert else "updated"] += 1
 
 
 def _extract_event_times(component, local_tz):
