@@ -370,7 +370,13 @@ window.App.AI.Tasks = (function () {
             insBtn.style.display = "inline-block";
             insBtn._onInsert = () => onDone(task);
           }
-          if (ai && ai._showStatus) ai._showStatus(blockId, "✅ Generado", true);
+          if (ai && ai._showStatus) {
+            ai._showStatus(blockId, "✅ Generado", true);
+            // Not left up forever: the user has the stream modal open with an
+            // Insert button, so the banner only has to survive until they act.
+            // _onContentSuccess clears it outright once the block lands.
+            if (ai._clearStatus) setTimeout(() => ai._clearStatus(blockId), 6000);
+          }
         }
       } catch (err) {
         /* transient — keep polling */

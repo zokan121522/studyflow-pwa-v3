@@ -851,13 +851,66 @@ window.App.Courses = (function () {
     return String(a) === String(b);
   }
 
+  // ── _refreshSidebarNav() — rebuild ONLY the left tree ─────────
+  // renderStudyflow() does sidebar + center + the addon/quiz navs, which is
+  // far too much to run on every block mutation: it refetches the course
+  // list and re-renders the marketplace panels, which visibly fights the
+  // user while the AI is streaming results in.
+  //
+  // What the user needs after a block is inserted is for it to appear in the
+  // outline. Two details make this non-obvious:
+  //
+  //  1. The tree does NOT read the block list off `fetchCourses()`. It reads
+  //     `STATE._expandedCourseTopics`, which is only filled by
+  //     `fetchCourseDetail()`. Refetching the course list alone therefore
+  //     re-renders the tree with the SAME stale blocks — the outline looks
+  //     like it refreshed but the inserted block is still missing.
+  //  2. `fetchCourseDetail()` is cached, so the detail has to be invalidated
+  //     first or we re-read the pre-insert snapshot.
+  async function _refreshSidebarNav(courseId) {
+    const leftEl = document.getElementById("studyflow-left");
+    if (!leftEl || courseId == null) return;
+    const s = STATE();
+    // Only the open course carries blocks in the tree; refreshing other
+    // courses would be wasted work on every mutation.
+    if (!s.expandedCourseId || !_sameId(s.expandedCourseId, courseId)) return;
+    try {
+      if (typeof clearDetailCache === "function") clearDetailCache();
+      const [courses, full] = await Promise.all([
+        fetchCourses(),
+        fetchCourseDetail(courseId),
+      ]);
+      if (!courses) return;
+      s._expandedCourseTopics = (full && full.topics) || [];
+      s._expandedCourseBlocks = (full && full.blocks) || [];
+      const scrollTop = leftEl.scrollTop;
+      leftEl.innerHTML = renderCourseTree(courses, s);
+      // Re-rendering resets the scroll position; put it back so a long tree
+      // does not jump to the top every time a block is inserted.
+      leftEl.scrollTop = scrollTop;
+      if (window.App.CoursesSidebar && window.App.CoursesSidebar.updateSelection) {
+        window.App.CoursesSidebar.updateSelection(leftEl, s);
+      }
+    } catch (err) {
+      console.error("[blocks-changed] sidebar refresh failed:", err);
+    }
+  }
+
   function _onBlocksChanged(e) {
     const detail = (e && e.detail) || {};
     const s = STATE();
     if (detail.courseId != null && !_sameId(s.currentCourseId, detail.courseId)) return;
     if (detail.topicId != null && !_sameId(s.selectedTopicId, detail.topicId)) return;
     // Fire-and-forget: don't block the event handler.
+    //
+    // The sidebar and the center are refreshed TOGETHER but independently:
+    // the center renders the inserted block, while the tree is what makes it
+    // discoverable. Only refreshing the center left the outline stale, so the
+    // course looked unchanged until something else happened to re-render the
+    // nav. Neither is awaited by the other — a slow or failing tree render
+    // must not delay the block the user is waiting for.
     updateCenter().catch((err) => console.error("[blocks-changed]", err));
+    _refreshSidebarNav(detail.courseId != null ? detail.courseId : s.currentCourseId);
   }
   if (typeof window !== "undefined"
       && !window.__studyflowBlocksListenerMounted) {

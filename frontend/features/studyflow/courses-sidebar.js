@@ -250,9 +250,11 @@ window.App.CoursesSidebar = (function () {
     const safeBlockTitle = escHtml(b.title || "Sin título").replace(/'/g, "\\'");
     const isSep = b.type === "separator";
     const sepCls = isSep ? ` separator${(b.title || "").trim() ? " has-label" : " no-label"}` : "";
-    const dblClick = isSep
-      ? `ondblclick="event.stopPropagation();window.App.Courses._inlineRenameBlockTitle('${courseId}','${b.id}')" title="Doble clic para editar"`
-      : "";
+    // The separator title used to be renamed on double click, which fired by
+    // accident while selecting text and is undiscoverable next to a single
+    // click that selects the block. The ⋮ menu below already offers
+    // "✏️ Editar título" for exactly the same action, so the affordance is not
+    // lost — it just lives in one predictable place.
 
     return `<div class="block-item ${isActive ? "active" : ""}${sepCls}" data-block-id="${b.id}" data-course-id="${courseId}" data-topic-id="${topicId}" data-block-idx="${idx}">
       <span class="drag-handle" draggable="true" title="Arrastrar para mover" aria-hidden="true">⠿</span>
@@ -260,7 +262,7 @@ window.App.CoursesSidebar = (function () {
         <input type="checkbox" ${checked} onchange="window.App.Courses._toggleBlockDone('${courseId}','${b.id}')">
       </label>
       <span class="bi-icon">${icon}</span>
-      <span class="bi-title" ${dblClick}>${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
+      <span class="bi-title">${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
       <div class="topic-menu-wrap">
         <button class="topic-menu-toggle" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')">⋮</button>
         <div class="topic-menu">

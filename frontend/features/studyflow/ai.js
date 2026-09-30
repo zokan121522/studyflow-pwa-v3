@@ -788,15 +788,9 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       blockType = "markdown"; label = "Markdown"; emoji = "🤖";
     }
 
-    let sourceTitle = label;
-    try {
-      const list = await window.App.CoursesAPI.fetchCourses();
-      const course = (list || []).find((c) => c.id === courseId) || {};
-      const sourceBlock = (course.blocks || []).find((b) => b.id === blockId);
-      if (sourceBlock && sourceBlock.title) {
-        sourceTitle = _cleanBlockTitle(sourceBlock.title) || label;
-      }
-    } catch { /* fallback to label */ }
+    // Title the block after WHAT WAS GENERATED, not after the generic tool
+    // name. See _blockTitleForTask for the preference order.
+    const sourceTitle = await _blockTitleForTask(task, courseId, blockId, label);
 
     let blockContent = task.result_content || "";
     if (format === "audio") {
@@ -813,11 +807,15 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         content: blockContent,
         topic_id: topicId,
       });
-      _showStatus(blockId, `✅ ${label} generado`, true);
       // Trigger the v3 re-render event so the block shows immediately.
       window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
         detail: { courseId, topicId }
       }));
+      // The result is in the tree now, so the "generado" banner has done its
+      // job. It used to be left up (persistent) until the user re-rendered
+      // the screen by hand, sitting under the very block it was announcing.
+      _showStatus(blockId, `✅ ${label} generado`, true);
+      setTimeout(() => _clearStatus(blockId), 4000);
       return newId;
     } catch (err) {
       console.error("[AI] insert block failed:", err);
@@ -826,6 +824,62 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       const why = (err && (err.message || err.statusText)) || "error desconocido";
       _showStatus(blockId, `❌ Error al guardar: ${why}`, true);
     }
+  }
+
+  // ─── clearStatus(blockId) — drop a status line immediately ─────
+  // `_showStatus(..., true)` marks a message persistent so it survives long
+  // enough to be read. For a generation result that outlives its usefulness:
+  // the new block is in, the tree has it, and the banner is now just in the
+  // way until the user re-renders something by hand.
+  function _clearStatus(blockId) {
+    const container = document.querySelector(`[data-ai-status="${blockId}"]`);
+    if (!container) return;
+    clearTimeout(container._sfStatusTimer);
+    container._sfStatusTimer = null;
+    container.textContent = "";
+    container.style.display = "none";
+  }
+
+  // ─── blockTitleForTask(task, blockId, fallback) ──────────────
+  // A generated block used to be titled after whatever it was generated FROM,
+  // which for a launch from the topic toolbar is no block at all — so the user
+  // got "🤖 NotebookLM" and had to open every block to tell them apart.
+  //
+  // Prefer, in order:
+  //   1. the source video title the YouTube worker already stored in
+  //      coverage_data (authoritative, and free — no extra round trip);
+  //   2. the first markdown H1 of the generated content, which is what the
+  //      model was told to lead with;
+  //   3. the caller's fallback.
+  async function _blockTitleForTask(task, courseId, blockId, fallback) {
+    const content = (task && task.result_content) || "";
+
+    // 1. video title from the task row
+    const coverage = task && task.coverage_data;
+    if (coverage && typeof coverage === "object") {
+      const vTitle = _cleanBlockTitle(coverage.video_title || "");
+      if (vTitle) return vTitle;
+    }
+
+    // 2. first H1 / H2 in the generated markdown
+    const heading = content.match(/^\s{0,3}#{1,2}\s+(.+?)\s*#*\s*$/m);
+    if (heading) {
+      const h = _cleanBlockTitle(heading[1]);
+      if (h) return h;
+    }
+
+    // 3. fall back to the source block's title, then the generic label
+    try {
+      const list = await window.App.CoursesAPI.fetchCourses();
+      const course = (list || []).find((c) => c.id === courseId) || {};
+      const sourceBlock = (course.blocks || []).find((b) => b.id === blockId);
+      if (sourceBlock && sourceBlock.title) {
+        const t = _cleanBlockTitle(sourceBlock.title);
+        if (t) return t;
+      }
+    } catch { /* fallback below */ }
+
+    return fallback;
   }
 
   // ─── Test success callback ─────────────────────────────────────
@@ -928,6 +982,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     },
     // Internal callbacks (used by ai-tasks.js streaming poll)
     _showStatus,
+    _clearStatus,
     _onContentSuccess,
     _onTestSuccess,
     _addBlockAfterSource,
