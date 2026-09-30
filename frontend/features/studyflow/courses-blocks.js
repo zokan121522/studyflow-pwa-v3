@@ -38,10 +38,59 @@ window.App.CoursesBlocks = (function () {
   const { escHtml } = window.App.UI;
   const {
     addBlock, updateBlock, deleteBlock,
-    listTopicBlocks,
+    listTopicBlocks, fetchCourseDetail,
   } = window.App.CoursesAPI;
   const { _renderMd } = window.App.ContentBlocks;
   const MdEditor = window.App.MarkdownEditor;
+
+  function _showBlockNotice(blockEl, msg) {
+    // This view has no [data-ai-status] node (that lives in ai.js's own
+    // renderer), so the card's edit slot doubles as the message area.
+    const host = blockEl && (blockEl.closest(".sf-block-card") || blockEl);
+    const form = host && host.querySelector(".sf-td-edit-form");
+    if (!form) return;
+    form.innerHTML =
+      `<p style="margin:0;color:var(--danger,#e5484d);font-size:13px">${escHtml(msg)}</p>`;
+    form.style.display = "block";
+  }
+
+  // ── _ctxFrom(btn, fallbackCourseId, fallbackTopicId) ──────────
+  // Resolve the course/topic a clicked control belongs to, from the DOM
+  // rather than from the listener's closure.
+  //
+  // Why: _attachBlockHandlers is idempotent — it attaches ONE listener per
+  // container and closes over the courseId/topicId that were current at that
+  // moment. Navigate to another course and the listener is not re-attached,
+  // so every id it holds is stale: the pencil looks the block up in the wrong
+  // topic, doesn't find it, and returns silently. Worse, save and delete
+  // would then PATCH/DELETE against the *previous* course.
+  //
+  // The fallback ids are only used if the DOM cannot answer, which for a
+  // rendered card it always can.
+  function _ctxFrom(btn, fallbackCourseId, fallbackTopicId) {
+    const card = btn.closest(".sf-block-card");
+    const blockEl =
+      btn.closest(".sf-td-block") ||
+      (card && card.querySelector(".sf-td-block")) ||
+      card;
+    if (!blockEl) return null;
+    const scope = blockEl.closest(".sf-topic-detail") || centerScope(btn);
+    const domCourse =
+      Number(blockEl.dataset.courseId) ||
+      Number(card && card.dataset.courseId) ||
+      Number(scope && scope.dataset.courseId);
+    const domTopic = Number(scope && scope.dataset.topicId);
+    return {
+      blockEl,
+      card: card || blockEl,
+      courseId: domCourse || fallbackCourseId,
+      topicId: domTopic || fallbackTopicId,
+    };
+  }
+
+  function centerScope(el) {
+    return el.closest(".sf-topic-detail, .sf-td-blocks, .col-center") || null;
+  }
 
   // ── Block-type → icon + label + strip + per-type create defaults ──
   // defaults drive the create-block payload (content/url/title seed).
@@ -292,17 +341,42 @@ window.App.CoursesBlocks = (function () {
       const editBtn = e.target.closest(".sf-td-edit");
       if (editBtn) {
         e.stopPropagation();
-        const blockEl = editBtn.closest(".sf-td-block") || (editBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
-        if (!blockEl) return;
+        const ctx = _ctxFrom(editBtn, courseId, topicId);
+        if (!ctx) {
+          _showBlockNotice(editBtn.closest(".sf-block-card") || editBtn,
+            "⚠️ No encuentro la tarjeta del bloque.");
+          return;
+        }
+        const { blockEl, courseId: domCourseId, topicId: domTopicId } = ctx;
         const bid = Number(blockEl.dataset.blockId);
         // Pull fresh block data from cache (or listTopicBlocks)
         try {
-          const blocks = await listTopicBlocks(courseId, topicId);
-          const block = (blocks || []).find((x) => x.id === bid);
-          if (!block) return;
+          let block = null;
+          const blocks = await listTopicBlocks(domCourseId, domTopicId);
+          block = (blocks || []).find((x) => x.id === bid);
+          if (!block) {
+            // The card is on screen but its id is gone from the topic list —
+            // a concurrent delete, or a block whose topic_id disagrees with
+            // the topic it is rendered under. Try the course's flat list
+            // before giving up; if that misses too, the block really is
+            // gone. Previously this was a bare `return`, so the pencil did
+            // nothing at all and the only cure was a full reload.
+            const detail = await fetchCourseDetail(domCourseId);
+            block = (detail.blocks || []).find((x) => x.id === bid);
+          }
+          if (!block) {
+            // Say so. A silent no-op here is indistinguishable from a broken
+            // button, which is how "it won't let me edit this" went
+            // unreported for so long.
+            _showBlockNotice(blockEl, "⚠️ Este bloque ya no existe. Recarga la vista para actualizar.");
+            return;
+          }
           const form = blockEl.querySelector(".sf-td-edit-form");
-          if (!form) return;
-          form.innerHTML = _renderEditForm(block, courseId);
+          if (!form) {
+            _showBlockNotice(blockEl, "⚠️ Este tipo de bloque no se puede editar aquí.");
+            return;
+          }
+          form.innerHTML = _renderEditForm(block, domCourseId);
           form.style.display = "block";
           // Wire the live preview (input → .md-preview) and the
           // editor↔preview scroll sync. attachLivePreview is idempotent
@@ -334,8 +408,9 @@ window.App.CoursesBlocks = (function () {
       const saveBtn = e.target.closest(".sf-td-save");
       if (saveBtn) {
         e.stopPropagation();
-        const blockEl = saveBtn.closest(".sf-td-block") || (saveBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
-        if (!blockEl) return;
+        const ctxSave = _ctxFrom(saveBtn, courseId, topicId);
+        if (!ctxSave) return;
+        const blockEl = ctxSave.blockEl;
         const bid = Number(blockEl.dataset.blockId);
         const titleInput = blockEl.querySelector(".sf-td-md-title");
         const editor = blockEl.querySelector(".md-editor");
@@ -348,10 +423,10 @@ window.App.CoursesBlocks = (function () {
         if (plain) payload.content = plain.value;
         if (urlInput) payload.url = urlInput.value.trim();
         try {
-          await updateBlock(courseId, bid, payload);
+          await updateBlock(ctxSave.courseId, bid, payload);
           // Force the topic panel to re-render via the center-updater.
           const evt = new CustomEvent("studyflow:blocks-changed", {
-            detail: { courseId, topicId }
+            detail: { courseId: ctxSave.courseId, topicId: ctxSave.topicId }
           });
           window.dispatchEvent(evt);
         } catch (err) {
@@ -364,9 +439,11 @@ window.App.CoursesBlocks = (function () {
       const cancelBtn = e.target.closest(".sf-td-cancel");
       if (cancelBtn) {
         e.stopPropagation();
-        const blockEl = cancelBtn.closest(".sf-td-block") || (cancelBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
-        if (!blockEl) return;
+        const ctxCancel = _ctxFrom(cancelBtn, courseId, topicId);
+        if (!ctxCancel) return;
+        const blockEl = ctxCancel.blockEl;
         const form = blockEl.querySelector(".sf-td-edit-form");
+
         if (form) {
           form.style.display = "none";
           form.innerHTML = "";
@@ -382,14 +459,15 @@ window.App.CoursesBlocks = (function () {
       const delBtn = e.target.closest(".sf-td-del");
       if (delBtn) {
         e.stopPropagation();
-        const blockEl = delBtn.closest(".sf-td-block") || (delBtn.closest(".sf-block-card")||document).querySelector(".sf-td-block");
-        if (!blockEl) return;
+        const ctxDel = _ctxFrom(delBtn, courseId, topicId);
+        if (!ctxDel) return;
+        const blockEl = ctxDel.blockEl;
         const bid = Number(blockEl.dataset.blockId);
         if (!confirm("¿Borrar este bloque?")) return;
         try {
-          await deleteBlock(courseId, bid);
+          await deleteBlock(ctxDel.courseId, bid);
           const evt = new CustomEvent("studyflow:blocks-changed", {
-            detail: { courseId, topicId }
+            detail: { courseId: ctxDel.courseId, topicId: ctxDel.topicId }
           });
           window.dispatchEvent(evt);
         } catch (err) {
@@ -540,7 +618,13 @@ window.App.CoursesBlocks = (function () {
         // hiccup just means the next re-render shows the old state.
         if (Number.isFinite(bid)) {
           try {
-            await updateBlock(courseId, bid, { collapsed: isCollapsed });
+            // Same stale-closure trap as the other handlers: derive the
+            // course from the card that was actually clicked.
+            const domCourse =
+              Number(card.dataset.courseId) ||
+              Number((card.closest(".sf-topic-detail") || {}).dataset?.courseId) ||
+              courseId;
+            await updateBlock(domCourse, bid, { collapsed: isCollapsed });
           } catch (_) { /* best-effort */ }
         }
         return;

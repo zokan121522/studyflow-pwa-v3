@@ -720,7 +720,7 @@ window.App.Courses = (function () {
     const addBar = blocks.length ? "" : Blocks._renderAddBar(courseId, topicId);
 
     centerEl.innerHTML = `
-      <div class="sf-topic-detail">
+      <div class="sf-topic-detail" data-topic-id="${topicId}" data-course-id="${courseId}">
         <div class="sf-td-back" data-course-id="${courseId}">
           ← ${escHtml(course.title || "Curso")}
         </div>
