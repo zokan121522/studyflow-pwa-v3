@@ -65,6 +65,12 @@ LIMIT %s
 _MARK_READ_SQL = """
 UPDATE calendar_import_notifications SET read_at = NOW()
 WHERE id = %s AND user_id = %s AND read_at IS NULL
+RETURNING id
+"""
+
+_COUNT_PENDING_SQL = """
+SELECT COUNT(*) AS n FROM calendar_import_notifications
+WHERE user_id = %s AND read_at IS NULL
 """
 
 _STORE_SQL = """
@@ -87,6 +93,12 @@ def fetch_pending(cur, user_id, limit=5):
     """Unread notices, newest first. Rows are dicts — RealDictCursor."""
     cur.execute(_PENDING_SQL, (user_id, limit))
     return [dict(r) for r in (cur.fetchall() or [])]
+
+
+def count_pending(cur, user_id):
+    """How many unread notices there are. Cheaper than fetching them all."""
+    cur.execute(_COUNT_PENDING_SQL, (user_id,))
+    return int((cur.fetchone() or {}).get("n") or 0)
 
 
 def mark_read(cur, user_id, notification_id):

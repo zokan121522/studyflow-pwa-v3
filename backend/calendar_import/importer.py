@@ -94,8 +94,15 @@ def run_import_for_user(cur, days, user_id=1, calendar_loader=None,
     the same reason: the window starts today, so a test that hardcodes a
     past date would silently test nothing.
 
-    Returns (user_id, calendar_name, new_sessions) — the shape the scheduler
-    needs to build one notice per run.
+    Returns (user_id, calendar_name, new_sessions, per_calendar).
+
+    ``per_calendar`` is the part that matters for the status panel. This
+    function used to log a failed feed and carry on, which was right for
+    importing but made a dead Moodle indistinguishable from a quiet one:
+    both produced zero new sessions. A status line built on that would tell
+    the user everything is fine while nothing has been imported for a week.
+    Each entry here is {name, ok, new, updated, skipped, error}, so the
+    caller can say "2 calendars ok, 1 unreachable" instead of guessing.
     """
     from calendar_import.window import import_window
 
@@ -108,31 +115,44 @@ def run_import_for_user(cur, days, user_id=1, calendar_loader=None,
     calendars = calendar_loader(user_id)
     all_new = []
     names = []
+    per_calendar = []
     for calendar in calendars:
         url = calendar.get("url")
         name = calendar.get("name") or "calendario"
         if not url:
             continue
+        entry = {"name": name, "ok": False, "new": 0, "updated": 0,
+                 "skipped": 0, "error": None}
         try:
             cal = feed_fetcher(url)
         except Exception as exc:
-            # One unreachable feed must not stop the others from importing.
+            # One unreachable feed must not stop the others from importing —
+            # but it must be reported, or a dead feed reads as a quiet one.
+            entry["error"] = f"{type(exc).__name__}: {exc}"[:300]
             logger.warning(
                 "calendar_import_skip name=%s err=%s",
                 name, type(exc).__name__,
             )
+            per_calendar.append(entry)
             continue
         if cal is None:
+            entry["error"] = "feed no parseable"
+            per_calendar.append(entry)
             continue
-        _counters, new_sessions = walk_calendar_into_sessions(
+        counters, new_sessions = walk_calendar_into_sessions(
             cur, cal, window_start, window_end, local_tz, user_id
         )
+        entry["ok"] = True
+        entry["new"] = counters["imported"]
+        entry["updated"] = counters["updated"]
+        entry["skipped"] = counters["skipped_out_of_range"]
         if new_sessions:
             names.append(name)
         all_new.extend(new_sessions)
+        per_calendar.append(entry)
 
     label = names[0] if names else (calendars[0].get("name") if calendars else "")
-    return user_id, label or "calendario", all_new
+    return user_id, label or "calendario", all_new, per_calendar
 
 
 def _local_zone():

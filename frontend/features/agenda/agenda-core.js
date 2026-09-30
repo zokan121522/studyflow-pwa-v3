@@ -187,8 +187,9 @@ window.App.AgendaCore = (function () {
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
         '<button class="ht-btn" data-action="add-session" style="font-size:10px;">➕ Añadir sesión</button>' +
-        '<button class="ht-btn" data-action="open-calendars" style="font-size:10px;">📅 Calendarios</button>' +
-        '<span style="font-size:11px;color:var(--text-muted);background:var(--surface);padding:2px 10px;border-radius:10px;border:1px solid var(--border);">' + daySessions.length + ' sesiones</span>' +
+'<button class="ht-btn" data-action="open-calendars" style="font-size:10px;">📅 Calendarios</button>' +
+          '<span class="cal-import-status" style="font-size:10px;color:var(--text-muted);padding:2px 8px;border-radius:10px;border:1px solid var(--border);" title="Estado de la sincronización del calendario">⏳ comprobando…</span>' +
+          '<span style="font-size:11px;color:var(--text-muted);background:var(--surface);padding:2px 10px;border-radius:10px;border:1px solid var(--border);">' + daySessions.length + ' sesiones</span>' +
       '</div>';
   }
 

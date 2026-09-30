@@ -34,6 +34,11 @@ _LOCK_ID = 918273645
 _STARTUP_DELAY_S = 60
 _TICK_INTERVAL_S = 24 * 60 * 60
 
+# The app is single-user local mode (see routes/auth.token_required), so there
+# is exactly one user to import for. Noted here because it is the reason this
+# is a constant and not a query over users.
+_USER_ID = 1
+
 _thread = None
 _lock = threading.Lock()
 
@@ -50,19 +55,26 @@ def _run_once(conn_factory, days):
 
     Separated from the loop so it can be exercised directly in tests without
     threads, timers or a real scheduler.
+
+    Every outcome is written to the run log, including the failure and the
+    lock-skip. A run that fails silently is how a dead feed looks like a
+    quiet one, and the status panel then lies to the user for a week.
     """
     import database as db
-    from calendar_import import notifications
+    from calendar_import import notifications, runs
     from calendar_import.importer import run_import_for_user
 
     conn = conn_factory()
     try:
         if not _acquire(conn):
             logger.info("calendar_import_skipped reason=lock_held_by_other_worker")
+            with conn.cursor() as cur:
+                runs.record_run(cur, _USER_ID, "skipped", detail="otro worker")
+            conn.commit()
             return 0
         with conn.cursor() as cur:
-            user_id, calendar_name, new_sessions = run_import_for_user(
-                cur, days=days
+            user_id, calendar_name, new_sessions, per_calendar = (
+                run_import_for_user(cur, days=days)
             )
             if new_sessions:
                 message = notifications.build_message(
@@ -71,15 +83,34 @@ def _run_once(conn_factory, days):
                 notifications.store_pending(
                     cur, user_id, calendar_name, message
                 )
-        conn.commit()
-        if new_sessions:
-            logger.info(
-                "calendar_import_done calendar=%s new=%d",
-                calendar_name, len(new_sessions),
+            bad = sum(1 for c in per_calendar if not c.get("ok"))
+            runs.record_run(
+                cur, user_id,
+                "partial" if bad else "ok",
+                per_calendar=per_calendar,
+                new_sessions=len(new_sessions),
+                updated=sum(c.get("updated", 0) for c in per_calendar),
+                skipped=sum(c.get("skipped", 0) for c in per_calendar),
             )
-        else:
-            logger.info("calendar_import_noop calendar=%s", calendar_name)
+        conn.commit()
+        logger.info(
+            "calendar_import_done calendar=%s new=%d bad_calendars=%d",
+            calendar_name, len(new_sessions), bad,
+        )
         return len(new_sessions)
+    except Exception as exc:
+        # Recorded even though the import failed. Without this row the panel
+        # would keep reporting the previous good run as if it were current.
+        try:
+            with conn.cursor() as cur:
+                runs.record_run(
+                    cur, _USER_ID, "error",
+                    detail=f"{type(exc).__name__}: {exc}"[:500],
+                )
+            conn.commit()
+        except Exception:
+            logger.exception("calendar_import_error_log_failed")
+        raise
     finally:
         # Closing releases the advisory lock.
         conn.close()

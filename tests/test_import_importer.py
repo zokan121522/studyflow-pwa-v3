@@ -187,7 +187,7 @@ ONE = [{"id": "a", "name": "Digitech", "url": "https://x.test/a"}]
 def test_run_import_reports_the_user_and_name(monkeypatch, stub_agenda):
     _wire(monkeypatch, ONE, lambda url: feed(CLASS_A))
 
-    user_id, name, new = I.run_import_for_user(
+    user_id, name, new, _per = I.run_import_for_user(
         FakeCursor(inserts=True), days=60, user_id=1, today=BASE
     )
     assert user_id == 1
@@ -198,7 +198,7 @@ def test_run_import_reports_the_user_and_name(monkeypatch, stub_agenda):
 def test_run_import_is_silent_when_nothing_is_new(monkeypatch, stub_agenda):
     _wire(monkeypatch, ONE, lambda url: feed(CLASS_A))
 
-    _uid, _name, new = I.run_import_for_user(
+    _uid, _name, new, _per = I.run_import_for_user(
         FakeCursor(inserts=False), days=60, user_id=1, today=BASE
     )
     assert new == []
@@ -212,7 +212,7 @@ def test_one_dead_feed_does_not_block_the_others(monkeypatch, stub_agenda):
     ], lambda url: (_ for _ in ()).throw(ValueError("token muerto"))
         if "bad" in url else feed(CLASS_A))
 
-    _uid, name, new = I.run_import_for_user(
+    _uid, name, new, _per = I.run_import_for_user(
         FakeCursor(inserts=True), days=60, user_id=1, today=BASE
     )
     assert name == "Digitech"
@@ -222,7 +222,7 @@ def test_one_dead_feed_does_not_block_the_others(monkeypatch, stub_agenda):
 def test_no_calendars_means_no_notice(monkeypatch, stub_agenda):
     _wire(monkeypatch, [], lambda url: feed())
 
-    _uid, name, new = I.run_import_for_user(FakeCursor(), days=60, user_id=1, today=BASE)
+    _uid, name, new, _per = I.run_import_for_user(FakeCursor(), days=60, user_id=1, today=BASE)
     assert new == []
     assert name == "calendario"
 

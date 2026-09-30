@@ -198,9 +198,23 @@ window.App.Agenda = (function () {
   // ==================================================================
   // AGENDA
   // ==================================================================
-  async function renderAgenda() {
-    // Clean up any running timer intervals before re-render
-    AgendaTimer.stopAll();
+  // ─── Calendar sync status ──────────────────────────────────────────
+  // Shared by the boot path and every re-render, so the chip always
+  // reflects the current state instead of whatever it was at page load.
+  // Silently does nothing if the module failed to load.
+  function _refreshCalendarStatus() {
+    if (!window.CalendarImportStatus ||
+        typeof window.CalendarImportStatus.refresh !== "function") return;
+    return window.CalendarImportStatus.refresh();
+  }
+
+async function renderAgenda() {
+      // Clean up any running timer intervals before re-render
+      AgendaTimer.stopAll();
+
+      // Runs before the DOM is rebuilt so the chip is painted once the new
+      // markup exists; renderAgenda replaces the whole side panel.
+      _refreshCalendarStatus();
 
     const weekId = STATE.currentWeek || getWeekId(todayStr());
     STATE.currentWeek = weekId;
@@ -256,6 +270,12 @@ if (window.App.AgendaCalendars && typeof window.App.AgendaCalendars.init === "fu
     if (window.CalendarImportNotice && typeof window.CalendarImportNotice.refresh === "function") {
       window.CalendarImportNotice.refresh();
     }
+
+    // ─── Calendar sync status (Phase 9) ──────────────────────────────
+    // The user wants to know from the agenda alone whether the calendar is
+    // healthy. refresh() is re-run on every render, so the chip tracks the
+    // current state rather than whatever it was at boot.
+    _refreshCalendarStatus();
 
   // ─── Public API ──────────────────────────────────────────────────
   return {

@@ -92,6 +92,21 @@ def _auth(app, user_id):
 PENDING = [{"id": 7, "calendar_name": "Digitech", "message": "3 sesiones nuevas"}]
 
 
+def test_mark_read_sql_actually_returns_the_row():
+    """Guard for a bug that shipped once already.
+
+    mark_read() reads the row back with fetchone(). Without RETURNING id the
+    UPDATE still works but fetchone() yields None, so the function reports
+    "nothing changed" for every dismiss — and a test with a fake cursor that
+    ignores the SQL string will happily pass. Assert the clause is there.
+    """
+    from calendar_import.notifications import _MARK_READ_SQL
+
+    assert "RETURNING id" in _MARK_READ_SQL, (
+        "mark_read() would always report False without RETURNING id"
+    )
+
+
 def test_pending_returns_the_unread_notices(client):
     c, holder, app = client
     holder["cursor"] = type(holder["cursor"])(pending=PENDING)

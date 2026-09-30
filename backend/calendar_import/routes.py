@@ -30,6 +30,29 @@ def pending_notifications(current_user_id: int):
         db.put_connection(conn)
 
 
+@bp.get("/calendar/status")
+@token_required
+def import_status(current_user_id: int):
+    """Is the import healthy, and is anything waiting for the user?
+
+    Called when the agenda opens. Deliberately cheap: one indexed lookup for
+    the last run, one for the last good run, one for the unread count. The
+    agenda must not wait on the network to render.
+    """
+    import database as db
+
+    from calendar_import import runs
+
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            pending = notifications.count_pending(cur, current_user_id)
+            payload = runs.status(cur, current_user_id, pending)
+        return jsonify(payload)
+    finally:
+        db.put_connection(conn)
+
+
 @bp.post("/calendar/notifications/<int:notification_id>/read")
 @token_required
 def mark_notification_read(current_user_id: int, notification_id: int):
