@@ -199,8 +199,61 @@ def _fetch_ics(url: str) -> bytes:
         or b"BEGIN:VCALENDAR" in body[:512]
     )
     if not looks_ics:
-        raise ValueError("not an ICS feed")
+        raise ValueError(
+            _classify_non_feed(resp.headers, body) or "not an ICS feed"
+        )
     return body
+  
+  
+# Why a response is not an ICS feed, phrased so the user can act on it.
+# A Moodle `import.php` URL answers 200 with an HTML login page; calling that
+# just "not a valid ICS feed" left the user with no way to know an
+# authentication wall was the actual problem. These strings are a UI
+# contract — keep them stable and free of URLs/credentials.
+_FEED_REASONS = {
+    "login_page": (
+        "Esa URL devuelve una pagina de inicio de sesion, no un calendario. "
+        "Moodle exige un enlace con token: usa el enlace personal de "
+        "exportacion (…/calendar/export.php?token=…) o, si tienes la "
+        "suspeccion en Google Calendar, la direccion ICS de "
+        "calendar.google.com (Ajustes > Calendario > Integrar calendario)."
+    ),
+    "not_html_calendar_page": (
+        "Esa URL devuelve una pagina web, no un calendario. "
+        "Hace falta la direccion del feed (.ics), no la de la pagina."
+    ),
+    "empty_response": "Esa URL ha devuelto una respuesta vacia.",
+    "not_an_ics_feed": (
+        "La respuesta no tiene formato de calendario (.ics). "
+        "Comprueba que el enlace sea el feed y no una pagina web."
+    ),
+}
+  
+  
+def _classify_non_feed(headers, body) -> str:
+    """Return why this response is not an ICS feed, or None if it is one."""
+    ctype = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+    if not body.strip():
+        return _FEED_REASONS["empty_response"]
+    if b"BEGIN:VCALENDAR" in body[:4096]:
+        return None
+    # An HTML page that looks like a sign-in form is the Moodle case: it is
+    # reachable and returns 200, so only the content gives it away. The body
+    # is already capped at _FETCH_MAX_BYTES, and the real Moodle login form
+    # sits ~15 KB in behind the stylesheet, so scan all of it rather than
+    # a prefix.
+    if "html" in ctype or b"<html" in body[:2048].lower():
+        lowered = body.lower()
+        looks_like_login = (
+            b'name="logintoken"' in lowered
+            or (b'name="username"' in lowered and b'name="password"' in lowered)
+            or b"type=\"password\"" in lowered
+            or b"type='password'" in lowered
+        )
+        return _FEED_REASONS[
+            "login_page" if looks_like_login else "not_html_calendar_page"
+        ]
+    return _FEED_REASONS["not_an_ics_feed"]
 
 
 def _normalise_dt(value):
@@ -340,7 +393,9 @@ def _load_calendar_from_url(url):
     except ValueError as exc:
         logger.warning("calendar_rejected host=%s reason=%s",
                        urlparse(url).netloc, exc)
-        return None, (jsonify(error="the response is not a valid ICS feed"), 400)
+        # Surface the real reason: "not an ICS feed" told the user nothing
+        # about the Moodle login wall that was actually in the way.
+        return None, (jsonify(error=str(exc) or "the response is not a valid ICS feed"), 400)
     try:
         return Calendar.from_ical(body_bytes), None
     except Exception as exc:
