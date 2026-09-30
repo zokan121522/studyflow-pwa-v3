@@ -97,13 +97,20 @@ window.App.AI.Generation = (function () {
   }
 
   // ─── YouTube → Markdown (native NotebookLM ingestion) ──────────
-  async function youtubeToMd(blockId, topicId, url) {
+  async function youtubeToMd(blockId, topicId, url, opts = {}) {
     Status(blockId, "⏳ Procesando YouTube…");
     try {
+      // Issue #13 — carry the YouTubeZen dialog options to the native
+      // endpoint so it can compose the prompt. All optional: with none of
+      // them set the backend keeps the original fixed prompt.
       const resp = await window.API.post("/ai/notebooklm/youtube-to-markdown", {
         url,
         block_id: blockId || "",
         topic_id: topicId || "",
+        template_id: opts.template || "",
+        depth: opts.depth || "standard",
+        mode: opts.mode || "unitema",
+        language: opts.language || "auto",
       });
       const tasks = Tasks();
       if (tasks) {

@@ -21,14 +21,37 @@ from pathlib import Path
 import requests
 from notebooklm import NotebookLMClient
 
-from database import execute, execute_returning
+from database import execute, execute_returning, query_one
 from ai.notebooklm.client import _strip_citation_markers
 from ai.notebooklm.prompts import (
     YOUTUBE_TO_MARKDOWN_PROMPT,
     YOUTUBE_TO_HTML_PROMPT,
+    compose_nb_md_prompt,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── mode instruction (issue #13) ─────────────────────────────────────
+#
+# The native NotebookLM YouTube path used to ship ONE fixed prompt, so the
+# dialog had nothing to offer: no template, no language, no depth and no
+# mode. Phase 64 (#255) hid those controls because the endpoint only read
+# url + topic_id. They are now real, so we compose the prompt instead of
+# accepting the fixed one.
+#
+# Only `por_tema` needs a nudge. `unitema` is the default single-block
+# layout NotebookLM already produces, so it adds nothing — keeping the
+# no-options path byte-identical to the pre-#13 behaviour.
+
+_MODE_POR_TEMA_INSTRUCTION = (
+    "\n## ORGANISATION OVERRIDE\n"
+    "Split the notes into SEVERAL thematic sections, one per main idea of "
+    "the video, each with its own heading. Do not collapse everything into "
+    "a single block of prose.\n"
+)
+
+_VALID_MODES = ("unitema", "por_tema")
 
 
 # ── helpers ─────────────────────────────────────────────────────────
@@ -119,11 +142,69 @@ async def _add_youtube_and_ask(url: str, prompt: str) -> str:
 # ── public API ──────────────────────────────────────────────────────
 
 
-def youtube_to_markdown(url: str) -> str:
+def build_native_youtube_prompt(
+    template_id: str | None = None,
+    depth: str = "standard",
+    mode: str = "unitema",
+    language: str = "auto",
+) -> str:
+    """Compose the native NotebookLM YouTube prompt from the dialog options.
+
+    Issue #13 — the NotebookLM YouTube button now offers the same
+    template / depth / mode / language controls as YouTubeZen.
+
+    Delegates role, language and length to the shared Phase 62 composer
+    (`compose_nb_md_prompt`, issue #253) instead of reinventing them here,
+    then appends the mode instruction when `por_tema` is selected.
+
+    When every value is a default the result is EXACTLY
+    ``YOUTUBE_TO_MARKDOWN_PROMPT`` — same string object, no prelude — so
+    the pre-#13 behaviour is preserved byte for byte and a regression
+    cannot slip in through the new controls.
+
+    Args:
+        template_id: MD_TEMPLATES key, or None/'' for the standard role.
+        depth: 'concise' | 'standard' | 'detailed' (maps to length).
+        mode: 'unitema' | 'por_tema'. Unknown values fall back to
+            'unitema' rather than raising: a stale bookmark should not
+            fail the task.
+        language: 'auto' | 'es' | 'en'.
+
+    Returns:
+        The composed system prompt.
+    """
+    depth = (depth or "standard").strip().lower()
+    if depth not in ("concise", "standard", "detailed"):
+        depth = "standard"
+
+    mode = (mode or "unitema").strip().lower()
+    if mode not in _VALID_MODES:
+        mode = "unitema"
+
+    language = (language or "auto").strip().lower() or "auto"
+    template_id = (template_id or "").strip() or None
+
+    prompt = compose_nb_md_prompt(
+        template_id=template_id,
+        language=language,
+        length=depth,
+        base_prompt=YOUTUBE_TO_MARKDOWN_PROMPT,
+    )
+
+    if mode == "por_tema":
+        prompt += _MODE_POR_TEMA_INSTRUCTION
+
+    return prompt
+
+
+def youtube_to_markdown(url: str, prompt: str | None = None) -> str:
     """YouTube → Markdown via NotebookLM Chat API.
 
     Args:
         url: YouTube video URL.
+        prompt: Optional system prompt. Defaults to the fixed
+            YOUTUBE_TO_MARKDOWN_PROMPT, preserving the original
+            behaviour for callers that pass nothing.
 
     Returns:
         Markdown string with structured course notes.
@@ -132,7 +213,9 @@ def youtube_to_markdown(url: str) -> str:
         ValueError: If URL is invalid.
         RuntimeError: On API failure.
     """
-    return _sync_run(_add_youtube_and_ask(url, YOUTUBE_TO_MARKDOWN_PROMPT))
+    if prompt is None:
+        prompt = YOUTUBE_TO_MARKDOWN_PROMPT
+    return _sync_run(_add_youtube_and_ask(url, prompt))
 
 
 def youtube_to_html(url: str) -> str:
@@ -189,6 +272,43 @@ def _fetch_video_title(url: str) -> str:
     return ""
 
 
+def _read_task_options(task_id: str) -> dict:
+    """Read the dialog options stored on a task row (issue #13).
+
+    The worker runs in a background thread long after the request, so it
+    must re-read the options from the row instead of relying on anything
+    the caller held in memory. Missing or malformed values fall back to
+    the defaults, so a task row written before #13 still runs unchanged.
+    """
+    row = query_one(
+        """SELECT template_id, language, length, coverage_data
+             FROM ai_tasks WHERE id = %s""",
+        (task_id,),
+    ) or {}
+
+    mode = "unitema"
+    raw = row.get("coverage_data") or ""
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                mode = parsed.get("mode") or "unitema"
+        except (ValueError, TypeError):
+            logger.warning("task %s: unparsable coverage_data, using unitema", task_id)
+
+    return {
+        "template_id": (row.get("template_id") or "").strip() or None,
+        "language": (row.get("language") or "").strip() or "auto",
+        # NOTE: the column is `length` (kept for parity with YouTubeZen and
+        # the Phase 62 composer) but the composer parameter is `depth`, so it
+        # is returned under the parameter name. The worker splats this dict
+        # straight into build_native_youtube_prompt(**opts) — returning
+        # "length" here raises TypeError and fails every task.
+        "depth": (row.get("length") or "").strip() or "standard",
+        "mode": mode,
+    }
+
+
 def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
     """Background thread: process YouTube URL and update ai_tasks.
 
@@ -217,7 +337,11 @@ def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
         logger.info(f"YouTube task {task_id}: processing {url} as {output_format}")
 
         if output_format == "markdown":
-            result = youtube_to_markdown(url)
+            # Issue #13: compose the prompt from the dialog options. With
+            # every option at its default this yields the original fixed
+            # prompt, so the common path is unchanged.
+            opts = _read_task_options(task_id)
+            result = youtube_to_markdown(url, build_native_youtube_prompt(**opts))
         else:
             result = youtube_to_html(url)
 
@@ -270,14 +394,33 @@ def _norm_topic_id(topic_id) -> int | None:
     return int(topic_id)
 
 
-def create_youtube_md_task(url: str, topic_id: str, block_id: str, user_id: str) -> dict:
+def create_youtube_md_task(
+    url: str,
+    topic_id: str,
+    block_id: str,
+    user_id: str,
+    template_id: str | None = None,
+    depth: str = "standard",
+    mode: str = "unitema",
+    language: str = "auto",
+) -> dict:
     """Create a YouTube → Markdown background task.
+
+    Issue #13 — the four dialog options are stored on the task row so the
+    background worker can rebuild the prompt. The storage layout mirrors
+    YouTubeZen exactly: template_id / language / length in their own
+    columns, and `mode` inside the coverage_data JSON, which already
+    carries the video URL for this task type.
 
     Args:
         url: YouTube video URL.
         topic_id: Topic to associate the result with.
         block_id: Source block id (may be empty for standalone YouTube).
         user_id: User creating the task.
+        template_id: MD_TEMPLATES key, or None for the standard role.
+        depth: 'concise' | 'standard' | 'detailed'.
+        mode: 'unitema' | 'por_tema'.
+        language: 'auto' | 'es' | 'en'.
 
     Returns:
         {"task_id": str}
@@ -288,12 +431,29 @@ def create_youtube_md_task(url: str, topic_id: str, block_id: str, user_id: str)
     if not validate_youtube_url(url):
         raise ValueError(f"Invalid YouTube URL: {url}")
 
+    # Normalise once here so the stored row always matches what the worker
+    # will read back, and so junk from the client never reaches the prompt.
+    template_id = (template_id or "").strip() or None
+    depth = (depth or "standard").strip().lower() or "standard"
+    if depth not in ("concise", "standard", "detailed"):
+        depth = "standard"
+    mode = (mode or "unitema").strip().lower() or "unitema"
+    if mode not in _VALID_MODES:
+        mode = "unitema"
+    language = (language or "auto").strip().lower() or "auto"
+
     task_row = execute_returning(
         """INSERT INTO ai_tasks
-           (id, user_id, topic_id, task_type, format, source_type, source_id, status)
-           VALUES (%s, %s, %s, 'youtube', 'markdown', 'youtube', %s, 'pending')
+           (id, user_id, topic_id, task_type, format, source_type, source_id, status,
+            template_id, language, length, coverage_data)
+           VALUES (%s, %s, %s, 'youtube', 'markdown', 'youtube', %s, 'pending',
+                   %s, %s, %s, %s)
            RETURNING id""",
-        (_new_task_id(), user_id, _norm_topic_id(topic_id), block_id),
+        (
+            _new_task_id(), user_id, _norm_topic_id(topic_id), block_id,
+            template_id or "", language, depth,
+            json.dumps({"url": url, "mode": mode}, ensure_ascii=False),
+        ),
     )
     task_id = task_row["id"]
 

@@ -71,13 +71,22 @@ def _parse_block_ids(data: dict) -> list[str] | None:
 def youtube_to_markdown(current_user_id: int):
     """POST /api/ai/notebooklm/youtube-to-markdown
 
-    Body: { "url": "https://youtube.com/watch?v=...", "topic_id": "...", "block_id": "..." }
+    Body: { "url": "https://youtube.com/watch?v=...", "topic_id": "...",
+    "block_id": "...", "template_id": "tutorial", "depth": "standard",
+    "mode": "unitema", "language": "es" }  // issue #13: all optional
     Returns: { "task_id": "..." }
     """
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     topic_id = (data.get("topic_id") or "").strip()
     block_id = (data.get("block_id") or "").strip()
+    # Issue #13 — the dialog now sends the YouTubeZen controls. Every one
+    # is optional; with all of them absent the prompt is byte-identical to
+    # the pre-#13 fixed prompt.
+    template_id = (data.get("template_id") or "").strip() or None
+    depth = (data.get("depth") or "standard").strip().lower()
+    mode = (data.get("mode") or "unitema").strip().lower()
+    language = (data.get("language") or "auto").strip().lower()
 
     if not url:
         return jsonify(error="Missing required field: url"), 400
@@ -86,6 +95,7 @@ def youtube_to_markdown(current_user_id: int):
         from ai.notebooklm.youtube import create_youtube_md_task
         result = create_youtube_md_task(
             url=url, topic_id=topic_id, block_id=block_id, user_id=current_user_id,
+            template_id=template_id, depth=depth, mode=mode, language=language,
         )
         return jsonify(result)
     except ValueError as e:

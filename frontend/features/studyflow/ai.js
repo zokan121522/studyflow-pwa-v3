@@ -381,8 +381,16 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
   /** Minimal YouTube URL dialog (native NotebookLM ingestion). */
   function _showYoutubeDialog(topicId, courseId, opts = {}) {
-    // Phase 64 (#255) — notebooklm provider hides zen-only controls (native
-    // endpoint accepts only url + topic_id). Default call is byte-identical.
+    // Issue #13 — the NotebookLM YouTube button now gets the full YouTubeZen
+    // controls (template / depth / mode / language), the same as OpenZen.
+    //
+    // Phase 64 (#255) hid them because the native endpoint only read
+    // url + topic_id. The native path now composes its prompt from these
+    // four options, so they are real for both providers.
+    //
+    // nbNative survives ONLY to pick the submit path: YouTubeZen goes
+    // through the FIFO queue, the native NotebookLM path posts one task
+    // per URL. It no longer hides any control.
     const nbNative = !!(opts && opts.provider === "notebooklm");
 
     // Remove any existing panel
@@ -406,7 +414,6 @@ window.App.AI = Object.assign(window.App.AI, (function () {
               style="padding:10px 14px;"
               placeholder="https://youtube.com/watch?v=...&#10;https://youtu.be/... (máx 20)"
             ></textarea>
-            ${!nbNative ? `
             <label class="kp-label">🎛️ Plantilla de prompt (opcional):</label>
             <div class="ozmd-grid">
               <div class="ozmd-templates" id="yt-templates">
@@ -455,7 +462,6 @@ window.App.AI = Object.assign(window.App.AI, (function () {
               <button class="kp-lang-btn selected" data-lang="es">🇪🇸 Español</button>
               <button class="kp-lang-btn" data-lang="en">🇬🇧 English</button>
             </div>
-            ` : ""}
             <div id="yt-dialog-status" style="font-size:12px;color:var(--text-muted,#888);display:none;padding:8px 12px;border-radius:6px;background:var(--surface-raised,#252535);margin-top:12px;"></div>
           </div>
           <div class="kp-modal-footer">
@@ -577,16 +583,31 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
       const gen = window.App.AI.Generation;
       if (!gen) return;
-      if (nbNative) {
-        // Native NotebookLM: one backend task per URL (sequential).
-        (async () => {
-          for (const url of urls) {
-            try { await gen.youtubeToMd("", topicId, url); }
-            catch (err) { _showStatus("", `❌ YouTube: ${err.message}`, true); }
-          }
-        })();
-        return;
-      }
+        if (nbNative) {
+          // Native NotebookLM: one backend task per URL (sequential).
+          // Issue #13 — the dialog options now travel with the request so
+          // the native path composes its prompt from them, exactly as
+          // YouTubeZen does.
+          //
+          // The language is sent as selected, NOT mapped to 'auto'. Mapping
+          // it would leave the Español button (the default selection)
+          // doing nothing, i.e. a decorative control. Forcing it is the
+          // parity the issue asks for, and it is a deliberate change: the
+          // native default output is now pinned to Spanish like YouTubeZen.
+          const opts = {
+            template: selectedTemplate,
+            depth: selectedDepth,
+            mode: selectedMode,
+            language: selectedLang,
+          };
+          (async () => {
+            for (const url of urls) {
+              try { await gen.youtubeToMd("", topicId, url, opts); }
+              catch (err) { _showStatus("", `❌ YouTube: ${err.message}`, true); }
+            }
+          })();
+          return;
+        }
       if (urls.length === 1) {
         // Single URL → legacy flow (stream modal + manual insert)
         gen.youtubeZen("", topicId, urls[0], "markdown", selectedDepth, selectedMode, selectedLang, selectedTemplate);
