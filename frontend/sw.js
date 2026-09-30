@@ -18,7 +18,16 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // courses-api.js now expires its per-session cache (TTL + revalidate on
 // tab focus) and pdf-import.js stops bypassing the cache layer, but both are
 // precached, so installed PWAs need the bump to pick any of it up.
-const ASSET_CACHE = 'studyflow-assets-v34';
+// v35: the five insert-flow polish fixes (#8c501f4) touched four precached
+// assets — ai.js, courses.js, markdown-editor.js and studyflow-editor.css —
+// and v34 was left in place. Static assets are cache-first, and the service
+// worker only re-installs when sw.js itself changes, so every installed PWA
+// kept serving the pre-fix code with no update prompt: the "Nueva versión
+// disponible" banner in app.js never fired because no new worker was ever
+// installed. Bump so the precache is refetched. tests/test_sw_asset_version.py
+// now fails the build if a precached asset changes without this bump, so this
+// cannot silently recur.
+const ASSET_CACHE = 'studyflow-assets-v35';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -35,7 +44,6 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses.js',
   '/features/studyflow/courses-api.js',
   '/features/studyflow/courses-blocks.js',
-  '/features/studyflow/courses-notes.js',
   '/features/studyflow/courses-dnd.js',
   '/features/studyflow/courses-dashboard.js',
   '/features/studyflow/openzen-settings.js',
@@ -94,12 +102,34 @@ const PRECACHE_ASSETS = [
 const API_CACHE_MAX_AGE = 5 * 60 * 1000;
 
 // Install event: cache basic assets
+//
+// Deliberately NOT cache.addAll(). addAll() is atomic: a single 404 rejects
+// the whole promise and leaves the precache completely empty, so one stale
+// entry takes offline support down with it and nothing in the app notices —
+// the SW installs, the update banner still fires, and only the failure to
+// precache is invisible. That is exactly what happened: /features/studyflow/
+// courses-notes.js was listed here but never existed in the repo, so the
+// precache had been failing silently for a long time and the cache we
+// inspected had in fact been filled by the runtime cache-first path instead.
+//
+// allSettled keeps every asset that does resolve and reports the rest.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(ASSET_CACHE)
       .then((cache) => {
         console.log('[SW] Precaching assets');
-        return cache.addAll(PRECACHE_ASSETS.map(url => new Request(url, { credentials: 'same-origin' })));
+        return Promise.allSettled(
+          PRECACHE_ASSETS.map(url =>
+            cache.add(new Request(url, { credentials: 'same-origin' }))
+          )
+        ).then((results) => {
+          const failed = PRECACHE_ASSETS.filter((_, i) => results[i].status === 'rejected');
+          if (failed.length) {
+            console.error('[SW] Precache failed for', failed.length, 'asset(s):', failed);
+          } else {
+            console.log('[SW] Precached', PRECACHE_ASSETS.length, 'assets');
+          }
+        });
       })
       .then(() => self.skipWaiting())
   );
