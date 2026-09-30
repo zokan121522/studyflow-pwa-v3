@@ -300,3 +300,57 @@ def test_raise_does_not_leave_a_notebook_behind():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ── provenance header (option A: two lines INSIDE the markdown block) ───────
+
+def test_provenance_helper_is_exported_for_testing():
+    assert "_provenance," in _src(AI_JS).split("return {", 1)[-1], (
+        "_provenance must be reachable so its output can be asserted"
+    )
+
+
+def test_provenance_prepends_both_lines_as_a_blockquote():
+    """Two blockquote lines then a blank line, ahead of the generated content."""
+    body = _src(AI_JS).split("function _provenanceHeader(task, format) {", 1)[1]
+    body = body.split("\n  }", 1)[0]
+    assert 'lines.push(`> ${p.chip}`)' in body
+    assert 'lines.push(`> 🎬 ${p.link}`)' in body
+    assert 'return lines.join("\\n") + "\\n\\n"' in body, (
+        "the header needs a trailing blank line or it fuses into the first "
+        "heading of the generated content"
+    )
+
+
+def test_provenance_is_applied_to_both_insert_paths():
+    """The single-block path AND the por_tema split, or half the blocks lose it."""
+    src = _src(AI_JS)
+    assert src.count("_provenanceHeader(task, format)") >= 3, (
+        "expected the helper call in the por_tema split, the single-block "
+        "path, and the helper's own definition"
+    )
+
+
+def test_provenance_never_touches_audio_or_infographic():
+    """A blockquote in front of a bare <audio>/<img> tag is literal text."""
+    src = _src(AI_JS)
+    assert 'if (blockType === "markdown") {' in src, (
+        "audio/infographic/html content is raw markup; the header must be "
+        "gated on markdown or it lands as visible text above the media"
+    )
+
+
+def test_por_tema_every_section_gets_the_header():
+    """A section dragged out of its siblings should still say what made it."""
+    split = _src(AI_JS).split("for (let i = 0; i < sections.length; i++)", 1)[1]
+    split = split.split("}", 1)[0]
+    assert "_provenanceHeader(task, format) + sections[i].body" in split, (
+        "only the first section is getting the header; the rest are orphans"
+    )
+
+
+def test_no_trailing_emoji_prefix_leaks_back_into_titles():
+    """Titles must stay exactly as generated (see the 🎥 regression)."""
+    src = _src(AI_JS)
+    assert "title: `${emoji}" not in src
+    assert "title: sourceTitle," in src

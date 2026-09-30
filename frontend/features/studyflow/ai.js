@@ -869,6 +869,26 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     return { chip: chip, link: link, url: url, provider: provider };
   }
 
+  /**
+   * Render the provenance as the markdown header that opens a generated block.
+   *
+   * Option A (the user's choice): both lines live INSIDE the block, as a
+   * blockquote, so they travel with the content and disappear when the block is
+   * deleted. Two separate blocks above it would have put 2 extra rows into the
+   * tree for every generation — 80 rows on a 40-chunk course.
+   *
+   * Returns "" when there is nothing worth saying (a PDF or an unknown
+   * provider), so the block content is left exactly as generated.
+   */
+  function _provenanceHeader(task, format) {
+    const p = _provenance(task, format);
+    const lines = [];
+    if (p.chip) lines.push(`> ${p.chip}`);
+    if (p.link) lines.push(`> 🎬 ${p.link}`);
+    if (!lines.length) return "";
+    return lines.join("\n") + "\n\n";
+  }
+
   // ─── Content success callback ──────────────────────────────────
   async function _onContentSuccess(task, blockId, topicId, format, courseIdHint) {
     // Resolve the owning course from the topic when the caller has no hint:
@@ -927,10 +947,14 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       if (sections.length > 0) {
         try {
           for (let i = 0; i < sections.length; i++) {
+            // Every section carries the header, not just the first. They all
+            // come from one task, but a section is a standalone block once it
+            // is in the tree: dragged somewhere else, or read on its own, it
+            // should still say what produced it.
             await _addBlockAfterSource(courseId, blockId, {
               type: "markdown",
               title: sections[i].title,
-              content: sections[i].body,
+              content: _provenanceHeader(task, format) + sections[i].body,
               topic_id: topicId,
             }, i);
           }
@@ -954,6 +978,14 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     }
     if (format === "infographic") {
       blockContent = `<img src="${blockContent.replace(/"/g, "&quot;")}" style="max-width:100%;height:auto;border-radius:8px;">`;
+    }
+
+    // Provenance opens the markdown block. Guarded on blockType: audio and
+    // infographic content is a bare <audio>/<img> tag, and a blockquote in
+    // front of it would either be stripped by the sanitiser or show as
+    // literal text above the media.
+    if (blockType === "markdown") {
+      blockContent = _provenanceHeader(task, format) + blockContent;
     }
 
     try {
