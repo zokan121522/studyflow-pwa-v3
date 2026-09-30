@@ -297,6 +297,23 @@ _MIN_CHUNK_CONTENT_CHARS = 300
 # Max sections per chunk (1 per chunk — smaller output per call, fewer empty responses)
 _CHUNK_SIZE = 1
 
+# Transcript size (chars) above which the chunked plan-based pipeline is used
+# regardless of the requested depth.
+#
+# Chunking used to be gated on `depth == "detailed"` alone, which made the
+# protection a function of a *style* choice instead of the *size* of the input.
+# A 424k-char transcript in standard/concise went to the single-shot
+# ``_structure()`` path, sent the whole thing in one POST, and died on the
+# 900s OpenCode timeout — task stuck in 'processing' with a useless error and
+# nothing to retry. Depth says how thorough the notes should be; it says
+# nothing about whether the payload fits in one request.
+#
+# ~60k chars is roughly 15k tokens: comfortably inside the window where a
+# single non-streaming call answers well inside 900s. Above it, chunking is
+# the only path that reliably finishes — and it costs one extra plan call.
+# Overridable so the threshold can be tuned without a redeploy.
+_CHUNK_THRESHOLD_CHARS = int(os.environ.get("YTZEN_CHUNK_THRESHOLD_CHARS", "60000"))
+
 # Max retry attempts for a failed detailed chunk before forcing the user
 # to either skip it or cancel (avoids infinite retry loops). The limit is
 # PER CHUNK — with many chunks (15+) and transient provider failures a low
@@ -617,7 +634,19 @@ def _build_timestamp_block(
 
 
 def _chunk_text(text: str, max_chars: int = _CHUNK_MAX_CHARS) -> list[str]:
-    """Split text into chunks ≤ max_chars on paragraph boundaries."""
+    """Split text into chunks ≤ max_chars on paragraph boundaries.
+
+    An oversized *single paragraph* is hard-split as a last resort. Without
+    it, one long paragraph slipped through whole: the loop below only flushes
+    when `current` is non-empty, so a first paragraph longer than max_chars was
+    appended to an empty buffer and then emitted verbatim. A chunk far past
+    max_chars is exactly what blows the 900s OpenCode timeout, so the ceiling
+    has to hold for the pathological case too, not just the tidy one.
+
+    Sentence-ish boundaries (`. `, `? `, `! `, newlines) are preferred so the
+    seams land between sentences; only if that yields nothing usable does it
+    fall back to a hard character slice.
+    """
     if len(text) <= max_chars:
         return [text]
 
@@ -628,6 +657,14 @@ def _chunk_text(text: str, max_chars: int = _CHUNK_MAX_CHARS) -> list[str]:
 
     for para in paragraphs:
         sep = para + "\n\n"
+        if len(para) > max_chars:
+            # Flush what we have first so ordering is preserved.
+            if current:
+                chunks.append("\n\n".join(current))
+                current = []
+                current_len = 0
+            chunks.extend(_hard_split(para, max_chars))
+            continue
         if current_len + len(sep) > max_chars and current:
             chunks.append("\n\n".join(current))
             current = []
@@ -639,6 +676,54 @@ def _chunk_text(text: str, max_chars: int = _CHUNK_MAX_CHARS) -> list[str]:
         chunks.append("\n\n".join(current))
 
     return chunks if chunks else [text]
+
+
+def _hard_split(text: str, max_chars: int) -> list[str]:
+    """Split an oversized paragraph into ≤max_chars pieces on sentence seams.
+
+    Lossless: the concatenation of the pieces, with the seams restored, is the
+    original paragraph apart from the whitespace the split consumed. An earlier
+    version re-inserted a single space between pieces while ``re.split`` had
+    already eaten it, which inflated the text (7 words repeated → 47999 chars
+    instead of 42000) and quietly changed what the model was asked to read.
+    """
+    # Capture the separator so it can be replayed exactly. Splitting on it
+    # without capturing loses the whitespace and cannot be undone.
+    parts = re.split(r"(?<=[.!?])(\s+)|\n+", text)
+
+    out: list[str] = []
+    buf = ""
+    for part in parts:
+        if not part:
+            continue
+        if part.isspace():
+            # A separator that does not fit is not thrown away: it is held and
+            # prepended to the next piece. Dropping it lost one space per
+            # boundary (6 over a 54k paragraph), so the text the model read
+            # was not the text that was extracted.
+            if buf and len(buf) + len(part) > max_chars:
+                out.append(buf)
+                buf = part
+            elif buf:
+                buf += part
+            continue
+        if len(part) > max_chars:
+            # A single "sentence" longer than the ceiling (minified text, a
+            # run-on caption block): flush, then slice by characters.
+            if buf:
+                out.append(buf)
+                buf = ""
+            for i in range(0, len(part), max_chars):
+                out.append(part[i:i + max_chars])
+            continue
+        if len(buf) + len(part) > max_chars and buf:
+            out.append(buf)
+            buf = part
+        else:
+            buf += part
+    if buf:
+        out.append(buf)
+    return out
 
 
 # ── Shared helpers (ported from knowledge_pipeline) ─────────────────
