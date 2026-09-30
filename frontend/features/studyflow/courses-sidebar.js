@@ -21,7 +21,28 @@ window.App.CoursesSidebar = (function () {
     separator: "➖", interactive: "🌐"
   };
 
+  // AI-generated blocks already carry an emoji in the title ("📚 NotebookLM",
+  // "🎥 YouTube Zen", "📊 PDF - RA1", "❓ Class notes"), which is what tells
+  // you where the block came from. Pairing that with the type icon rendered
+  // every one of them with two icons for a single fact — "📝 📚 RA1_CLAS_01",
+  // "📄 📊 PDF", even "❓ ❓ Class notes". Dropping the type icon whenever the
+  // title already leads with a pictograph leaves the block with exactly one
+  // marker, and costs nothing for hand-made blocks ("Nuevo Markdown" starts
+  // with a letter, so it keeps its 📝).
+  //
+  // This started as a hand-written list of the eight emoji ai.js happened to
+  // use, and the browser check caught the rest the moment real data went
+  // through: 🎵 📊 ❓ ✨ 🌙 were missing and every one of them was still
+  // double-iconed. Unicode's Extended_Pictographic is the actual definition
+  // of "this is an emoji", so it cannot fall behind a new title prefix.
+  const TITLE_EMOJI_PREFIX = /^\p{Extended_Pictographic}\s*/u;
+
+  function hasTitleEmojiPrefix(title) {
+    return TITLE_EMOJI_PREFIX.test((title || "").trim());
+  }
+
   function getBlockIcon(block) {
+    if (hasTitleEmojiPrefix(block.title)) return "";
     if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
     // content-type title prefixes from v2 AI blocks
     if (block.type === "content" && block.title) {
@@ -261,8 +282,7 @@ window.App.CoursesSidebar = (function () {
       <label class="bi-check" onclick="event.stopPropagation()">
         <input type="checkbox" ${checked} onchange="window.App.Courses._toggleBlockDone('${courseId}','${b.id}')">
       </label>
-      <span class="bi-icon">${icon}</span>
-      <span class="bi-title">${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
+      ${icon ? `<span class="bi-icon">${icon}</span>` : ""}      <span class="bi-title">${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
       <div class="topic-menu-wrap">
         <button class="topic-menu-toggle" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')">⋮</button>
         <div class="topic-menu">

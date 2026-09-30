@@ -27,7 +27,17 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // installed. Bump so the precache is refetched. tests/test_sw_asset_version.py
 // now fails the build if a precached asset changes without this bump, so this
 // cannot silently recur.
-const ASSET_CACHE = 'studyflow-assets-v35';
+// v36: por_tema now splits a NotebookLM YouTube run into one markdown block
+// per `## ` section (ai.js), and the nav no longer prefixes a 📝 to blocks
+// whose title already carries an emoji (courses-sidebar.js). Both are
+// precached, so installed PWAs need the bump to pick them up. The digest
+// guard added in v35 caught this omission at build time, which is the whole
+// point of having added it.
+// v37: courses-sidebar.js only. The first attempt at the duplicate-icon fix
+// matched a hand-written list of eight emoji, and real titles proved it
+// incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
+// off Unicode Extended_Pictographic, so no future title prefix can outrun it.
+const ASSET_CACHE = 'studyflow-assets-v37';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

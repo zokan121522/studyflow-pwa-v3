@@ -725,7 +725,7 @@ window.App.AI = Object.assign(window.App.AI, (function () {
    * Create a block in the topic and move it right after the source block.
    * v3 has per-block POST + move (no v2 bulk PATCH with full blocks).
    */
-  async function _addBlockAfterSource(courseId, sourceBlockId, blockData) {
+  async function _addBlockAfterSource(courseId, sourceBlockId, blockData, indexOffset = 0) {
     const newBlock = await window.App.CoursesAPI.addBlock(courseId, {
       topic_id: blockData.topic_id || undefined,
       type: blockData.type || "markdown",
@@ -745,9 +745,12 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         }
         const idx = (blocks || []).findIndex((b) => b.id === sourceBlockId);
         if (idx !== -1 && window.App.CoursesAPI.moveBlock) {
+          // indexOffset keeps a multi-block insert in order: each call targets
+          // the same slot (idx + 1), so without it every new block pushes the
+          // previous one down and the sections come out reversed.
           await window.App.CoursesAPI.moveBlock(newBlock.id, {
             target_topic_id: blockData.topic_id,
-            index: idx + 1,
+            index: idx + 1 + (indexOffset || 0),
           });
         }
       } catch (err) {
@@ -755,6 +758,40 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       }
     }
     return newBlock.id;
+  }
+
+  /**
+   * Does this task want one block per topic?
+   *
+   * Covers the NotebookLM YouTube path (format "markdown"/"md") alongside the
+   * Knowledge Pipeline and YouTube Zen formats v2 handled, so a per-topic run
+   * is split no matter which tool produced it.
+   */
+  function _isPorTemaTask(task, format) {
+    const mode = task && task.coverage_data && task.coverage_data.mode;
+    if (mode !== "por_tema") return false;
+    return format === "markdown" || format === "md"
+      || format === "ytd_zen" || format === "knowledge_pipeline";
+  }
+
+  /**
+   * Split markdown into one section per `## ` heading.
+   * Ported from v2's _parseKpSections. Only level-2 headings split, so `###`
+   * sub-headings stay inside their section instead of becoming their own
+   * ("bloques que no tocan").
+   */
+  function _parsePorTemaSections(content) {
+    if (!content) return [];
+    const sections = [];
+    const parts = String(content).split(/(?=^##\s)/m);
+    for (const part of parts) {
+      const match = part.match(/^(##)\s+(.+?)\n([\s\S]*)$/);
+      if (!match) continue;
+      const title = match[2].replace(/\*\*/g, "").replace(/[#*]/g, "").trim();
+      const body = match[3].trim();
+      if (title && body && body.length > 20) sections.push({ title, body });
+    }
+    return sections;
   }
 
   // ─── Content success callback ──────────────────────────────────
@@ -791,6 +828,44 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     // Title the block after WHAT WAS GENERATED, not after the generic tool
     // name. See _blockTitleForTask for the preference order.
     const sourceTitle = await _blockTitleForTask(task, courseId, blockId, label);
+
+    // ── por_tema → one markdown block per `## ` section ──────────────
+    // v2 only split for the Knowledge Pipeline and YouTube Zen formats:
+    //     if ((isKp || format === "ytd_zen") && task.coverage_data?.mode === "por_tema")
+    // The NotebookLM YouTube endpoint sends format "markdown", so once #13 gave
+    // that dialog the real per-topic mode, the mode arrived and was ignored —
+    // a "por tema" run inserted one block with every section inside it. The
+    // format check was the gate, and the gate was never widened.
+    //
+    // The mode itself was also being lost before it got this far: the worker
+    // rewrote coverage_data with just {video_title, video_url}, wiping the
+    // `mode` that create_youtube_md_task had stored. See _merge_coverage in
+    // backend/ai/notebooklm/youtube.py.
+    if (_isPorTemaTask(task, format)) {
+      const sections = _parsePorTemaSections(task.result_content || "");
+      if (sections.length > 0) {
+        try {
+          for (let i = 0; i < sections.length; i++) {
+            await _addBlockAfterSource(courseId, blockId, {
+              type: "markdown",
+              title: `${emoji} ${sections[i].title}`,
+              content: sections[i].body,
+              topic_id: topicId,
+            }, i);
+          }
+          window.App.CoursesAPI.clearDetailCache(courseId);
+          window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
+            detail: { courseId, topicId }
+          }));
+          _showStatus(blockId, `✅ ${sections.length} bloques insertados en el tema`);
+        } catch (err) {
+          console.error("[AI] por_tema insert failed:", err);
+          _showStatus(blockId, `❌ Error al crear bloques desde el contenido: ${err.message}`, true);
+        }
+        return; // do not also insert the whole thing as one block
+      }
+      console.warn("[AI] por_tema: no `##` sections parsed, falling back to one block");
+    }
 
     let blockContent = task.result_content || "";
     if (format === "audio") {

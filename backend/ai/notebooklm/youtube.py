@@ -245,12 +245,18 @@ def _update_progress(task_id: str, message: str) -> None:
     )
 
 
-def _fetch_video_title(url: str) -> str:
-    """yt-dlp → oEmbed fallback chain. Motivation (#255): oEmbed 401s
-    from the home server IP (works on Mac, fails in container), so
-    yt-dlp runs first; oEmbed is the last resort. Never raises.
+def _fetch_video_meta(url: str) -> tuple[str, int | None]:
+    """Return (title, duration_seconds) via yt-dlp, then an oEmbed fallback.
+
+    Duration matters on its own: NotebookLM ingests the whole video as a
+    single source and the chat RPC must return the *entire* answer in one
+    response, so a multi-hour lecture produces a response that blows the
+    client's 50 MiB cap. Knowing the duration before we start lets us fail
+    in a second with advice instead of after NotebookLM has spent a minute
+    ingesting and generating.
     """
-    base = ["yt-dlp", "--print", "title", "--skip-download", "--no-playlist", "--no-warnings", url]
+    fmt = "%(title)s\t%(duration)s"
+    base = ["yt-dlp", "--print", fmt, "--skip-download", "--no-playlist", "--no-warnings", url]
     cookies = os.environ.get(
         "YOUTUBE_COOKIES",
         str(Path.home() / ".studyflow-app" / "cookies" / "youtube_cookies.txt"),
@@ -260,16 +266,46 @@ def _fetch_video_title(url: str) -> str:
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=25)
             if r.returncode == 0 and r.stdout.strip():
-                return r.stdout.decode(errors="replace").splitlines()[0].strip()
+                line = r.stdout.decode(errors="replace").splitlines()[0]
+                title, _, dur = line.partition("\t")
+                try:
+                    return title.strip(), int(float(dur))
+                except (TypeError, ValueError):
+                    return title.strip(), None
         except Exception as e:
-            logger.debug("yt-dlp title failed: %s", e)
+            logger.debug("yt-dlp metadata failed: %s", e)
     try:
         resp = requests.get("https://www.youtube.com/oembed", params={"format": "json", "url": url}, timeout=5)
         if resp.ok:
-            return str(resp.json().get("title", "")).strip()
+            return str(resp.json().get("title", "")).strip(), None
     except Exception as e:
         logger.debug("oEmbed title failed: %s", e)
-    return ""
+    return "", None
+
+
+def _fetch_video_title(url: str) -> str:
+    """yt-dlp → oEmbed fallback chain. Motivation (#255): oEmbed 401s
+    from the home server IP (works on Mac, fails in container), so
+    yt-dlp runs first; oEmbed is the last resort. Never raises.
+    """
+    return _fetch_video_meta(url)[0]
+
+
+# Past roughly this length the single-shot NotebookLM ask stops being viable:
+# the answer has to come back in one RPC response and the client refuses
+# anything over 50 MiB. A 7.5 h course produced a 52,449,345-byte response
+# and failed with "RPC response exceeded 52428800 bytes" after a minute of
+# ingestion, which reads like a bug but is really just a video that is too
+# long for a one-shot ask.
+_LONG_VIDEO_SECONDS = 3 * 3600  # 3 h
+
+_LONG_VIDEO_MESSAGE = (
+    "El vídeo dura más de 3 horas: NotebookLM no puede devolverlo en una sola "
+    "consulta (el límite es 50 MB por respuesta) y el trabajo se perdería. "
+    "Opciones: usa un vídeo más corto, elige la longitud «corto», o usa el "
+    "botón de YouTube Zen, que extrae los subtítulos localmente y los "
+    "estructura por partes sin gastar cuota de consultas."
+)
 
 
 def _read_task_options(task_id: str) -> dict:
@@ -309,6 +345,43 @@ def _read_task_options(task_id: str) -> dict:
     }
 
 
+def _merge_coverage(task_id: str, extra: dict) -> str:
+    """Merge `extra` into the task's existing coverage_data and re-serialise.
+
+    Writing coverage_data wholesale here used to destroy the dialog options
+    that create_youtube_md_task had already stored on the row — `mode`,
+    `url`, `template_id`… The options are read by the worker from the row
+    itself, so the damage was invisible server-side: the prompt came out
+    right, the task succeeded, and the options simply vanished from the
+    response. The frontend is what noticed, because `mode` is how
+    por_tema is detected, so a "por tema" run arrived as a single block
+    with no trace that per-topic mode had ever been requested.
+
+    Kept separate from the UPDATE so the merge can be tested without a
+    database, and so a malformed row degrades to `extra` instead of
+    failing the task that has already done all the expensive work.
+    """
+    merged = dict(extra)
+    row = query_one(
+        "SELECT coverage_data FROM ai_tasks WHERE id = %s", (task_id,)
+    ) or {}
+    raw = row.get("coverage_data") or ""
+    if raw:
+        try:
+            existing = json.loads(raw)
+            if isinstance(existing, dict):
+                # Existing keys win only where `extra` is empty; the freshly
+                # fetched title/url must not resurrect a stale blank value.
+                merged = {k: v for k, v in existing.items() if v not in (None, "")}
+                merged.update({k: v for k, v in extra.items() if v not in (None, "")})
+        except (ValueError, TypeError):
+            logger.warning(
+                "task %s: unparsable coverage_data on completion, "
+                "overwriting with video metadata", task_id,
+            )
+    return json.dumps(merged, ensure_ascii=False)
+
+
 def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
     """Background thread: process YouTube URL and update ai_tasks.
 
@@ -326,6 +399,26 @@ def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
 
         if not validate_youtube_url(url):
             raise ValueError(f"URL de YouTube no válida: {url}")
+
+        # Pre-flight the length before handing the video to NotebookLM. The
+        # check is advisory: an unknown duration is not a reason to refuse,
+        # because the metadata lookup itself can fail behind a network or a
+        # missing cookie file, and the RPC guard below still catches the real
+        # case. But when we *do* know the video is 7 hours long we can say so
+        # in a second instead of after a minute of ingestion.
+        if output_format == "markdown":
+            try:
+                _, duration = _fetch_video_meta(url)
+                if duration and duration > _LONG_VIDEO_SECONDS:
+                    logger.warning(
+                        "task %s: refusing %ss video, over the one-shot limit",
+                        task_id, duration,
+                    )
+                    raise ValueError(_LONG_VIDEO_MESSAGE)
+            except ValueError:
+                raise
+            except Exception as e:
+                logger.debug("task %s: duration pre-flight skipped: %s", task_id, e)
 
         _update_progress(
             task_id,
@@ -359,7 +452,10 @@ def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
         # can name the generated block after the video instead of the generic
         # "NotebookLM" label. Best-effort: never aborts the task.
         video_title = _fetch_video_title(url)
-        coverage_data = json.dumps({"video_title": video_title, "video_url": url})
+        coverage_data = _merge_coverage(task_id, {
+            "video_title": video_title,
+            "video_url": url,
+        })
 
         execute(
             """UPDATE ai_tasks
@@ -370,14 +466,35 @@ def _run_youtube_task(task_id: str, url: str, output_format: str) -> None:
         )
 
     except Exception as e:
+        message = _humanise_task_error(e)
         logger.error(f"YouTube task {task_id}: failed — {e}")
         execute(
             """UPDATE ai_tasks
                SET status = 'error', error_message = %s,
                    completed_at = NOW(), updated_at = NOW()
                WHERE id = %s""",
-            (str(e), task_id),
+            (message, task_id),
         )
+
+
+def _humanise_task_error(exc: Exception) -> str:
+    """Turn library-internal error text into something the user can act on.
+
+    The raw failure for a long video was
+
+        RPC response exceeded 52428800 bytes (read 52449345 bytes before
+        aborting)
+
+    which is a client-library guard, mentions two byte counts nobody can do
+    anything with, and gives no hint that the cause is simply "this video is
+    too long for a one-shot ask". Everything else is passed through, because
+    an unfamiliar error is more useful verbatim than creatively rewritten.
+    """
+    text = str(exc)
+    if "RPC response exceeded" in text:
+        logger.warning("NotebookLM response blew past the RPC cap: %s", text)
+        return _LONG_VIDEO_MESSAGE
+    return text or exc.__class__.__name__
 
 
 def _norm_topic_id(topic_id) -> int | None:
