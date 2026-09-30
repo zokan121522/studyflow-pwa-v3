@@ -27,7 +27,7 @@ window.App.Courses = (function () {
     createCourse, renameCourse, updateDescription, deleteCourse,
     addTopic, renameTopic, deleteTopic,
     // Blocks (S3)
-    addBlock, toggleBlockDone, moveBlock,
+    addBlock, toggleBlockDone, moveBlock, updateBlock,
     // Favorites + course order (Issue #12)
     setFavorite, reorderCourses,
   } = window.App.CoursesAPI;
@@ -726,6 +726,9 @@ window.App.Courses = (function () {
     // On non-empty topics the create chips live inside each block's
     // unified toolbar (ai.js ➕ Añadir group, below NotebookLM/OpenZen).
     const addBar = blocks.length ? "" : Blocks._renderAddBar(courseId, topicId);
+    // The fold-all control reads the whole topic, not the filtered view, so
+    // "desplegar todo" from a single focused block would otherwise be a lie.
+    const allCollapsed = allBlocks.length > 0 && allBlocks.every((b) => !!b.collapsed);
 
     centerEl.innerHTML = `
       <div class="sf-topic-detail" data-topic-id="${topicId}" data-course-id="${courseId}">
@@ -738,7 +741,13 @@ window.App.Courses = (function () {
                data-course-id="${courseId}" data-topic-id="${topicId}">
                ☰ Ver todos los bloques (${allBlocks.length})
              </button>`
-          : ""}
+          : (allBlocks.length > 1
+            ? `<button type="button" class="sf-td-fold-all ht-btn"
+                 data-course-id="${courseId}" data-topic-id="${topicId}"
+                 title="Plegar o desplegar todos los bloques de golpe">
+                 ${allCollapsed ? "☰ Desplegar todo" : "☰ Plegar todo"}
+               </button>`
+            : "")}
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
@@ -758,6 +767,40 @@ window.App.Courses = (function () {
       showAllBtn.addEventListener("click", async () => {
         const st = STATE();
         st.selectedBlockId = null;
+        await updateCenter();
+      });
+    }
+    // Fold / unfold every block in the topic in one go. Goes through the same
+    // PUT {collapsed} the per-card arrow uses, so the server stays the source
+    // of truth and the flag survives a reload. Sequential on purpose: one
+    // request per block, and a 13-block topic should not be 13 parallel writes
+    // that can interleave with a collapse-all/expand-all double tap.
+    const foldAllBtn = centerEl.querySelector(".sf-td-fold-all");
+    if (foldAllBtn) {
+      foldAllBtn.addEventListener("click", async () => {
+        const cId = Number(foldAllBtn.dataset.courseId);
+        const tId = Number(foldAllBtn.dataset.topicId);
+        const cards = [...centerEl.querySelectorAll(".sf-block-card")];
+        if (!cards.length) return;
+        // Fold if anything is still open; unfold only when all are already
+        // folded. Anything else is a coin toss the user did not ask for.
+        const targetCollapsed = cards.some((c) => !c.classList.contains("is-collapsed"));
+        foldAllBtn.disabled = true;
+        try {
+          for (const card of cards) {
+            const bid = Number(card.dataset.blockId);
+            if (!bid) continue;
+            card.classList.toggle("is-collapsed", targetCollapsed);
+            const arrow = card.querySelector(".sf-bc-collapse");
+            if (arrow) arrow.textContent = targetCollapsed ? "▶" : "▼";
+            try {
+              await updateBlock(cId, bid, { collapsed: targetCollapsed });
+            } catch (_) { /* one failure must not abort the rest */ }
+          }
+        } finally {
+          foldAllBtn.disabled = false;
+        }
+        // Re-render so the button's own label flips to the other action.
         await updateCenter();
       });
     }

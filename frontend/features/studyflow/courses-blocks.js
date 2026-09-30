@@ -347,8 +347,21 @@ window.App.CoursesBlocks = (function () {
             "⚠️ No encuentro la tarjeta del bloque.");
           return;
         }
-        const { blockEl, courseId: domCourseId, topicId: domTopicId } = ctx;
+        const { blockEl, card: cardEl, courseId: domCourseId, topicId: domTopicId } = ctx;
         const bid = Number(blockEl.dataset.blockId);
+        // A folded card hides its whole body (`.is-collapsed .sf-bc-body
+        // {display:none}`) and the editor is rendered inside that body, so
+        // editing a folded block produced a form of height 0: the pencil did
+        // nothing, the same dead-button report as the stale-closure bug above.
+        // Unfold first, then edit. `is-collapsed` lives on the .sf-block-card,
+        // not on the inner .sf-td-block that blockEl points at — toggling the
+        // wrong one is a no-op that looks like the fix did not take.
+        const wasCollapsed = !!(cardEl && cardEl.classList.contains("is-collapsed"));
+        if (wasCollapsed) {
+          cardEl.classList.remove("is-collapsed");
+          const arrow = cardEl.querySelector(".sf-bc-collapse");
+          if (arrow) arrow.textContent = "▼";
+        }
         // Pull fresh block data from cache (or listTopicBlocks)
         try {
           let block = null;
@@ -398,6 +411,14 @@ window.App.CoursesBlocks = (function () {
           // Focus the title input for keyboard-driven editing.
           const titleEl = form.querySelector(".sf-td-md-title");
           if (titleEl) titleEl.focus();
+          // Persist the unfold we just did, so the card does not snap back
+          // to folded on the next render. Silent like the other persistence
+          // here: the edit itself must not fail because a flag did not save.
+          if (wasCollapsed) {
+            try {
+              await updateBlock(domCourseId, bid, { collapsed: false });
+            } catch (_) { /* keep editing; the flag re-syncs on next render */ }
+          }
         } catch (err) {
           alert("❌ Error: " + (err.message || err));
         }
