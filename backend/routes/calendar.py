@@ -37,7 +37,9 @@ bp = Blueprint("calendar", __name__)
 _MAX_CALENDARS = 5
 _FETCH_TIMEOUT_S = 15
 _FETCH_MAX_BYTES = 512 * 1024
-_VALID_DAYS = (7, 15, 30)
+# Single source of truth with calendar_import.window — 60 is the
+# "2 meses" option. Validated by a test that the two agree.
+_VALID_DAYS = (7, 15, 30, 60)
 _LOCAL_TZ = "Europe/Madrid"
 _UID_SANITISE_RE = re.compile(r"[^A-Za-z0-9-]")
 _HTML_TAG_RE = re.compile(r"<[^>]*>")

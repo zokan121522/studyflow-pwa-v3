@@ -245,9 +245,17 @@ window.App.Agenda = (function () {
   // ─── Init calendar import panel (Phase 71, #262) ──────────────────
   // Wired once at module load — the open/close API is then driven by the
   // "📅 Calendarios" button that AgendaCore renders in the centre column.
-  if (window.App.AgendaCalendars && typeof window.App.AgendaCalendars.init === "function") {
-    window.App.AgendaCalendars.init();
-  }
+if (window.App.AgendaCalendars && typeof window.App.AgendaCalendars.init === "function") {
+      window.App.AgendaCalendars.init();
+    }
+
+    // ─── Pending calendar-import notice (Phase 9) ────────────────────
+    // Asked for on open so a session imported overnight is visible without
+    // the user visiting the calendar panel. Failures stay silent — there is
+    // nothing for the user to do about a missing notice.
+    if (window.CalendarImportNotice && typeof window.CalendarImportNotice.refresh === "function") {
+      window.CalendarImportNotice.refresh();
+    }
 
   // ─── Public API ──────────────────────────────────────────────────
   return {

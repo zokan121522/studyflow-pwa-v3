@@ -37,7 +37,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // matched a hand-written list of eight emoji, and real titles proved it
 // incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
 // off Unicode Extended_Pictographic, so no future title prefix can outrun it.
-const ASSET_CACHE = 'studyflow-assets-v41'; // +41: cabecera de provenance (chip de proveedor + enlace) dentro del bloque markdown // +40: AI titles clean (no emoji prefix), markdown blocks no auto icon
+const ASSET_CACHE = 'studyflow-assets-v42'; // +42: calendario auto-import (banner de avisos con copiar, opción 60d, nuevo calendar-import-notice.js) // +41: cabecera de provenance (chip de proveedor + enlace) dentro del bloque markdown // +40: AI titles clean (no emoji prefix), markdown blocks no auto icon
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
