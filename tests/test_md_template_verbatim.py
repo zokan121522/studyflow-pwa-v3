@@ -52,14 +52,14 @@ def test_catalog_and_roles_agree_in_both_directions():
 def test_role_forbids_summarising():
     role = _ROLES_BY_ID[TEMPLATE_ID].lower()
     # It must forbid summarising, not merely avoid mentioning it.
-    for phrase in ("summar", "resum", "paraphras", "takeaway"):
+    for phrase in ("summar", "no summary", "paraphras", "reword"):
         assert phrase in role, f"la plantilla deja de prohibir '{phrase}'"
 
 
 def test_role_forbids_adding_material():
     role = _ROLES_BY_ID[TEMPLATE_ID].lower()
-    assert "no added material" in role, "debe prohibir anadir material ausente"
-    assert "verbatim" in role, "debe exigir literalidad"
+    assert "add nothing of your own" in role, "debe prohibir anadir material ausente"
+    assert "word for word" in role, "debe exigir literalidad"
 
 
 def test_role_handles_unreadable_without_guessing():
@@ -71,23 +71,37 @@ def test_role_handles_unreadable_without_guessing():
 def test_role_preserves_code_verbatim():
     role = _ROLES_BY_ID[TEMPLATE_ID].lower()
     assert "code" in role, "debe tratar el codigo"
-    assert "refactor" in role, "debe prohibir reescribir el codigo de origen"
+    assert "unchanged" in role, "el codigo de origen va sin tocar"
 
 
 def test_role_marks_figures_instead_of_dropping_them():
     role = _ROLES_BY_ID[TEMPLATE_ID]
     assert "figura" in role.lower(), "debe marcar las figuras en su sitio"
-    assert "page markers" in role.lower() or "<!-- p." in role, (
-        "debe anclar el markdown a las paginas del PDF"
-    )
+    assert "<!-- p." in role, "debe anclar el markdown a las paginas del PDF"
 
 
-def test_no_preamble_so_the_output_is_usable_directly():
+def test_role_starts_at_the_content():
     role = _ROLES_BY_ID[TEMPLATE_ID].lower()
-    assert "no preamble" in role, (
+    assert "start directly with the document" in role, (
         "el markdown debe empezar en el contenido, no con un prologo que "
         "habria que borrar antes de trabajar con el"
     )
+
+
+def test_role_stays_short_and_readable():
+    """Guard against the prompt bloating back into an essay.
+
+    The user asked for a plain prompt with simple Markdown architecture and
+    no flourishes. This template started at 3816 chars with twelve numbered
+    rules and an acceptance test; that was written like an engineer, not
+    like someone who wants a clean document. The prompt is now six rules.
+    """
+    role = _ROLES_BY_ID[TEMPLATE_ID]
+    assert len(role) < 1600, (
+        f"el prompt ha vuelto a crecer ({len(role)} chars): debe seguir siendo "
+        "unas pocas reglas, no un tratado"
+    )
+    assert role.count("\n") < 14, "demasiadas lineas para seis reglas"
 
 
 def test_existing_templates_are_untouched():

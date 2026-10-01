@@ -17,6 +17,7 @@ storage_state.json to the profile dir; no terminal interaction needed.
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -42,6 +43,24 @@ LOGIN_TIMEOUT = 600  # 10 minutes
 STATE_FILE = "/tmp/notebooklm_login.json"
 
 PYTHON = sys.executable  # python running the Flask app
+
+# Executables Playwright's ``channel="chrome"`` resolves to. If none exists,
+# `notebooklm login --browser chrome` dies immediately with
+# "Google Chrome not found". Probed, never assumed.
+_CHROME_BINARIES = (
+    "google-chrome", "google-chrome-stable", "chrome", "chromium-browser",
+)
+
+
+def _missing_desktop_chrome() -> bool:
+    """True when the desktop Chrome needed by `--browser chrome` is absent.
+
+    Playwright ships its own Chromium under PLAYWRIGHT_BROWSERS_PATH and that
+    binary is NOT interchangeable here: the library resolves `chrome` through
+    the `channel` parameter, which only looks at system-installed browsers
+    (notebooklm/cli/services/playwright_login.py, CHANNEL_BROWSERS).
+    """
+    return not any(shutil.which(name) for name in _CHROME_BINARIES)
 
 
 def _read_state() -> dict:
@@ -186,27 +205,61 @@ def login_start(current_user_id: int):
         except OSError:
             pass
 
+    # --browser chrome necesita el Chrome DE ESCRITORIO, que Playwright no
+    # incluye (es distinto del Chromium bundled). Comprobarlo antes de
+    # lanzar evita el diagnóstico mentiroso de más abajo, que atribuía el
+    # fallo a notebooklm/playwright —los dos instalados— en vez de a la
+    # causa real.
+    missing = _missing_desktop_chrome()
+    if missing:
+        _write_state("idle")
+        return jsonify({
+            "success": False,
+            "missing_chrome": True,
+            "message": (
+                "Falta Google Chrome en el servidor. El login de NotebookLM "
+                "abre el Chrome del contenedor, que no viene incluido en la "
+                "imagen. No es un problema de tu cuenta: vuelve a intentarlo "
+                "cuando se haya instalado."
+            ),
+        }), 500
+
     cmd = [
         PYTHON, "-m", "notebooklm", "login",
         "--browser", "chrome",
         "--storage", storage_path,
     ]
+    # stderr va a un archivo, no a DEVNULL: este proceso corre en segundo
+    # plano y su error es la ÚNICA pista si el login vuelve a morir. Con
+    # DEVNULL se perdía y el 500 de abajo tenía que inventar un diagnóstico.
+    LOG_FILE = os.path.join(COOKIE_DIR, "login.log")
+    _log = open(LOG_FILE, "ab", buffering=0)
     login_proc = subprocess.Popen(
         cmd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=_log,
+        stderr=_log,
         start_new_session=True,
     )
     time.sleep(1.0)
 
     # Sanity: if the process died instantly, report error
     if login_proc.poll() is not None:
+        _log.close()
         _write_state("idle")
+        # Chrome estaba presente (comprobado arriba), así que si el proceso
+        # muere ya no es el diagnóstico de antes. Se lee el log real.
+        detail = ""
+        try:
+            with open(LOG_FILE, "r", errors="replace") as fh:
+                detail = fh.read().strip().splitlines()[-1][:200]
+        except OSError:
+            pass
         return jsonify({
             "success": False,
             "message": (
                 "El proceso de login falló al arrancar. "
-                "Verifica que `notebooklm` está disponible y playwright instalado."
+                + (f"Detalle: {detail}" if detail else
+                   "Revisa backend/routes/notebooklm_login.py.")
             ),
         }), 500
 
