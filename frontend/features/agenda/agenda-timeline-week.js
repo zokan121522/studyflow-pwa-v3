@@ -91,7 +91,7 @@
       'left:calc(' + laneLeft + '% + 1px);' +
       'width:calc(' + laneW + '% - 2px);' +
       'background:' + App.UI.colorAlpha(color, 0.08) + ';' +
-      'border-left-color:' + color + ';"' +
+      'border-left-color:' + color + ';">' +
       ' title="' + (session.title || "Sesión") + ' · ' + timeStr + '">' +
       '<div class="tlw-block-bar" style="background:' + color + ';"></div>' +
       '<div class="tlw-block-body">' +

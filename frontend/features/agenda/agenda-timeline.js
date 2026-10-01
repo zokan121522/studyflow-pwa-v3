@@ -123,7 +123,7 @@ var topPx = timeToPx(start);
       'left:calc(' + laneLeft + '% + 1px);' +
       'width:calc(' + laneW + '% - 2px);' +
       'background:' + App.UI.colorAlpha(color, 0.08) + ';' +
-      'border-left-color:' + color + ';"' +
+      'border-left-color:' + color + ';">' +
       '<div class="tl-block-bar" style="background:' + color + ';"></div>' +
       '<div class="tl-block-body">' +
         '<span class="tl-block-title">' + displayTitle(icon, session.title) + '</span>' +
