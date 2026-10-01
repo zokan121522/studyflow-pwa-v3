@@ -107,6 +107,34 @@ def test_mixed_list_keeps_plain_items_as_plain():
     assert "solo texto" in html
 
 
+def test_single_newlines_survive_as_line_breaks():
+    """Lines the user typed must stay on their own lines in the preview.
+
+    Joining the paragraph with " " (CommonMark's soft break) turned a task
+    note into one run-on line: the subject, the due date and the work name all
+    ended up on a single row. A newline in the textarea is a line meant to be
+    kept, not a space.
+    """
+    md = (
+        "📚 DAW · 0613. Desarrollo web en entorno servidor\n"
+        "⏰ Entrega: sáb 10 oct · 23:59\n"
+        "📄 Informe Comparativo de Arquitecturas (RA1)"
+    )
+    html = render(md)
+    assert html.count("<br>") == 2, (
+        "the two newlines must become two <br>: %r" % html
+    )
+    # Order and content preserved, one visible line per newline.
+    assert re.findall(r"<br>|📚|⏰|📄", html)[:3] == ["📚", "<br>", "⏰"]
+
+
+def test_blank_line_is_still_a_paragraph_break():
+    """The fix must not turn blank-line paragraph breaks into <br>."""
+    html = render("primera\n\nsegunda")
+    assert "<br>" not in html, "a blank line is a real break, not a <br>: %r" % html
+    assert html.count("<p>") == 2, "blank line must still split paragraphs"
+
+
 def test_table_has_one_cell_per_column():
     html = render("| Dia | Tarea | Estado |\n| --- | --- | --- |\n| Lun | DIW | Hecho |")
     # Counted on the closing tags: "<th" also matches "<thead>".

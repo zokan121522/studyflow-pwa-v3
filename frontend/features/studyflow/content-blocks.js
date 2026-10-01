@@ -258,7 +258,12 @@ window.App.ContentBlocks = (function () {
              && !/\|/.test(lines[i])) {
         p.push(lines[i]); i++;
       }
-      out.push("<p>" + _extractInlines(p.join(" ")) + "</p>");
+      // Join with <br>, not " ". Joining with a space was CommonMark's
+      // "soft break", which collapsed every single newline a user typed into
+      // one long run-on line: a note holding 📚 subject / ⏰ due date / 📄 work
+      // name on separate lines came out as one unreadable sentence. A newline
+      // in the textarea is a line the user meant to keep.
+      out.push("<p>" + p.map(_extractInlines).join("<br>") + "</p>");
     }
     return out;
   }
