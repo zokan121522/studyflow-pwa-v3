@@ -83,8 +83,20 @@ RUN playwright install --with-deps chromium
 # cuenta de Google en lugar de a la falta del navegador.
 #
 # `--no-sandbox`: corre como root dentro del contenedor.
-RUN playwright install --with-deps chrome \
-    && playwright install-deps chrome \
+#
+# El canal `chrome` de Google NO existe para Linux Arm64: Playwright aborta
+# con "ERROR: not supported on Linux Arm64 / Failed to install browsers", y
+# como era una capa del build, el fallo tumbaba la imagen entera — no solo
+# NotebookLM, sino también el scraper de Selenium y cualquier otra cosa. Por
+# eso se salta en arm64 (Apple Silicon) y solo se instala donde existe.
+# Chromium, que sí tiene build arm64, se instala arriba y es el que usa el
+# scraper de Selenium vía _chromium_binary().
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        playwright install --with-deps chrome \
+        && playwright install-deps chrome; \
+    else \
+        echo "arm64: se omite el canal chrome (no existe para esta arquitectura)"; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 # El código llega por bind-mount en tiempo de ejecución (ver compose), pero

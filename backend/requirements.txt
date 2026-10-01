@@ -44,3 +44,7 @@ Pillow==12.3.0          # importado como "PIL"
 # option", que es un fallo mucho más confuso que el FileNotFoundError.
 # La ruta de subtítulos usa --skip-download, así que NO hace falta ffmpeg.
 yt-dlp>=2025.6.30
+# MD -> PDF (services/md_to_pdf.py). Necesita pango/cairo, que el
+# Dockerfile ya instala via apt. Se importaba sin declararse: al recrear
+# el contenedor la app no arrancaba (ModuleNotFoundError).
+weasyprint==62.3

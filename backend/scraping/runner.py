@@ -315,6 +315,30 @@ def _download_prefs(output_dir: str) -> dict:
     }
 
 
+def _chromium_binary() -> Optional[str]:
+    """Locate the Chromium the image already ships, or None to let Selenium pick.
+
+    backend/Dockerfile runs `playwright install --with-deps chromium`, so a
+    working browser is already in the image — just not on PATH, and not
+    somewhere Selenium looks on its own. Playwright pins a version in its
+    path (chromium-1243), so glob rather than hard-code: a Playwright bump
+    moves the number and a fixed path would silently break the scraper again.
+    """
+    import glob
+    import os
+
+    patterns = (
+        "/ms-playwright/chromium-*/chrome-linux*/chrome",
+        "/ms-playwright/chromium-*/chrome-linux/chrome",
+        "/root/.cache/ms-playwright/chromium-*/chrome-linux*/chrome",
+    )
+    for pat in patterns:
+        for cand in sorted(glob.glob(pat), reverse=True):
+            if os.access(cand, os.X_OK):
+                return cand
+    return None
+
+
 def _open_driver(timeout: int, output_dir: str, progress_cb: ProgressCb):
     """Build the headless Chrome WebDriver (Selenium Manager resolves driver)."""
     from selenium import webdriver
@@ -325,6 +349,10 @@ def _open_driver(timeout: int, output_dir: str, progress_cb: ProgressCb):
     for arg in _CHROME_ARGS:
         options.add_argument(arg)
     options.add_experimental_option("prefs", _download_prefs(output_dir))
+    binary = _chromium_binary()
+    if binary:
+        options.binary_location = binary
+        _emit(progress_cb, f"Chrome (imagen) — {os.path.basename(binary)}")
     driver = webdriver.Chrome(service=Service(), options=options)
     driver.set_page_load_timeout(timeout)
     _emit(progress_cb, "Chrome listo — esperando la página")

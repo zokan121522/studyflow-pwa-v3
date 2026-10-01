@@ -394,9 +394,21 @@ def is_scorm_zip_available() -> bool:
     return True
 
 
+def _scraping_flag_on() -> bool:
+    """True when SCRAPING_ENABLED is set to a truthy value.
+
+    Was `!= "1"`, so `SCRAPING_ENABLED=true` — the obvious thing to type, and
+    what .env shipped — read as OFF. Two functions gated on it, so the whole
+    Moodle branch looked broken with no clue why.
+    """
+    return os.environ.get("SCRAPING_ENABLED", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
 def is_moodle_scraping_available() -> bool:
     """True only when both env flag is on AND selenium imports cleanly."""
-    if os.environ.get("SCRAPING_ENABLED") != "1":
+    if not _scraping_flag_on():
         return False
     try:
         import selenium  # noqa: F401
@@ -406,7 +418,7 @@ def is_moodle_scraping_available() -> bool:
 
 
 def _scraping_runtime_available() -> bool:
-    if os.environ.get("SCRAPING_ENABLED") != "1":
+    if not _scraping_flag_on():
         return False
     try:
         import selenium  # noqa: F401
