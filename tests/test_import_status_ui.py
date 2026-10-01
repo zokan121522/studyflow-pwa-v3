@@ -85,3 +85,63 @@ def test_backend_exposes_the_status_route():
     src = route.read_text()
     assert '@bp.get("/calendar/status")' in src
     assert "token_required" in src, "the status route must stay authenticated"
+
+
+# ─── the race that shipped ─────────────────────────────────────────────
+
+def test_the_chip_cannot_get_stuck_on_its_placeholder():
+    """Regression: the chip sat on "⏳ comprobando…" forever.
+
+    renderAgenda() rebuilds the side panel, so the chip is a new element on
+    every render. The fetch resolved before that markup existed, paint() found
+    nothing to paint, and nothing ever tried again — the panel rendered its
+    placeholder and stayed there while the status was in fact fine.
+
+    The fix is to keep the last status and re-apply it whenever the chip
+    appears, which needs all three of these.
+    """
+    src = STATUS_JS.read_text()
+    assert "var _last" in src, "the fetched status must be kept somewhere"
+    assert "MutationObserver" in src, (
+        "the chip is recreated on every render; without watching for it the "
+        "painted value is lost and it reverts to the placeholder"
+    )
+    assert "repaint" in src, "a cached repaint path is what closes the race"
+
+
+def test_the_status_survives_the_chip_being_replaced():
+    """Same guarantee asserted through the public API surface."""
+    src = STATUS_JS.read_text()
+    exported = src[src.find("window.CalendarImportStatus = {"):]
+    for name in ("refresh", "repaint", "paint"):
+        assert name in exported, f"{name} must stay reachable from agenda.js"
+
+
+def test_a_missing_api_layer_waits_instead_of_reporting_a_failure():
+    """app.js defines the API and loads after this file.
+
+    Calling refresh() at boot used to throw ReferenceError and paint an
+    error, which is a load-order artefact dressed up as a real fault.
+    """
+    src = STATUS_JS.read_text()
+    assert "typeof window.API === \"undefined\"" in src, (
+        "must check for the API layer before using it"
+    )
+    assert "load" in src, "should retry once the page has finished loading"
+
+
+def test_agenda_repaints_before_it_refreshes():
+    """Repaint-then-fetch, so the chip is never briefly a lie.
+
+    Matched on the module calls, not the bare word "refresh": the helper is
+    itself called _refreshCalendarStatus, so a naive search finds the name in
+    its own signature and passes regardless of the order inside the body.
+    """
+    src = AGENDA.read_text()
+    helper = src[src.find("function _refreshCalendarStatus"):
+                 src.find("async function renderAgenda")]
+    repaint_at = helper.index("CalendarImportStatus.repaint")
+    fetch_at = helper.index("CalendarImportStatus.refresh")
+    assert repaint_at < fetch_at, (
+        "repaint must come first: the fetch is async and the chip exists now"
+    )

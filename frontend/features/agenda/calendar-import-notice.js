@@ -103,6 +103,12 @@
   }
 
   async function refresh() {
+    // Wait for API layer just like the status chip does, because the script is
+    // loaded before app.js and a synchronous call would throw and be swallowed.
+    if (typeof window.API === "undefined" || !window.API) {
+      window.addEventListener("load", function () { refresh(); }, { once: true });
+      return;
+    }
     try {
       var resp = await API.get("/calendar/notifications/pending");
       _render((resp && resp.notifications) || []);

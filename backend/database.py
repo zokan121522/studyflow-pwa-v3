@@ -28,11 +28,27 @@ def init_db() -> None:
         cursor_factory=RealDictCursor
     )
 
-    # Create tables
-    with get_db() as conn:
-        with conn.cursor() as cur:
+    # Create tables (serialised across workers)
+    # We need a connection before the pool is returned; use a one-off connection
+    # to hold the advisory lock while creating/migrating tables.
+    conn = psycopg2.connect(dsn=database_url, cursor_factory=RealDictCursor)
+    try:
+        cur = conn.cursor()
+        try:
+            try:
+                cur.execute("SELECT pg_advisory_lock(0)")
+            except Exception:
+                pass
             _create_tables(cur)
-        conn.commit()
+            conn.commit()
+        finally:
+            try:
+                cur.execute("SELECT pg_advisory_unlock(0)")
+            except Exception:
+                pass
+            cur.close()
+    finally:
+        conn.close()
 
     # Seed local user (id=1) for single-user mode
     _seed_local_user()

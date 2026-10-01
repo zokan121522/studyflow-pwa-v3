@@ -203,9 +203,17 @@ window.App.Agenda = (function () {
   // reflects the current state instead of whatever it was at page load.
   // Silently does nothing if the module failed to load.
   function _refreshCalendarStatus() {
-    if (!window.CalendarImportStatus ||
-        typeof window.CalendarImportStatus.refresh !== "function") return;
-    return window.CalendarImportStatus.refresh();
+    if (!window.CalendarImportStatus) return;
+    // Repaint first from the cached value so a freshly inserted chip shows the
+    // real state immediately, then fetch. Without the repaint the chip sits on
+    // its "comprobando…" placeholder until the request comes back — which is
+    // exactly what it did before this.
+    if (typeof window.CalendarImportStatus.repaint === "function") {
+      window.CalendarImportStatus.repaint();
+    }
+    if (typeof window.CalendarImportStatus.refresh === "function") {
+      return window.CalendarImportStatus.refresh();
+    }
   }
 
 async function renderAgenda() {
