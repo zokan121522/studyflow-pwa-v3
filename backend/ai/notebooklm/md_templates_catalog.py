@@ -36,8 +36,28 @@ MD_TEMPLATES: dict[str, dict] = {
             "- ✅ La nube = recursos bajo demanda y pago por uso\n"
         ),
     },
-    "transcripcion": {
-        "name": "Reconstrucción de transcripción",
+"transcripcion-fiel": {
+          "name": "Fiel al original",
+          "emoji": "📄",
+          "description": (
+              "Reproduce el PDF tal cual en Markdown — mismo texto, mismo "
+              "orden, sin resumir ni añadir nada. Para trabajar sobre él."
+          ),
+          "mock": (
+              "<!-- p. 1 -->\n"
+              "# 1. Introducción a los Restricted Boltzmann Machines\n"
+              "El modelo se define sobre una distribución de Boltzmann:\n"
+              "$P(h) = \\frac{1}{Z} e^{-\\epsilon(h)}$\n"
+              "<!-- p. 2 -->\n"
+              "> **Figura 1** — Diagrama del proceso de entrenamiento\n"
+              "```python\n"
+              "for epoch in range(epochs):\n"
+              "    delta = w.dot(v) - h\n"
+              "```\n"
+          ),
+      },
+      "transcripcion": {
+          "name": "Reconstrucción de transcripción",
         "emoji": "🧠",
         "description": "Transcripciones ruidosas (ASR/OCR) — reconstruye, corrige y organiza.",
         "mock": (
