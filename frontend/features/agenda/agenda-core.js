@@ -72,7 +72,7 @@ function getViewMode() { return _viewMode; }
       API.get("/agenda/session/" + sid)
         .then(function (session) {
           AgendaSession.openSessionOverlay(
-            block.dataset.date || session.day_date || _curDateStr,
+            session.day_date || block.dataset.date || _curDateStr,
             _curWeekId, session, _curRefresh
           );
         })
