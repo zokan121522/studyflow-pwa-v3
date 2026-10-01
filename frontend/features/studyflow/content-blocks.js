@@ -196,16 +196,36 @@ window.App.ContentBlocks = (function () {
         continue;
       }
 
-      // Unordered list
+      // Unordered list, including GitHub-style task items (- [ ] / - [x])
       if (/^\s*[-*]\s+/.test(ln)) {
         const ul = [];
+        let hasTasks = false;
         while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
-          ul.push("<li>" + _extractInlines(
-            lines[i].replace(/^\s*[-*]\s+/, "")
-          ) + "</li>");
+          const item = lines[i].replace(/^\s*[-*]\s+/, "");
+          const task = /^\[([ xX])\]\s+(.*)$/.exec(item);
+          if (task) {
+            hasTasks = true;
+            // The preview is a read-only view of the note, so the box is
+            // rendered disabled: it has to look like a checkbox without
+            // pretending to be a control the user can operate from here.
+            // The label is wrapped in a span on purpose: the row is a flex
+            // container, and the strike-through for a ticked task needs an
+            // element to land on — bare text after the input would be
+            // unreachable for both.
+            ul.push(
+              '<li class="task-item">'
+              + `<input type="checkbox" disabled${task[1] === " " ? "" : " checked"}>`
+              + `<span class="task-label">${_extractInlines(task[2])}</span>`
+              + "</li>"
+            );
+          } else {
+            ul.push("<li>" + _extractInlines(item) + "</li>");
+          }
           i++;
         }
-        out.push("<ul>" + ul.join("") + "</ul>");
+        out.push(
+          `<ul${hasTasks ? ' class="task-list"' : ""}>` + ul.join("") + "</ul>"
+        );
         continue;
       }
 

@@ -109,19 +109,23 @@
 
 /* ─── Tables ─────────────────────────────────────────────── */
 .md-view table, .sf-td-block-content table,
-.md-preview table, .ct-preview table {
+.md-preview table, .ct-preview table,
+.so-notes-rendered table {
   width: 100%; border-collapse: collapse; font-size: 13px;
   margin: 10px 0; display: block; overflow-x: auto;
 }
 .md-view th, .md-view td,
 .sf-td-block-content th, .sf-td-block-content td,
-.md-preview th, .md-preview td, .ct-preview th, .ct-preview td {
+.md-preview th, .md-preview td, .ct-preview th, .ct-preview td,
+.so-notes-rendered th, .so-notes-rendered td {
   padding: 7px 10px; border: 1px solid var(--border);
 }
 .md-view th, .sf-td-block-content th,
-.md-preview th, .ct-preview th {
+.md-preview th, .ct-preview th,
+.so-notes-rendered th {
   background: var(--surface); font-weight: 600; text-align: left;
 }
+.so-notes-rendered tbody tr:nth-child(even) { background: var(--bg); }
 .md-view tr:nth-child(even),
 .sf-td-block-content tr:nth-child(even),
 .md-preview tr:nth-child(even), .ct-preview tr:nth-child(even) {
@@ -223,4 +227,25 @@ textarea + .md-toolbar { border-top: 1px solid var(--border); border-radius: 6px
   font-size: 14px; line-height: 1.7; background: var(--bg);
   color: var(--text); border: 1px solid var(--border);
   overflow-y: auto; resize: vertical;
+}
+/* ─── Task lists (- [ ] / - [x]) ─────────────────────────────────
+   The parser emits a real <input type="checkbox" disabled> so the state
+   survives into the preview. It is disabled on purpose: this is the View
+   tab, and a box you can tick but cannot save is worse than no box. The
+   accent colour comes from the theme so a ticked item reads as done in
+   both light and dark, instead of the browser's greyed-out default. */
+.task-list { list-style: none; padding-left: 2px; }
+.task-list .task-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 3px 0; margin: 0;
+}
+.task-list .task-item input[type="checkbox"] {
+  flex: 0 0 auto; margin: 4px 0 0; width: 15px; height: 15px;
+  accent-color: var(--primary); cursor: default;
+}
+/* A ticked item is struck through so the state is readable even when the
+   box itself is hard to make out against the background. */
+.task-list .task-item:has(input:checked) { color: var(--text-muted); }
+.task-list .task-item:has(input:checked) .task-label {
+  text-decoration: line-through; text-decoration-thickness: 1px;
 }
