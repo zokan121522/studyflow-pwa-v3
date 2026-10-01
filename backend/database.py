@@ -234,17 +234,42 @@ def _create_ai_usage_log(cur) -> None:
     task_type for the daily-limit counters shown in the ✨ toolbar.
     """
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS ai_usage_log (
-            id          SERIAL PRIMARY KEY,
-            user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            task_type   TEXT DEFAULT '',
-            source      TEXT DEFAULT '',
-            model_id    TEXT DEFAULT '',
-            provider_id TEXT DEFAULT '',
-            tokens      INTEGER DEFAULT 0,
-            cost        REAL DEFAULT 0,
-            created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
+              CREATE TABLE IF NOT EXISTS ai_usage_log (
+                  id          SERIAL PRIMARY KEY,
+                  user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                  task_type   TEXT DEFAULT '',
+                  source      TEXT DEFAULT '',
+                  model_id    TEXT DEFAULT '',
+                  provider_id TEXT DEFAULT '',
+                  tokens      INTEGER DEFAULT 0,
+                  cost        REAL DEFAULT 0,
+                  created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                  -- audio.py registra el consumo de TTS y v2_domains.py el de
+                  -- OpenZen. Ambas escribían columnas que no existían aquí, así
+                  -- que el INSERT fallaba al final de la tarea —con el audio ya
+                  -- generado— y el consumo se perdía.
+                  task_id            INTEGER,
+                  duration           TEXT,
+                  input_tokens       INTEGER DEFAULT 0,
+                  output_tokens      INTEGER DEFAULT 0,
+                  reasoning_tokens   INTEGER DEFAULT 0,
+                  cache_read_tokens  INTEGER DEFAULT 0,
+                  cache_write_tokens INTEGER DEFAULT 0,
+                  total_tokens       INTEGER DEFAULT 0
+              )
+          """)
+    # ALTER por si la tabla ya existía de una versión anterior: el
+    # CREATE TABLE de arriba no cambia nada si la tabla está creada.
+    cur.execute("""
+        ALTER TABLE ai_usage_log
+            ADD COLUMN IF NOT EXISTS task_id            INTEGER,
+            ADD COLUMN IF NOT EXISTS duration           TEXT,
+            ADD COLUMN IF NOT EXISTS input_tokens       INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS output_tokens      INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS reasoning_tokens   INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS cache_read_tokens  INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS total_tokens       INTEGER DEFAULT 0
     """)
     cur.execute(
         "CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date "
