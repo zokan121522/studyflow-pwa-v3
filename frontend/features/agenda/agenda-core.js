@@ -54,6 +54,38 @@ window.App.AgendaCore = (function () {
   }
 function getViewMode() { return _viewMode; }
 
+    // ── Single click -> open session overlay (registered once) ─────
+    var _curDateStr = "";
+    var _curWeekId = "";
+    var _curRefresh = null;
+    var _clickOpenRegistered = false;
+    var _downXY = null;
+
+    function _openSessionOnClick(e) {
+      if (e.target.closest("input, textarea, select, button, a, [data-action], .vt-btn, .sc-sub")) return;
+      var block = e.target.closest(".tl-block, .tlw-block, .tlm-session, .s-card");
+      if (!block) return;
+      var sid = block.dataset.sid || block.dataset.sessionId;
+      if (!sid) return;
+      if (_downXY && (Math.abs(e.clientX - _downXY[0]) > 5 || Math.abs(e.clientY - _downXY[1]) > 5)) return;
+      e.stopPropagation();
+      API.get("/agenda/session/" + sid)
+        .then(function (session) {
+          AgendaSession.openSessionOverlay(
+            block.dataset.date || session.day_date || _curDateStr,
+            _curWeekId, session, _curRefresh
+          );
+        })
+        .catch(function () { /* silent */ });
+    }
+
+    function _registerClickOpen(el) {
+      if (_clickOpenRegistered) return;
+      el.addEventListener("pointerdown", function (e) { _downXY = [e.clientX, e.clientY]; }, true);
+      el.addEventListener("click", _openSessionOnClick);
+      _clickOpenRegistered = true;
+    }
+
     // ── Category lookup maps (extracted to keep render functions short) ──
   var CAT_LABELS = {
     formal_study: { label: "Formal", cls: "formal" },
@@ -359,19 +391,21 @@ function getViewMode() { return _viewMode; }
   }
 
   // ── Render center column: session cards + habits table ───────────
-  async function renderAgendaCenter(dateStr, weekData, callbacks) {
-    callbacks = callbacks || {};
-    var onRefresh = callbacks.onRefresh;
-    _latestDateStr = dateStr;
-    _latestWeekId = (weekData && weekData.week_id) || "";
-    _latestRefresh = onRefresh;
+async function renderAgendaCenter(dateStr, weekData, callbacks) {
+      callbacks = callbacks || {};
+      var onRefresh = callbacks.onRefresh;
+      _curDateStr = dateStr;
+      _curWeekId = (weekData && weekData.week_id) || "";
+      _curRefresh = onRefresh;
 
-    var el = document.getElementById("agenda-center");
+      var el = document.getElementById("agenda-center");
     if (!el) return;
     var d = new Date(dateStr + "T12:00:00");
     var dayName = d.toLocaleDateString("es-ES", { weekday: "long" });
 var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
       var dayNameCapitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+
+      _registerClickOpen(el);
 
       // Month view is delegated to its own module
     if (_viewMode === "month") {
