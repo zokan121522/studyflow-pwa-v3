@@ -186,3 +186,40 @@ def test_checkbox_is_not_clickable(css):
     block = re.search(r'\.task-list \.task-item input\[type="checkbox"\][^{]*\{([^}]*)\}', css)
     assert block, "the checkbox itself needs a rule to sit on the text baseline"
     assert "cursor" in block.group(1), "the cursor must say it is not a control"
+
+
+def test_task_box_is_sized_in_em_not_px(css):
+    """The same HTML is rendered at 16px in the overlay and 11px in the card.
+
+    A checkbox sized in px cannot satisfy both: 15px reads as a normal box
+    over 16px text and as an oversized one over 11px text (1.36em, wider
+    than the line it sits in). This is a source-level check on purpose —
+    jsdom cannot lay anything out — so it only guards the one thing that
+    regressed, which is fixed lengths sneaking back in.
+    """
+    block = re.search(r'\.task-list \.task-item input\[type="checkbox"\][^{]*\{([^}]*)\}', css)
+    assert block, "the checkbox rule is missing"
+    body = block.group(1)
+    for prop in ("width", "height"):
+        m = re.search(rf'{prop}\s*:\s*([^;]+);', body)
+        assert m, f"{prop} must be set explicitly or the box falls back to the UA default"
+        assert m.group(1).strip().endswith("em"), (
+            f"{prop} is {m.group(1).strip()!r} in absolute units; it must be in em "
+            "so the box scales with the 11px agenda card and the 16px overlay"
+        )
+    # Without this, the em above resolves against the UA's 13.33px default
+    # for form controls instead of the container, and 1.15em lands on 15px —
+    # the exact value this test exists to ban. Caught by measuring, not by
+    # reading: the px/em assertions all passed while the box stayed 15x15.
+    assert re.search(r"font-size\s*:\s*inherit", body), (
+        "the checkbox must inherit the container's font-size, or the em units "
+        "resolve against the UA default (13.33px) and not against the card"
+    )
+    # the gap has the same problem, in the same rule
+    item = re.search(r'\.task-list \.task-item\s*\{([^}]*)\}', css)
+    assert item, ".task-item needs a rule"
+    gap = re.search(r'gap\s*:\s*([^;]+);', item.group(1))
+    assert gap and gap.group(1).strip().endswith("em"), (
+        f"gap is {gap and gap.group(1).strip()!r}; a 9px gap is 0.82em of an "
+        "11px card and dwarfs the text next to it"
+    )

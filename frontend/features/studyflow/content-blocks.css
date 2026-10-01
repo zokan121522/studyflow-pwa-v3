@@ -234,13 +234,25 @@ textarea + .md-toolbar { border-top: 1px solid var(--border); border-radius: 6px
    tab, and a box you can tick but cannot save is worse than no box. The
    accent colour comes from the theme so a ticked item reads as done in
    both light and dark, instead of the browser's greyed-out default. */
-.task-list { list-style: none; padding-left: 2px; }
+   Every length here is in em, never px, and that is load-bearing. The same
+   rendered HTML is dropped into two containers with wildly different type
+   sizes: the session overlay reads at 16px, the agenda card at 11px
+   (.s-card .sc-sub). A 15px box is 0.94em in the overlay and 1.36em in the
+   card — bigger than the line it sits in. Sizing in em makes one rule fit
+   both. Do not "tidy" these back into pixels. */
+.task-list { list-style: none; padding-left: 0.15em; }
 .task-list .task-item {
-  display: flex; align-items: flex-start; gap: 9px;
-  padding: 3px 0; margin: 0;
+  display: flex; align-items: flex-start; gap: 0.5em;
+  padding: 0.2em 0; margin: 0;
 }
 .task-list .task-item input[type="checkbox"] {
-  flex: 0 0 auto; margin: 4px 0 0; width: 15px; height: 15px;
+  flex: 0 0 auto; margin: 0.22em 0 0; width: 1.15em; height: 1.15em;
+  /* font-size: inherit is load-bearing, not tidying. Form controls do not
+     inherit type size from their parent — Chrome hands an <input> its own
+     13.33px default — so every em below would resolve against that instead
+     of the container. In the agenda card that worked out at 1.15 x 13.33 =
+     15px, exactly the px value this rule was written to stop using. */
+  font-size: inherit;
   accent-color: var(--primary); cursor: default;
 }
 /* A ticked item is struck through so the state is readable even when the
