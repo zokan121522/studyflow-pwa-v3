@@ -497,10 +497,24 @@ function _appendPdfLink(cardEl, pdf) {
         }
         const cardEl = ctxPdf.card;
         const bidPdf = Number(cardEl.dataset.blockId);
-        const md = (ctxPdf.blockEl.querySelector(".sf-td-md-plain") || {}).value;
-        const titleEl = ctxPdf.blockEl.querySelector(".sf-td-md-title");
-        const titleMd = (titleEl && titleEl.value || "").trim()
-          || cardEl.querySelector(".sf-bc-title").textContent.trim();
+
+        // In read mode there is no textarea to read from: .sf-td-md-plain only
+        // exists inside the edit form. The markdown has to come from the API,
+        // the same way ai.js reads a source block before moving it.
+        let md = "";
+        let titleMd = (cardEl.querySelector(".sf-bc-title") || {}).textContent || "";
+        try {
+          const blocks = await listTopicBlocks(
+            ctxPdf.courseId, ctxPdf.topicId);
+          const src = (blocks || []).find((b) => Number(b.id) === bidPdf);
+          if (src) {
+            md = src.content || "";
+            if (src.title) titleMd = src.title;
+          }
+        } catch (_) {
+          md = "";
+        }
+        titleMd = String(titleMd).trim();
 
         if (!md || !md.trim()) {
           _showBlockNotice(cardEl, "⚠️ Este bloque no tiene texto para convertir.");
@@ -682,7 +696,6 @@ function _appendPdfLink(cardEl, pdf) {
         <span class="sf-bc-actions">
           <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
           <button class="sf-td-del ht-btn-mini" title="Borrar">🗑️</button>
-          <button class="sf-md-pdf ht-btn-mini" title="Convertir este markdown en PDF">📄→PDF</button>
         </span>
       </header>
       <div class="sf-bc-body">${innerBody}</div>

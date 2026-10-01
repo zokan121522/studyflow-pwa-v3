@@ -240,6 +240,15 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         `<span class="sf-td-add-chip-icon">${m.icon}</span>${escHtml(m.label)}</button>`;
     }
     html += `</div>`;
+    // MD → PDF sits with the ➕ Añadir group: it acts on THIS block (turn its
+    // markdown into a stored PDF) rather than creating anything, so it reads
+    // as a per-block action and not as another block type to add.
+    if (scope === "md") {
+      html += `<div class="toolbar-group" data-addon="md2pdf">` +
+        `<button type="button" class="sf-md-pdf ai-btn"`
+        + `${bidAttr}${topicAttr}`
+        + ` title="Convertir este markdown en PDF">📄→PDF</button></div>`;
+    }
     html += `<div class="ai-status" data-ai-status="${escHtml(blockId)}" style="display:none;flex-basis:100%;"></div>`;
     return html;
   }
