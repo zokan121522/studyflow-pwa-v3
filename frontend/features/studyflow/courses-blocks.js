@@ -321,6 +321,32 @@ window.App.CoursesBlocks = (function () {
     return html;
   }
 
+  // ── _appendPdfLink(cardEl, pdf) ─────────────────────────────────
+// Drop the generated PDF under the markdown, as a normal link into the
+// existing PDF viewer. Re-exporting the same card replaces the previous
+// link instead of stacking another one, so repeated exports do not leave a
+// pile of identical rows.
+function _appendPdfLink(cardEl, pdf) {
+    if (!cardEl || !pdf) return;
+    const body = cardEl.querySelector(".sf-bc-body");
+    if (!body) return;
+    const old = body.querySelector(".sf-md-pdf-out");
+    if (old) old.remove();
+    const when = pdf.created_at
+      ? new Date(pdf.created_at).toLocaleString("es-ES")
+      : "";
+    const a = document.createElement("a");
+    a.className = "sf-md-pdf-out";
+    a.href = `/api/pdf/${pdf.id}`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.style.cssText = "display:inline-block;margin-top:10px;font-size:13px";
+    a.textContent = `📄 ${pdf.original_name}`
+      + (pdf.page_count ? ` (${pdf.page_count} pág.)` : "")
+      + (when ? ` — ${when}` : "");
+    body.appendChild(a);
+  }
+
   // ── _attachBlockHandlers(centerEl, courseId, topicId) ─────────
   // Delegate clicks for edit / save / cancel / done / delete / add.
   // IDEMPOTENT: re-renders call this repeatedly but only the first call
@@ -452,6 +478,57 @@ window.App.CoursesBlocks = (function () {
           window.dispatchEvent(evt);
         } catch (err) {
           alert("❌ Error al guardar: " + (err.message || err));
+        }
+        return;
+      }
+
+      // MD → PDF: send this block's markdown to the server, which renders it
+      // with the same parser this view uses and stores the result in the pdfs
+      // table. The link is appended below the note instead of replacing the
+      // block, so the markdown the user wrote stays editable afterwards.
+      const pdfBtn = e.target.closest(".sf-md-pdf");
+      if (pdfBtn) {
+        e.stopPropagation();
+        const ctxPdf = _ctxFrom(pdfBtn, courseId, topicId);
+        if (!ctxPdf) {
+          _showBlockNotice(pdfBtn.closest(".sf-block-card") || pdfBtn,
+            "⚠️ No encuentro la tarjeta del bloque.");
+          return;
+        }
+        const cardEl = ctxPdf.card;
+        const bidPdf = Number(cardEl.dataset.blockId);
+        const md = (ctxPdf.blockEl.querySelector(".sf-td-md-plain") || {}).value;
+        const titleEl = ctxPdf.blockEl.querySelector(".sf-td-md-title");
+        const titleMd = (titleEl && titleEl.value || "").trim()
+          || cardEl.querySelector(".sf-bc-title").textContent.trim();
+
+        if (!md || !md.trim()) {
+          _showBlockNotice(cardEl, "⚠️ Este bloque no tiene texto para convertir.");
+          return;
+        }
+
+        const oldLabel = pdfBtn.textContent;
+        pdfBtn.textContent = "⏳";
+        pdfBtn.disabled = true;
+        try {
+          const res = await apiRequest("/pdf/md2pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              markdown: md,
+              title: titleMd,
+              course_id: ctxPdf.courseId,
+              topic_id: ctxPdf.topicId,
+            }),
+          });
+          const pdf = res.pdf;
+          _appendPdfLink(cardEl, pdf);
+          pdfBtn.textContent = "📄→PDF";
+        } catch (err) {
+          _showBlockNotice(cardEl, "⚠️ " + (err.message || "No se pudo generar el PDF"));
+          pdfBtn.textContent = oldLabel;
+        } finally {
+          pdfBtn.disabled = false;
         }
         return;
       }
@@ -605,6 +682,7 @@ window.App.CoursesBlocks = (function () {
         <span class="sf-bc-actions">
           <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
           <button class="sf-td-del ht-btn-mini" title="Borrar">🗑️</button>
+          <button class="sf-md-pdf ht-btn-mini" title="Convertir este markdown en PDF">📄→PDF</button>
         </span>
       </header>
       <div class="sf-bc-body">${innerBody}</div>

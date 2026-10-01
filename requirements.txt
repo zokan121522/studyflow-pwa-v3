@@ -1,2 +1,3 @@
 # Root requirements - delegates to backend
 # Install backend deps: pip install -r backend/requirements.txt
+weasyprint
