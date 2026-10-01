@@ -37,8 +37,8 @@ sys.path.insert(0, str(ROOT / "backend"))
 from calendar_import.importer import _UPSERT_ICS_SESSION_SQL  # noqa: E402
 from calendar_import.vevent import (  # noqa: E402
     CLASS_NOTES_TEMPLATE,
+    build_class_notes,
     build_event_fields,
-    build_import_notes,
 )
 from routes.calendar import _build_event_fields  # noqa: E402
 from routes import calendar as routes_calendar  # noqa: E402
@@ -106,16 +106,20 @@ def test_empty_and_whitespace_description_gets_the_checklist():
     assert _fields(description="   \r\n  ")["notes"] == CLASS_NOTES_TEMPLATE
 
 
-def test_existing_description_is_kept_below_the_checklist():
-    """The Teams join link is the way into the class; it must survive."""
-    notes = build_import_notes("Unirse a la reunión en Teams | Microsoft Teams")
-    assert notes == (
-        f"{CLASS_NOTES_TEMPLATE}\n\nUnirse a la reunión en Teams | Microsoft Teams"
+def test_existing_description_is_kept_and_the_checklist_stays():
+    """The Teams text is the way into the class; it must survive."""
+    notes = build_class_notes("Clase 2/16 DIW",
+                              "Unirse a la reunión en Teams | Microsoft Teams",
+                              "", "")
+    assert "Unirse a la reunión en Teams | Microsoft Teams" in notes
+    assert notes.endswith(CLASS_NOTES_TEMPLATE), (
+        "la checklist va al final: es lo accionable; arriba va la información"
     )
 
 
 def test_description_containing_checkboxes_is_not_double_templated():
-    notes = build_import_notes("- [ ] ya estaba en el evento")
+    notes = build_class_notes("Clase 2/16 DIW", "- [ ] ya estaba en el evento",
+                              "", "")
     assert notes.count("- [ ] Grabar clase.") == 1
     assert "- [ ] ya estaba en el evento" in notes
 
@@ -123,7 +127,7 @@ def test_description_containing_checkboxes_is_not_double_templated():
 def test_checklist_survives_html_stripping_and_newline_unescaping():
     """Moodle sends HTML and literal \\n; neither may eat the checklist."""
     notes = _fields(description="Clase 2&lt;br&gt;\\nUnirse a Teams")["notes"]
-    assert notes.startswith(CLASS_NOTES_TEMPLATE)
+    assert notes.endswith(CLASS_NOTES_TEMPLATE)
     assert "<br>" not in notes
     assert "\n" in notes
     assert "\\n" not in notes
@@ -133,7 +137,6 @@ def test_long_description_is_capped_but_keeps_the_checklist():
     notes = _fields(description="x" * 5000)["notes"]
     assert len(notes) <= 800
     assert notes.endswith("...")
-    assert notes.startswith("- [ ] Grabar clase.")
 
 
 def test_template_reaches_no_session_created_by_hand():
@@ -144,8 +147,10 @@ def test_template_reaches_no_session_created_by_hand():
     start stamping ticks onto sessions the user typed.
     """
     src = (ROOT / "backend" / "routes" / "agenda_sessions.py").read_text(encoding="utf-8")
-    assert "build_import_notes" not in src
+    assert "build_class_notes" not in src
+    assert "build_task_notes" not in src
     assert "CLASS_NOTES_TEMPLATE" not in src
+    assert "TASK_NOTES_TEMPLATE" not in src
 
 
 # ── the upsert must not clobber ─────────────────────────────────────────────

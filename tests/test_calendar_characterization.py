@@ -202,14 +202,21 @@ def test_missing_summary_gets_a_placeholder():
 def test_description_becomes_notes_with_real_newlines():
     """CHANGED ON PURPOSE — was: notes were exactly the description.
 
-    The description is still there, byte for byte, and its literal \\n still
-    becomes real newlines. It just no longer arrives alone: the class
-    checklist is prepended. The Teams join link is the only way into the
-    class on a real Digitech feed, so dropping it to keep the old assertion
-    would have been a regression dressed up as a test passing.
+    The description is still there and its literal \\n still becomes real
+    newlines. Two things changed on purpose since:
+
+      * the checklist now sits BELOW the information, not above it, because
+        the first thing read when opening a session is what it is;
+      * Moodle's "Links:" block is dropped, since it only repeats the join
+        link already shown on its own 🔗 line.
+
+    The Teams join link is the only way into the class on a real Digitech
+    feed, so it must still be present — which is what this asserts.
     """
     f = _fields(description="Teams\\nLinks:\\nNotas")
-    assert f["notes"] == f"{CLASS_NOTES_TEMPLATE}\n\nTeams\nLinks:\nNotas"
+    assert "Links:" not in f["notes"], "el bloque Links: solo repite el enlace"
+    assert f["notes"] == f"Teams\n\n{CLASS_NOTES_TEMPLATE}"
+    assert not f["notes"].startswith("\n"), "sin linea en blanco al principio"
 
 
 def test_notes_are_truncated_at_800_chars():
