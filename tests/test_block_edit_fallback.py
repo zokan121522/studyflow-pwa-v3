@@ -111,6 +111,23 @@ def test_handlers_derive_course_from_the_dom_not_the_closure():
         "deleteBlock with the captured courseId would delete from the previous "
         "course after navigating away"
     )
+    # Same trap, one helper further down: _embedPdfBlock writes through
+    # updateBlock and addBlock, so it must be handed the DOM-derived ids
+    # rather than reaching for the closure.
+    embed = re.search(r"async function _embedPdfBlock\(.*?\n  \}", src, re.S)
+    assert embed, "_embedPdfBlock must exist"
+    body = embed.group(0)
+    for call in ("updateBlock(", "addBlock("):
+        for match in re.finditer(re.escape(call) + r"([A-Za-z_][A-Za-z0-9_]*)", body):
+            arg = match.group(1)
+            assert arg.startswith("courseId") is False or arg != "courseId", (
+                f"{call} inside _embedPdfBlock must use the courseId parameter "
+                "that is passed in from the DOM-resolved context, not the "
+                "captured closure variable"
+            )
+    assert "_embedPdfBlock(ctxPdf.courseId, ctxPdf.topicId" in src, (
+        "_embedPdfBlock must receive the DOM-derived course/topic ids"
+    )
 
 
 def test_scope_search_never_falls_back_to_the_whole_document():
