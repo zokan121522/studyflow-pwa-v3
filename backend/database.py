@@ -248,7 +248,7 @@ def _create_ai_usage_log(cur) -> None:
                   -- OpenZen. Ambas escribían columnas que no existían aquí, así
                   -- que el INSERT fallaba al final de la tarea —con el audio ya
                   -- generado— y el consumo se perdía.
-                  task_id            INTEGER,
+                  task_id            TEXT,
                   duration           TEXT,
                   input_tokens       INTEGER DEFAULT 0,
                   output_tokens      INTEGER DEFAULT 0,
@@ -262,7 +262,7 @@ def _create_ai_usage_log(cur) -> None:
     # CREATE TABLE de arriba no cambia nada si la tabla está creada.
     cur.execute("""
         ALTER TABLE ai_usage_log
-            ADD COLUMN IF NOT EXISTS task_id            INTEGER,
+            ADD COLUMN IF NOT EXISTS task_id            TEXT,
             ADD COLUMN IF NOT EXISTS duration           TEXT,
             ADD COLUMN IF NOT EXISTS input_tokens       INTEGER DEFAULT 0,
             ADD COLUMN IF NOT EXISTS output_tokens      INTEGER DEFAULT 0,
