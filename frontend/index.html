@@ -408,6 +408,10 @@
 
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
+  <!-- Lane packer: assigns horizontal columns to overlapping sessions so
+       simultaneous events sit side by side. Loaded before the agenda
+       timeline files because they call App.Lanes.pack() at render time. -->
+  <script src="/shared/lane-packer.js"></script>
   <!-- Issue #9: allowlist HTML sanitizer for v2 content blocks (infographic
        <img>, audio <audio>, NotebookLM HTML). Loads right after ui-common so
        any feature can use App.UI.sanitizeHtml. -->

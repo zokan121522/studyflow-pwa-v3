@@ -103,12 +103,20 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     if (session.state === "completed") cls += " tl-block-done";
     if (session.timer_state === "running") cls += " tl-block-running";
     if (session.timer_state === "paused") cls += " tl-block-paused";
+    // Left/width come from the lane packer so simultaneous sessions sit
+    // side by side instead of stacked in the same rectangle.
+    var lane = session._lane || { index: 0, total: 1 };
+    var laneW = 100 / lane.total;
+    var laneLeft = lane.index * laneW;
     return '<div class="tl-block' + cls + '"' +
       ' data-sid="' + session.id + '"' +
       ' data-start="' + session.start_time + '"' +
       ' data-end="' + (session.end_time || "") + '"' +
       ' style="top:' + topPx + 'px;height:' + heightPx + 'px;' +
-      'background:' + color + '15;border-left-color:' + color + ';">' +
+      'left:calc(' + laneLeft + '% + 1px);' +
+      'width:calc(' + laneW + '% - 2px);' +
+      'background:' + App.UI.colorAlpha(color, 0.08) + ';' +
+      'border-left-color:' + color + ';"' +
       '<div class="tl-block-bar" style="background:' + color + ';"></div>' +
       '<div class="tl-block-body">' +
         '<span class="tl-block-title">' + displayTitle(icon, session.title) + '</span>' +
@@ -130,6 +138,9 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     scheduled.sort(function (a, b) {
       return parseHHMM(a.start_time).totalMin - parseHHMM(b.start_time).totalMin;
     });
+    // Lanes for simultaneous sessions, after sorting so the packer's
+    // start-time order matches what is actually painted.
+    App.Lanes.pack(scheduled, {});
     var blocksHtml = "";
     for (var j = 0; j < scheduled.length; j++) {
       var b = renderBlock(scheduled[j]);

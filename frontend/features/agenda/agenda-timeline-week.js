@@ -77,13 +77,21 @@
     var icon = catIcons[session.category] || "";
     var timeStr = session.start_time || "";
     var cls = _weekBlockCls(session);
+    // Left/width come from the lane packer, so simultaneous sessions sit
+    // side by side instead of on top of each other.
+    var lane = session._lane || { index: 0, total: 1 };
+    var laneW = 100 / lane.total;
+    var laneLeft = lane.index * laneW;
     return '<div class="tlw-block' + cls + '"' +
       ' data-sid="' + session.id + '"' +
       ' data-date="' + (session.day_date || "") + '"' +
       ' data-start="' + (session.start_time || "") + '"' +
       ' data-end="'   + (session.end_time   || "") + '"' +
       ' style="top:' + topPx + 'px;height:' + heightPx + 'px;' +
-      'background:' + color + '15;border-left-color:' + color + ';"' +
+      'left:calc(' + laneLeft + '% + 1px);' +
+      'width:calc(' + laneW + '% - 2px);' +
+      'background:' + App.UI.colorAlpha(color, 0.08) + ';' +
+      'border-left-color:' + color + ';"' +
       ' title="' + (session.title || "Sesión") + ' · ' + timeStr + '">' +
       '<div class="tlw-block-bar" style="background:' + color + ';"></div>' +
       '<div class="tlw-block-body">' +
@@ -142,10 +150,15 @@
     return html;
   }
 
-  function renderWeekColumn(d, today, weekData) {
-    var daySessions = (weekData.days && weekData.days[d.date]
-      && weekData.days[d.date].sessions) || [];
-    var colClass = "tlw-col" + (d.date === today ? " today" : "");
+function renderWeekColumn(d, today, weekData) {
+      var daySessions = (weekData.days && weekData.days[d.date]
+        && weekData.days[d.date].sessions) || [];
+      // Give every timed session a lane before rendering, so simultaneous
+      // events land side by side rather than in the same rectangle. The
+      // packer skips anything without a start time, which is why the
+      // unscheduled list below filters on the same thing.
+      App.Lanes.pack(daySessions, {});
+      var colClass = "tlw-col" + (d.date === today ? " today" : "");
     var html = '<div class="' + colClass + '" data-date="' + d.date + '">';
     html += '<div class="tlw-grid" style="height:' + TOTAL_H + 'px;">';
     for (var h = 0; h < 24; h++) {

@@ -52,32 +52,9 @@ window.App.AgendaCore = (function () {
     if (_viewMode === "month" && mode !== "month") _monthOffset = 0;
     _viewMode = mode;
   }
-  function getViewMode() { return _viewMode; }
+function getViewMode() { return _viewMode; }
 
-  // ── Single dblclick→edit handler (delegated, registered once) ────
-  var _latestDateStr = "";
-  var _latestWeekId = "";
-  var _latestRefresh = null;
-  var _dblEditRegistered = false;
-
-  async function _dblEditHandler(e) {
-    var block = e.target.closest(".tl-block, .tlw-block, .tlm-session, .s-card");
-    if (!block) return;
-    var sid = block.dataset.sid || block.dataset.sessionId;
-    if (!sid) return;
-    e.stopPropagation();
-    try {
-      var session = await API.get("/agenda/session/" + sid);
-      AgendaSession.openSessionOverlay(
-        session.day_date || _latestDateStr,
-        _latestWeekId,
-        session,
-        _latestRefresh
-      );
-    } catch (err) { /* silent */ }
-  }
-
-  // ── Category lookup maps (extracted to keep render functions short) ──
+    // ── Category lookup maps (extracted to keep render functions short) ──
   var CAT_LABELS = {
     formal_study: { label: "Formal", cls: "formal" },
     self_study:   { label: "Self",   cls: "self" },
@@ -393,16 +370,10 @@ window.App.AgendaCore = (function () {
     if (!el) return;
     var d = new Date(dateStr + "T12:00:00");
     var dayName = d.toLocaleDateString("es-ES", { weekday: "long" });
-    var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
-    var dayNameCapitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+      var dayNameCapitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
 
-    // Single dblclick handler bound on first call
-    if (!_dblEditRegistered) {
-      el.addEventListener("dblclick", _dblEditHandler);
-      _dblEditRegistered = true;
-    }
-
-    // Month view is delegated to its own module
+      // Month view is delegated to its own module
     if (_viewMode === "month") {
       var monthMod = window.App.AgendaMonthView;
       if (monthMod) return monthMod.render(el, dateStr, callbacks);
