@@ -98,21 +98,28 @@ def test_grid_is_marked_with_the_full_day_height(css):
     assert "flex: 1" in grid
 
 
-def test_week_view_cap_is_left_alone(css):
-    """Scope guard: the 60vh cap still exists, but only for the week view.
+def test_semana_tambien_usa_el_scroll_unico(css):
+    """The week view had the identical 60vh cap and is now fixed too.
 
-    The day view was the reported bug. The week timeline (`.tlw-*`) keeps its
-    own cap and is a separate change; this test documents that boundary so a
-    future fix here cannot silently drag the week view along.
+    It was scoped out of the original day-view fix; the same reasoning applies
+    because the structure is the same (gutter + columns inside a flex row).
     """
-    capped = [
+    body = rule_body(css, ".tlw-body")
+    assert "max-height" not in body, (
+        ".tlw-body no debe tener max-height: mismo scroll anidado que sufria "
+        "la vista Dia. Encontrado: %s" % body.strip()
+    )
+    assert "overflow-y" not in body
+    assert "display: flex" in body
+
+
+def test_ninguna_vista_deja_scroll_anidado(css):
+    """No timeline view may reintroduce a vh-based cap."""
+    offenders = [
         line.strip()
         for line in css.splitlines()
         if "max-height: 60vh" in line
     ]
-    assert capped, "se esperaba el cap de la vista Semana intacto"
-    for line in capped:
-        assert ".tlw-body" in line, (
-            "el cap de 60vh solo debe quedar en la vista Semana (.tlw-body), "
-            "no en la vista Día. Encontrado: %s" % line
-        )
+    assert not offenders, (
+        "scroll anidado reintroducido en alguna vista: %s" % offenders
+    )

@@ -23,6 +23,14 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
   // ── Constants ───────────────────────────────────────────────────
   var HOUR_H = 40;             // px per hour row
   var TOTAL_H = 24 * HOUR_H;   // 960px
+  // A session whose start equals its end is an instant, not a missing end.
+  // renderBlock draws it as a MIN_BLOCK_H sliver, so the lane packer has to
+  // assume the same span: with its 60-minute default it believed a 14:03
+  // question ran until 15:03 and stole a lane from the 15:00 Studyflow block,
+  // which does not overlap it at all. Kept in px and converted once so the
+  // two can never drift apart again.
+  var MIN_BLOCK_H = 18;                              // px floor for a block
+  var ZERO_LEN_MIN = Math.round(MIN_BLOCK_H / HOUR_H * 60);  // = 27 minutes
   var DRAG_THRESHOLD = 5;      // px of movement required to commit a drag
   var SNAP_MIN = 10;           // 10-minute snap grid
 
@@ -99,7 +107,7 @@ var topPx = timeToPx(start);
       // 960px grid, so the 18px floor for brief sessions pushed it to 977px
       // and it spilled past the bottom edge, clipped. Slide such a block up so
       // it is fully visible rather than shrinking it to an invisible sliver.
-      var MIN_H = 18;
+      var MIN_H = MIN_BLOCK_H;
       if (topPx + MIN_H > TOTAL_H) topPx = TOTAL_H - MIN_H;
       var heightPx = Math.max(MIN_H, (durationMin / 1440) * TOTAL_H);
       heightPx = Math.min(heightPx, TOTAL_H - topPx);
@@ -147,7 +155,7 @@ var topPx = timeToPx(start);
     });
     // Lanes for simultaneous sessions, after sorting so the packer's
     // start-time order matches what is actually painted.
-    App.Lanes.pack(scheduled, {});
+    App.Lanes.pack(scheduled, { fallbackMinutes: ZERO_LEN_MIN });
     var blocksHtml = "";
     for (var j = 0; j < scheduled.length; j++) {
       var b = renderBlock(scheduled[j]);

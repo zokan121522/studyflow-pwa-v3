@@ -47,7 +47,7 @@ def test_a_midnight_session_is_left_alone():
 
 
 def test_the_source_shifts_short_blocks_up_rather_than_shrinking_them():
-    body = SRC[ SRC.index("var MIN_H = 18;") : SRC.index("var MIN_H = 18;") + 260 ]
+    body = SRC[ SRC.index("var MIN_H = MIN_BLOCK_H;") : SRC.index("var MIN_H = MIN_BLOCK_H;") + 260 ]
     assert "topPx = TOTAL_H - MIN_H" in body, (
         "the fix is to slide the block up; clamping the height instead would "
         "leave a 0.7px sliver at 23:59 — technically inside, practically gone"
@@ -66,5 +66,9 @@ def test_the_18px_floor_still_exists():
     """The floor is what caused the overflow; it must not just be deleted —
     brief sessions would become unreadably thin."""
     assert "Math.max(MIN_H," in SRC, (
-        "keep a minimum readable height; the fix is placement, not removal"
+        "el dia dibuja el suelo con la constante declarada arriba, no con un 18 literal"
+    )
+    assert "var MIN_BLOCK_H = 18" in SRC, (
+        "el suelo de 18px debe seguir declarado como constante: es la misma que "
+        "se le pasa al empaquetador de carriles"
     )

@@ -84,7 +84,11 @@
 .tlw-day-num { display: block; font-size: 9px; color: var(--text-muted); margin-top: 1px; }
 .tlw-day-header.today .tlw-day-name { color: var(--primary); }
 
-.tlw-body { display: flex; max-height: 60vh; overflow-y: auto; position: relative; }
+/* Same reasoning as .tl-body above: a 60vh cap nested a second scroll box
+   inside the page's own scroll, cropping the day columns and squeezing the
+   hour gutter. .tlw-gutter already carries flex-shrink:0, so the labels now
+   stretch to the full week height instead of stopping mid-grid. */
+.tlw-body { display: flex; position: relative; }
 .tlw-gutter { flex-shrink: 0; width: 44px; background: var(--surface); border-right: 1px solid var(--border); z-index: 1; }
 
 .tlw-col { flex: 1; position: relative; min-width: 0; }

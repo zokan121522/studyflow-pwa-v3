@@ -38,43 +38,70 @@ def render_block_source(path, fn_name):
     raise AssertionError("no se pudo extraer %s de %s" % (fn_name, path.name))
 
 
-@pytest.mark.parametrize(
-    "path,fn_name",
-    [(DAY_JS, "renderBlock"), (WEEK_JS, "renderWeekBlock")],
-    ids=["dia", "semana"],
-)
-def test_bloque_cierra_la_etiqueta_de_apertura(path, fn_name):
-    """The block's opening div must be terminated with `>` after the style."""
-    body = render_block_source(path, fn_name)
-    offenders = [
-        line.strip()
-        for line in body.splitlines()
-        if re.search(r"'\s*;\"'\s*\+", line)
-    ]
-    assert not offenders, (
-        "%s: el div del bloque no se cierra (falta '>' tras el style). Eso hace "
-        "que el parser expulse el contenido y el bloque salga vacío: %s"
-        % (path.name, offenders)
+def _first_child_at(body):
+    """Index of the first child element of the block, or -1 if absent."""
+    for marker in ('<div class="tl-block-bar"', '<div class="tlw-block-bar"'):
+        at = body.find(marker)
+        if at != -1:
+            return at
+    return -1
+
+
+def test_dia_cierra_la_etiqueta_con_ela_del_style():
+    """The exact regression: the day block must close its tag with `;">`.
+
+    Before the fix the line ended `';"'`, so the `<div class="tl-block">` was
+    never terminated and the parser consumed the following markup as bogus
+    attributes, emptying every block. Pinning the literal is the cheapest
+    guard that cannot itself be fooled by refactors of the builder.
+    """
+    body = DAY_JS.read_text(encoding="utf-8")
+    assert "'border-left-color:' + color + ';\">' +" in body, (
+        "el div del bloque del dia debe cerrarse con ';\">' (falta el '>')"
+    )
+    assert "'border-left-color:' + color + ';\"' +" not in body, (
+        "vuelve el bracket perdido: el div no se cierra y el contenido se expulsa"
     )
 
 
-@pytest.mark.parametrize(
-    "path,fn_name",
-    [(DAY_JS, "renderBlock"), (WEEK_JS, "renderWeekBlock")],
-    ids=["dia", "semana"],
-)
-def test_bloque_emite_una_sola_etiqueta_style(path, fn_name):
-    """Exactly one `style="` opens the block, and it is closed properly."""
-    body = render_block_source(path, fn_name)
-    opening = [ln.strip() for ln in body.splitlines() if "' style=\"" in ln]
-    assert len(opening) == 1, (
-        "%s: se esperaba un unico style de apertura en el bloque, hay %d"
-        % (path.name, len(opening))
+def test_semana_cierra_la_etiqueta_tras_el_title():
+    """The week block appends a title attribute, so the tag closes there.
+
+    It used to close the style early *and* leave the `>` on the title line,
+    which printed `title="...">` as visible text — the "looks like embedded
+    code" symptom.
+    """
+    body = WEEK_JS.read_text(encoding="utf-8")
+    assert "'border-left-color:' + color + ';\"' +" in body
+    assert "' title=\"' + (session.title || \"Sesión\") + ' · ' + timeStr + '\">' +" in body, (
+        "el title de la semana debe terminar la etiqueta con '>'"
     )
-    assert any("';\">'" in ln for ln in body.splitlines()), (
-        "%s: el style del bloque debe terminar en ';\">' para cerrar la etiqueta"
-        % path.name
+    assert "'border-left-color:' + color + ';\">' +" not in body, (
+        "no se debe cerrar la etiqueta antes del title: dejaria un '>' visible"
     )
+    assert " · " in body  # el title conserva el separador legible
+
+
+def test_el_dia_no_lleva_title_espurio():
+    """The day block shows its title in the body, not as a title attribute."""
+    body = DAY_JS.read_text(encoding="utf-8")
+    assert '<div class="tl-block-body">' in body
+    assert 'class="tl-block-title"' in body
+    assert 'class="tl-block-time"' in body
+    assert " · " not in body, (
+        "el bloque del dia no debe llevar un title con punto medio"
+    )
+
+
+def test_html_de_las_dos_vistas_esta_balanceado():
+    """renderBlock opens and closes exactly the divs it declares."""
+    for path, fn in ((DAY_JS, "renderBlock"), (WEEK_JS, "renderWeekBlock")):
+        body = render_block_source(path, fn)
+        opens = len(re.findall(r"<div\b", body))
+        closes = len(re.findall(r"</div>", body))
+        assert opens == closes, (
+            "%s/%s abre %d divs y cierra %d" % (path.name, fn, opens, closes)
+        )
 
 
 def test_el_bloque_del_dia_no_tiene_title_sobrante():
