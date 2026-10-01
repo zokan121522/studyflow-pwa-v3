@@ -33,7 +33,18 @@ ON CONFLICT (id) DO UPDATE SET
     start_time = EXCLUDED.start_time,
     end_time = EXCLUDED.end_time,
     title = EXCLUDED.title,
-    notes = EXCLUDED.notes
+    -- Notes are written once and then belong to the user. An earlier version
+    -- did notes = EXCLUDED.notes, which meant every scheduled re-sync
+    -- overwrote the notes with the feed's copy — wiping a tick the user had
+    -- ticked, and blanking a session whose event carries no description.
+    -- The feed only fills notes that are still empty; from then on the
+    -- checklist, the ticks and any edits are the user's and stay put. The
+    -- cost is that a description edited in Digitech no longer propagates
+    -- here, which is the trade we took on purpose.
+    notes = CASE
+        WHEN sessions.notes IS NULL OR btrim(sessions.notes) = '' THEN EXCLUDED.notes
+        ELSE sessions.notes
+    END
 RETURNING (xmax = 0) AS is_insert
 """
 

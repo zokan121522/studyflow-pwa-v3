@@ -27,6 +27,7 @@ from backend import database as db
 from backend.models import iso_week_key
 from backend.routes.auth import token_required
 from backend.routes.agenda import _upsert_week, _upsert_day
+from backend.calendar_import.vevent import build_event_fields
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,15 @@ INSERT INTO sessions (
 )
 ON CONFLICT (id) DO UPDATE SET
     title      = EXCLUDED.title,
-    notes      = EXCLUDED.notes,
+    -- Same rule as calendar_import/importer.py: the feed fills notes only
+    -- while they are empty, so re-importing never discards what the user
+    -- wrote or ticked. Keep the two in step — a test asserts the manual and
+    -- scheduled paths agree on the notes for the same event.
+    notes      = CASE
+                     WHEN sessions.notes IS NULL OR btrim(sessions.notes) = ''
+                     THEN EXCLUDED.notes
+                     ELSE sessions.notes
+                 END,
     day_date   = EXCLUDED.day_date,
     start_time = EXCLUDED.start_time,
     end_time   = EXCLUDED.end_time,
@@ -472,24 +481,10 @@ def _extract_event_times(component, local_tz):
 
 
 def _build_event_fields(component, dtstart_local, dtend_local):
-    raw_uid = str(component.get("UID") or "")
-    if not raw_uid:
-        return None
-    safe_uid = _UID_SANITISE_RE.sub("", raw_uid) or uuid.uuid4().hex
-    session_id = f"cal-{safe_uid}"
-
-    summary = _strip_html(component.get("SUMMARY")) or "Sin título"
-    desc_raw = component.get("DESCRIPTION")
-    desc_str = _strip_html(str(desc_raw) if desc_raw is not None else "")
-    notes = desc_str.replace("\\n", "\n").strip()
-    if len(notes) > 800:
-        notes = notes[:797] + "..."
-
-    return {
-        "session_id": session_id,
-        "day_date": dtstart_local.date().isoformat(),
-        "start_time": dtstart_local.strftime("%H:%M"),
-        "end_time": dtend_local.strftime("%H:%M"),
-        "summary": summary,
-        "notes": notes,
-    }
+    # Delegated rather than reimplemented. This used to be a verbatim copy
+    # of calendar_import.vevent.build_event_fields, and the copy drifted
+    # once already: the class-notes template landed here weeks after it
+    # landed there, so a manually imported class opened with no checklist
+    # while the scheduled import gave it one. One implementation, two
+    # callers, no way for them to disagree.
+    return build_event_fields(component, dtstart_local, dtend_local)

@@ -2,8 +2,10 @@
 
 Lives in the feature package rather than in routes/calendar.py so the
 dependency runs the right way — the HTTP layer depends on this, not the
-other way round. routes/calendar.py re-exports these names, so the route and
-its tests keep working unchanged.
+other way round. routes/calendar.py imported its own copy of this logic for
+a long time; that copy drifted and the class-notes template reached the
+scheduled import without reaching the manual one, so _build_event_fields
+there now delegates to build_event_fields instead of repeating it.
 
 Behaviour here is pinned by tests/test_calendar_characterization.py. Three
 things are surprising and are deliberately NOT tidied up in this pass:
@@ -35,6 +37,34 @@ _HTML_SAFE_ENTITIES = (
 )
 
 NOTES_MAX_CHARS = 800
+
+# The checklist every imported class session opens with. Digitech's own
+# events carry either nothing or Moodle's "Unirse a la reunión en Teams"
+# boilerplate, so an import used to land with an empty description and no
+# way to tick anything off. This is the note the class actually needs.
+CLASS_NOTES_TEMPLATE = "\n".join((
+    "- [ ] Grabar clase.",
+    "- [ ] Resumen en markdown, audios, infografias, ejercicios ...",
+    "- [ ] Ver clase",
+    "- [ ] Ver Resumen",
+))
+
+
+def build_import_notes(description: str) -> str:
+    """Notes for an imported event: the checklist, then whatever it brought.
+
+    The description is kept rather than replaced because on a real Digitech
+    feed it is the only thing carrying the Teams join link, and dropping it
+    would take away the way into the class. Empty description is the common
+    case and becomes the checklist on its own.
+
+    This runs only inside the import paths, so sessions created by hand are
+    never touched by it.
+    """
+    desc = (description or "").strip()
+    if not desc:
+        return CLASS_NOTES_TEMPLATE
+    return f"{CLASS_NOTES_TEMPLATE}\n\n{desc}"
 
 
 def strip_html(value):
@@ -99,7 +129,8 @@ def build_event_fields(component, dtstart_local, dtend_local):
     summary = strip_html(component.get("SUMMARY")) or "Sin título"
     desc_raw = component.get("DESCRIPTION")
     desc_str = strip_html(str(desc_raw) if desc_raw is not None else "")
-    notes = desc_str.replace("\\n", "\n").strip()
+    desc_str = desc_str.replace("\\n", "\n").strip()
+    notes = build_import_notes(desc_str)
     if len(notes) > NOTES_MAX_CHARS:
         notes = notes[:NOTES_MAX_CHARS - 3] + "..."
 

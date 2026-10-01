@@ -37,6 +37,7 @@ from routes.calendar import (  # noqa: E402
     _normalise_dt,
     _strip_html,
 )
+from calendar_import.vevent import CLASS_NOTES_TEMPLATE  # noqa: E402
 
 MADRID = ZoneInfo("Europe/Madrid")
 
@@ -199,8 +200,16 @@ def test_missing_summary_gets_a_placeholder():
 
 
 def test_description_becomes_notes_with_real_newlines():
+    """CHANGED ON PURPOSE — was: notes were exactly the description.
+
+    The description is still there, byte for byte, and its literal \\n still
+    becomes real newlines. It just no longer arrives alone: the class
+    checklist is prepended. The Teams join link is the only way into the
+    class on a real Digitech feed, so dropping it to keep the old assertion
+    would have been a regression dressed up as a test passing.
+    """
     f = _fields(description="Teams\\nLinks:\\nNotas")
-    assert f["notes"] == "Teams\nLinks:\nNotas"
+    assert f["notes"] == f"{CLASS_NOTES_TEMPLATE}\n\nTeams\nLinks:\nNotas"
 
 
 def test_notes_are_truncated_at_800_chars():
@@ -210,7 +219,22 @@ def test_notes_are_truncated_at_800_chars():
 
 
 def test_notes_default_to_empty_string():
-    assert _fields()["notes"] == ""
+    """CHANGED ON PURPOSE — was: notes defaulted to "".
+
+    This used to pin the bug. A Digitech class event carries no
+    DESCRIPTION, so every imported class session landed with an empty note
+    and nothing to tick off. The import now seeds the class checklist when
+    the event brings no description of its own, so the default is the
+    checklist rather than the empty string.
+
+    It is kept as a characterisation test rather than deleted, because it
+    still says something true and worth noticing: this is the *default*,
+    not a merge. An event that brings its own description keeps it, below
+    the checklist. See tests/test_calendar_import_notes_template.py.
+    """
+    notes = _fields()["notes"]
+    assert notes == CLASS_NOTES_TEMPLATE
+    assert notes.strip(), "an imported session must never come back with no notes"
 
 
 def test_html_stripper_removes_script_bodies():
