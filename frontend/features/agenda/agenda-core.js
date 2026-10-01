@@ -98,17 +98,23 @@ window.App.AgendaCore = (function () {
   // Splitting this out keeps _renderSessionCard readable.
   function _buildActionsHtml(s) {
     var ts = s.timer_state;
+    // Stopping the timer sets state to "completed" (see .btn-stop), which used
+    // to collapse the entire row into the "Hecho" label. Timer controls are
+    // meaningless once settled, but delete / move / copy still are: a finished
+    // session is the one you most often want to tidy up. So the status tag
+    // becomes a prefix and only the timer buttons are dropped.
+    var settled = s.state === "completed" || s.state === "cancelled";
+    var statusTag = "";
     if (s.state === "completed") {
-      return '<span style="font-size:11px;color:var(--green);font-weight:600;">✅ Hecho</span>';
+      statusTag = '<span style="font-size:11px;color:var(--green);font-weight:600;margin-right:4px;">✅ Hecho</span>';
+    } else if (s.state === "cancelled") {
+      statusTag = '<span style="font-size:11px;color:var(--text-muted);font-weight:600;margin-right:4px;">⏹ Cancelado</span>';
     }
-    if (s.state === "cancelled") {
-      return '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">⏹ Cancelado</span>';
-    }
-    var playDisabled  = ts === "running" ? "disabled" : "";
-    var pauseDisabled = ts !== "running" ? "disabled" : "";
-    var stopDisabled  = (ts !== "running" && ts !== "paused") ? "disabled" : "";
+    var playDisabled  = (settled || ts === "running") ? "disabled" : "";
+    var pauseDisabled = (settled || ts !== "running") ? "disabled" : "";
+    var stopDisabled  = (settled || (ts !== "running" && ts !== "paused")) ? "disabled" : "";
     var moveDelDisabled = (ts === "running" || ts === "paused") ? "disabled" : "";
-    return '' +
+    return statusTag +
       '<button class="btn-play" data-sid="' + s.id + '" title="Iniciar" draggable="false" ' + playDisabled + '>▶️</button>' +
       '<button class="btn-pause" data-sid="' + s.id + '" title="Pausar" draggable="false" ' + pauseDisabled + '>⏸</button>' +
       '<button class="btn-stop" data-sid="' + s.id + '" title="Detener" draggable="false" ' + stopDisabled + '>⏹</button>' +
@@ -188,7 +194,7 @@ window.App.AgendaCore = (function () {
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
         '<button class="ht-btn" data-action="add-session" style="font-size:10px;">➕ Añadir sesión</button>' +
 '<button class="ht-btn" data-action="open-calendars" style="font-size:10px;">📅 Calendarios</button>' +
-          '<span class="cal-import-status" style="font-size:10px;color:var(--text-muted);padding:2px 8px;border-radius:10px;border:1px solid var(--border);" title="Estado de la sincronización del calendario">⏳ comprobando…</span>' +
+          '<button type="button" class="cal-import-status" style="font-size:10px;color:var(--text-muted);padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:transparent;cursor:pointer;font-family:inherit;" title="Estado de la sincronización del calendario — clic para ver las nuevas">⏳ comprobando…</button>' +
           '<span style="font-size:11px;color:var(--text-muted);background:var(--surface);padding:2px 10px;border-radius:10px;border:1px solid var(--border);">' + daySessions.length + ' sesiones</span>' +
       '</div>';
   }

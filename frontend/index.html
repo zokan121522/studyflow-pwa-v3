@@ -291,8 +291,15 @@
           </div>
         </div>
         <div class="so-acts">
-          <button class="ht-btn" id="so-cancel">Cancelar</button>
-          <button class="ht-btn p" id="so-save">➕ Guardar sesión</button>
+          <div class="so-acts-danger" id="so-danger-acts" hidden>
+            <button type="button" class="ht-btn" id="so-move" title="Mover a otro día">📅 Mover</button>
+            <button type="button" class="ht-btn" id="so-copy" title="Copiar sesión">📋 Copiar</button>
+            <button type="button" class="ht-btn danger" id="so-delete" title="Eliminar sesión">🗑 Eliminar</button>
+          </div>
+          <div class="so-acts-main">
+            <button class="ht-btn" id="so-cancel">Cancelar</button>
+            <button class="ht-btn p" id="so-save">➕ Guardar sesión</button>
+          </div>
         </div>
       </div>
     </div>
