@@ -439,12 +439,33 @@ var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
     _wireDeleteButtons(el, callbacks, dateStr);
     _wireMoveCopyButtons(el, callbacks, weekData, dateStr);
     _wireExpandButtons(el);
-    _wireListDnD(el, callbacks, weekData, dateStr);
-    _wireCenterButtons(el, dateStr, weekData, callbacks);
+_wireListDnD(el, callbacks, weekData, dateStr);
+      _wireCenterButtons(el, dateStr, weekData, callbacks);
+      _wireTimelineDrag(el, onRefresh);
     _startTimerTicks(daySessions);
   }
 
-  // ─── Public API ──────────────────────────────────────────────────
+  // ── Attach drag & drop to the timeline views ─────────────────────
+    // bindWeekDrag / bindDrag existed and were exported by the timeline
+    // modules but nothing ever called them, so dragging a session was a
+    // no-op in the day and week views (only the month view was wired, in
+    // agenda-month-view.js). Wire them here, next to the other post-render
+    // hooks, so every render re-attaches to the fresh container.
+    function _wireTimelineDrag(el, onRefresh) {
+      var TL = window.App.AgendaTimeline;
+      if (!TL) return;
+      var weekCont = el.querySelector(".tlw-container");
+      if (weekCont && typeof TL.bindWeekDrag === "function") {
+        TL.bindWeekDrag(weekCont, { onRefresh: onRefresh });
+        return;
+      }
+      var dayCont = el.querySelector(".tl-container");
+      if (dayCont && typeof TL.bindDrag === "function") {
+        TL.bindDrag(dayCont, { onRefresh: onRefresh });
+      }
+    }
+
+    // ─── Public API ──────────────────────────────────────────────────
   return {
     renderAgendaCenter: renderAgendaCenter,
     setViewMode: setViewMode,

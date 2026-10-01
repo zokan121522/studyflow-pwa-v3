@@ -348,17 +348,49 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
   // ── Shared pointer-event binding (mouse + touch) for day / week /
   // month drag handlers. Single helper so each bindDrag / bindWeekDrag /
   // bindMonthDrag only declares the four callbacks it needs.
+  //
+  // The move/up/cancel listeners live on `document` because a drag leaves
+  // the block. They are registered ONCE for the whole page: render() runs on
+  // every refresh, and adding a document listener per render would stack up
+  // unbounded duplicates that each re-run the drag handlers on every mouse
+  // move. Only the latest render's opts stay active in _activeDrag, and the
+  // stale closures of previous renders are dropped with it.
+  var _activeDrag = null;
+  var _docDragBound = false;
+
+  function _bindDocumentDragOnce() {
+    if (_docDragBound) return;
+    _docDragBound = true;
+    document.addEventListener("mousemove", function (e) {
+      if (_activeDrag) _activeDrag.onMove(e.clientX, e.clientY);
+    });
+    document.addEventListener("mouseup", function (e) {
+      if (_activeDrag) _activeDrag.onUp(e.clientX, e.clientY);
+    });
+    document.addEventListener("touchmove", function (e) {
+      if (!_activeDrag) return;
+      _activeDrag.onMove(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+    document.addEventListener("touchend", function (e) {
+      if (!_activeDrag) return;
+      _activeDrag.onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    });
+    document.addEventListener("touchcancel", function () {
+      if (_activeDrag) _activeDrag.onCancel();
+    });
+  }
+
   function bindPointerEvents(container, opts) {
+    if (!container) return;
+    _activeDrag = opts;
+    _bindDocumentDragOnce();
+    // The container is rebuilt on every render, so its own listeners die
+    // with the discarded node — no leak there, and it must not be skipped.
     container.addEventListener("mousedown", function (e) {
       var block = e.target.closest(opts.blockSelector);
       if (!block) return;
       opts.onDown(e, block);
-    });
-    document.addEventListener("mousemove", function (e) {
-      opts.onMove(e.clientX, e.clientY);
-    });
-    document.addEventListener("mouseup", function (e) {
-      opts.onUp(e.clientX, e.clientY);
     });
     container.addEventListener("touchstart", function (e) {
       var block = e.target.closest(opts.blockSelector);
@@ -366,14 +398,6 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
       opts.onDown(e.touches[0], block);
       e.preventDefault();
     }, { passive: false });
-    document.addEventListener("touchmove", function (e) {
-      opts.onMove(e.touches[0].clientX, e.touches[0].clientY);
-      e.preventDefault();
-    }, { passive: false });
-    document.addEventListener("touchend", function (e) {
-      opts.onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-    });
-    document.addEventListener("touchcancel", function () { opts.onCancel(); });
   }
 
   // ── Public API surface ──────────────────────────────────────────
