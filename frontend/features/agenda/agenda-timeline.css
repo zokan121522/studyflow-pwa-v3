@@ -152,11 +152,11 @@
 .tlm-week:last-child { border-bottom: none; }
 
 .tlm-cell {
-  min-height: 80px; padding: 3px 4px; cursor: pointer; position: relative;
-  border-right: 1px solid var(--border); background: var(--surface);
-  transition: background .12s; display: flex; flex-direction: column;
-  overflow: hidden;
-}
+    min-height: 110px; padding: 3px 4px; cursor: pointer; position: relative;
+    border-right: 1px solid var(--border); background: var(--surface);
+    transition: background .12s; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
 .tlm-cell:last-child { border-right: none; }
 .tlm-cell:hover { background: var(--surface-hover); }
 .tlm-cell.tlm-empty { cursor: default; background: var(--bg); }
@@ -166,7 +166,21 @@
 
 .tlm-day-num { font-size: 11px; font-weight: 500; color: var(--text-secondary); line-height: 1; margin-bottom: 2px; }
 
-.tlm-sessions { display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; }
+/* Days with more sessions than fit get their own scrollbar rather than
+     silently clipping — that was why a busy day looked empty. Auto (not
+     always-visible) so quiet cells show no scrollbar at all. */
+  .tlm-sessions {
+    display: flex; flex-direction: column; gap: 1px; flex: 1;
+    overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    overscroll-behavior: contain;
+  }
+  .tlm-sessions::-webkit-scrollbar { width: 5px; }
+  .tlm-sessions::-webkit-scrollbar-track { background: transparent; }
+  .tlm-sessions::-webkit-scrollbar-thumb {
+    background: var(--border); border-radius: 3px;
+  }
+  .tlm-sessions::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 .tlm-session {
   display: flex; align-items: center; gap: 3px; padding: 1px 3px; border-radius: 2px;

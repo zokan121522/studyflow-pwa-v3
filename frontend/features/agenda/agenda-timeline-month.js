@@ -135,21 +135,19 @@
     return html;
   }
 
-  // Show max 3 session rows; "+N" overflow if more.
-  function renderCellSessions(sessions, dateStr) {
-    var html = '<div class="tlm-sessions">';
-    var maxVisible = 3;
-    var visible = sessions.slice(0, maxVisible);
-    var overflow = sessions.length - maxVisible;
-    for (var i = 0; i < visible.length; i++) {
-      html += renderMonthSession(visible[i], dateStr);
+// Every session is rendered; the cell is what limits what you see. It is
+    // sized to show six rows (see .tlm-cell min-height) and scrolls for the
+    // rest. Capping the list at six and rendering a "+N" instead looked
+    // equivalent but was not: the cap left nothing to scroll to, so the
+    // seventh session of a day was simply unreachable.
+    function renderCellSessions(sessions, dateStr) {
+      var html = '<div class="tlm-sessions">';
+      for (var i = 0; i < sessions.length; i++) {
+        html += renderMonthSession(sessions[i], dateStr);
+      }
+      html += '</div>';
+      return html;
     }
-    if (overflow > 0) {
-      html += '<div class="tlm-overflow">+' + overflow + '</div>';
-    }
-    html += '</div>';
-    return html;
-  }
 
   function renderMonthSession(s, dateStr) {
     var color = catColors[s.category] || "var(--border)";
