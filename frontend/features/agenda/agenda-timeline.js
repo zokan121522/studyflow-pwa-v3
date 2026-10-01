@@ -94,8 +94,15 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     var durationMin = end
       ? Math.max(15, end.totalMin - start.totalMin)
       : 60;
-    var topPx = timeToPx(start);
-    var heightPx = Math.max(18, (durationMin / 1440) * TOTAL_H);
+var topPx = timeToPx(start);
+      // Keep short blocks inside the grid. A 23:59 start lands at 959.3px of a
+      // 960px grid, so the 18px floor for brief sessions pushed it to 977px
+      // and it spilled past the bottom edge, clipped. Slide such a block up so
+      // it is fully visible rather than shrinking it to an invisible sliver.
+      var MIN_H = 18;
+      if (topPx + MIN_H > TOTAL_H) topPx = TOTAL_H - MIN_H;
+      var heightPx = Math.max(MIN_H, (durationMin / 1440) * TOTAL_H);
+      heightPx = Math.min(heightPx, TOTAL_H - topPx);
     var color = catColors[session.category] || "var(--border)";
     var icon = catIcons[session.category] || "";
     var timeStr = session.start_time + (session.end_time ? "–" + session.end_time : "");
