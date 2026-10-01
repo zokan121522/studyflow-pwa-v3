@@ -14,7 +14,14 @@
 .tl-header-title { font-weight: 600; color: var(--text); }
 .tl-header-count { font-size: 10px; color: var(--text-muted); }
 
-.tl-body { display: flex; max-height: 60vh; overflow-y: auto; position: relative; }
+/* No max-height and no overflow-y here on purpose. Capping the timeline at
+     60vh put a second scroll box inside the page's own scroll, which showed
+     only 8.6 of the 24 hours: every session from 09:00 onwards sat below the
+     visible edge, crammed against the bottom, and the hour gutter — pinned
+     to the capped height — stopped at 08. Letting the grid take its natural
+     height (24 x 40px) means the page scrolls once, the hour labels stay
+     aligned with their rows by construction, and the whole day is visible. */
+.tl-body { display: flex; position: relative; }
 .tl-gutter { flex-shrink: 0; width: 44px; background: var(--surface); border-right: 1px solid var(--border); z-index: 1; }
 .tl-hour { display: flex; align-items: flex-start; justify-content: center; font-size: 10px; color: var(--text-muted); padding-top: 1px; border-bottom: 1px solid var(--border); }
 
