@@ -230,15 +230,33 @@ window.App.AI.Tasks = (function () {
     }, 1000);
   }
 
+  /**
+   * Freeze the timer where it stands. Called when the task reaches a terminal
+   * state, not when the modal closes: until now the only clearInterval lived in
+   * _hideStreamModal, so the clock kept counting for as long as the user took
+   * to decide about the Insert button — and the number on screen was the time
+   * they had spent *deciding*, not the time the generation took.
+   */
+  function _stopTimer(finished) {
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+    const timerEl = document.getElementById("stream-timer");
+    if (!timerEl || !finished) return;
+    const secs = _streamState.startTime
+      ? Math.floor((Date.now() - _streamState.startTime) / 1000) : 0;
+    timerEl.textContent = `✅ ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    timerEl.classList.add("done");
+    timerEl.title = "Tiempo de generación";
+  }
+
     function _hideStreamModal() {
-      if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
-      _streamState.startTime = 0;
-      _streamState.fullContent = "";
-      _streamState.done = false;
-      _streamState.lastChecklist = "";
-      _streamState.restartPoll = null;
-      _streamState.chunkPending = false;
-      _clearChunkBar();
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+    _streamState.startTime = 0;
+    _streamState.fullContent = "";
+    _streamState.done = false;
+    _streamState.lastChecklist = "";
+    _streamState.restartPoll = null;
+    _streamState.chunkPending = false;
+    _clearChunkBar();
     const panel = document.getElementById("sf-ai-panel");
     if (panel) panel.style.display = "none";
     if (_streamState.pollTimer) {
@@ -495,6 +513,7 @@ window.App.AI.Tasks = (function () {
           if (titleEl) titleEl.textContent = "⚠️ Cancelado";
           _log("⚠️", "Tarea cancelada");
           _setLast("Cancelado", "warn");
+          _stopTimer(true);
           return;
         }
           if (task.status === "error") {
@@ -503,6 +522,7 @@ window.App.AI.Tasks = (function () {
             const errMsg = task.error_message || "Error desconocido";
             if (spinner) spinner.hidden = true;
             _streamState.done = true;
+            _stopTimer(true);
 
             // Recoverable chunk failure → offer retry / skip instead of a
             // dead end. The healthy chunks survive in coverage_data.
@@ -543,6 +563,9 @@ window.App.AI.Tasks = (function () {
           _streamState.done = true;
           if (spinner) spinner.hidden = true;
           if (cancelBtn) cancelBtn.style.display = "none";
+          // The generation is over: freeze the clock now, while the number is
+          // still the generation time and not the user's thinking time.
+          _stopTimer(true);
 
           // Large content → fetch separately via content_url
           _log("⬇️", "Descargando contenido…");
