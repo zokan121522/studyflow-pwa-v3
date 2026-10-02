@@ -23,17 +23,21 @@ VALID_STATES = ("pending", "in_progress", "completed", "cancelled")
 VALID_TIMER_STATES = ("running", "paused", "stopped", None)
 
 # Seconds since timer_paused_at (0 if NULL).
-_PAUSED_DELTA = (
-    "COALESCE("
-    "EXTRACT(EPOCH FROM CAST(%(now)s AS timestamp) - CAST(timer_paused_at AS timestamp)),"
-    "0)"
-)
-# Total wall time since timer_started_at (0 if NULL).
-_WALL_DELTA = (
-    "COALESCE("
-    "EXTRACT(EPOCH FROM CAST(%(now)s AS timestamp) - CAST(timer_started_at AS timestamp)),"
-    "0)"
-)
+  # FLOOR: EXTRACT(EPOCH ...) returns fractional seconds (9.354299999999995),
+  # which reached the UI and printed as "00:02:9.354299999999995". Truncate at
+  # the source so the stored column stays whole seconds. formatTimer() floors
+  # too, as a second line of defence.
+  _PAUSED_DELTA = (
+      "COALESCE(FLOOR("
+      "EXTRACT(EPOCH FROM CAST(%(now)s AS timestamp) - CAST(timer_paused_at AS timestamp))"
+      "), 0)"
+  )
+  # Total wall time since timer_started_at (0 if NULL).
+  _WALL_DELTA = (
+      "COALESCE(FLOOR("
+      "EXTRACT(EPOCH FROM CAST(%(now)s AS timestamp) - CAST(timer_started_at AS timestamp))"
+      "), 0)"
+  )
 
 
 # ─── POST /api/agenda/session/state ───────────────────────────────
