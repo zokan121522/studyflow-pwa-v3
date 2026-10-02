@@ -110,6 +110,21 @@
         <span class="arr" id="week-prev" aria-label="Semana anterior">◀</span>
         <span id="week-label"><strong>Cargando...</strong></span>
         <span class="arr" id="week-next" aria-label="Semana siguiente">▶</span>
+        <!-- Now playing. Takes over this strip (the middle) while a session is
+             live, so it is visible from every view — the card timer alone was
+             not, and that is how a session ended up running forgotten. Hidden
+             until agenda-core syncs a play; the week label comes back on stop.
+             Driven by shared/session-miniplayer.js. -->
+        <div class="header-player" id="header-player" role="group"
+             aria-label="Sesión en curso" hidden>
+          <button type="button" class="hp-title" id="hp-title"
+                  title="Abrir la sesión"></button>
+          <span class="hp-time" id="hp-time">⏱ 0:00</span>
+          <button type="button" class="hp-btn" id="hp-play"
+                  title="Pausar" aria-label="Pausar">⏸</button>
+          <button type="button" class="hp-btn hp-stop" id="hp-stop"
+                  title="Detener" aria-label="Detener">⏹</button>
+        </div>
       </div>
       <div class="header-right">
         <!-- user-nav (v2 marker; hidden until auth lands) -->
@@ -542,5 +557,6 @@
   <script src="/shared/backup-restore.js"></script>
   <script src="/shared/v2-restore-modal.js"></script>
   <script src="/shared/server-status.js"></script>
+  <script src="/shared/session-miniplayer.js"></script>
 </body>
 </html>
