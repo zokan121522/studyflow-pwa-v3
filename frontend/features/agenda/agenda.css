@@ -292,11 +292,26 @@
    semi-transparent variants of the same category colour so cards stay readable
    on the v3 dark surface (#16213e) without redesigning anything. */
 
-/* ─── Focus mode (toggled by ⌘/Ctrl+B or body double-tap in agenda tab)
+/* ─── Focus mode (toggled by ⌘/Ctrl+B or by the header nav toggle)
    Expands the center column and hides the left side panel so the user can
    focus on a single day of sessions + habits table. ────────────── */
+
+/* .main is a GRID (`grid-template-columns: 340px 1fr`) and the view panels are
+   `display: contents`, so #agenda-left / #agenda-center and #studyflow-left /
+   #studyflow-center are direct grid items. Hiding the left column makes the
+   center auto-place into track 1 (the 340px one) instead of the wide track,
+   which is why the panel stayed narrow after hiding. Collapsing the grid to a
+   single track is what actually hands the full width to the center. */
+.main.sf-focus-mode { grid-template-columns: 1fr; }
+
 .main.sf-focus-mode #agenda-left { display: none; }
 .main.sf-focus-mode #agenda-center { flex: 1 1 100%; max-width: 100%; }
+
+/* The studyflow panel is the same shape under a different id (#studyflow-left
+   / #studyflow-center), so it needs the mirrored pair. Without these the header
+   toggle reported a collapsed nav while #studyflow-left stayed 340px wide. */
+.main.sf-focus-mode #studyflow-left { display: none; }
+.main.sf-focus-mode #studyflow-center { flex: 1 1 100%; max-width: 100%; }
 
 .sc-tag.formal { background: rgba(79, 140, 255, 0.15); }
 .sc-tag.self   { background: rgba(168, 85, 247, 0.18); }
