@@ -359,6 +359,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       hamburger.textContent = appEl.classList.contains('sidebar-open') ? '✕' : '☰';
     });
   }
+
+  // Hide/show the main nav on desktop. The header is a sibling of the nav
+  // column, not its parent, so it survives the collapse and stays clickable —
+  // which is the whole point: one control, both directions.
+  const navToggle = document.getElementById('nav-toggle-btn');
+  if (navToggle && appEl) {
+    const NAV_OPEN = '⇤';
+    const NAV_CLOSED = '⇥';
+    const sync = () => {
+      const hidden = appEl.classList.contains('nav-hidden');
+      navToggle.textContent = hidden ? NAV_CLOSED : NAV_OPEN;
+      navToggle.setAttribute('aria-pressed', String(hidden));
+      navToggle.setAttribute('aria-label', hidden ? 'Mostrar navegación' : 'Ocultar navegación');
+    };
+    navToggle.addEventListener('click', () => {
+      appEl.classList.toggle('nav-hidden');
+      sync();
+    });
+    sync();
+  }
   
   if (appEl) {
     appEl.addEventListener('click', (e) => {

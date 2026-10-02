@@ -96,6 +96,14 @@
             <span id="server-status" class="server-status" title="Comprobando servidor..." aria-label="Estado del servidor"></span>
             <span class="server-status-label">API</span>
           </span>
+          <!-- Hide/show the main nav (.col-left). Desktop only: on mobile the
+               ☰ already does this as an overlay. Deliberately NOT reusing
+               sf-focus-mode — that class belongs to the agenda's own #agenda-left
+               panel, and one name meaning two different panels is how this file
+               got a help text that documented the wrong control. -->
+          <button class="nav-toggle" id="nav-toggle-btn"
+                  aria-label="Ocultar navegación" aria-pressed="false"
+                  title="Ocultar navegación">⇤</button>
         </div>
       </div>
       <div class="header-week">

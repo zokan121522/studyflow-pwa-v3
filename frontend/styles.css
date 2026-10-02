@@ -420,8 +420,44 @@ body {
 }
 
 /* Keyboard hint — v2 parity (fixed, hover-free) */
+/* ── Hide/show the main nav (option B) ──────────────────────────────────
+   The grid is `340px 1fr`, so display:none alone would leave a 340px hole
+   where the nav used to be. The column is collapsed too, which is what
+   actually gives the content the width back. */
+.nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nav-toggle:hover { background: var(--surface-hover); color: var(--text); }
+.nav-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.app.nav-hidden { grid-template-columns: 0 1fr; }
+.app.nav-hidden .col-left {
+  display: none;
+  padding: 0;
+  border-right: 0;
+}
+.app.nav-hidden .nav-toggle { color: var(--primary); }
+
+/* On mobile the hamburger ☰ owns the nav. A second control doing the same
+   job in the same corner is just noise. */
+@media (max-width: 768px) {
+  .nav-toggle { display: none; }
+}
+
 .col-left::before {
-  content: "Ctrl+B / doble tap \A ocultar nav";
+  content: "Ctrl+B ocultar agenda";
   position: fixed;
   bottom: 8px;
   left: 14px;
