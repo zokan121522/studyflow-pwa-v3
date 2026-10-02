@@ -1,0 +1,97 @@
+/* ─── YouTube embed — floating PiP chrome (document-level) ──────────
+   La card .yt-card lleva sus estilos inline (funciona dentro de shadow
+   DOM); aquí solo vive la UI del PiP flotante (document.body). */
+
+/* Phase 8 — modal de entrada de URLs: necesita más ancho que el kp-modal
+   por defecto (480px) para la rejilla de plantillas + la vista previa de
+   la cola.
+
+   Doble clase a propósito: `.kp-modal` fija `width: 480px; max-width: 92vw`
+   y vive en knowledge-pipeline.css, que se carga DESPUÉS de esta hoja.
+   Con una sola clase la especificidad empata (0,1,0) y gana la última,
+   así que el ancho se descartaba en silencio. Con (0,2,0) gana esta
+   regla sin depender del orden de carga. */
+.kp-modal.kp-modal-yt-wide {
+  width: 900px;
+  max-width: 94vw;
+}
+
+/* La rejilla de plantillas vive en la primera columna de `.ozmd-grid`,
+   que en ai.css reparte 1fr / 1.2fr — con 900px eso deja la lista en
+   ~382px, demasiado estrecho para dos columnas. Se le da más peso. */
+.kp-modal.kp-modal-yt-wide .ozmd-grid {
+  grid-template-columns: minmax(300px, 1.35fr) minmax(240px, 1fr);
+}
+
+/* Rejilla de plantillas: a 900px caben 2 columnas cómodas en escritorio
+   y 1 en móvil. El contenedor real es `.ozmd-templates` (columna en
+   ai.css) — no existía ningún `.ozmd-tpl-grid` al que aplicar esto. */
+.kp-modal.kp-modal-yt-wide .ozmd-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  max-height: 340px;
+  align-content: start;
+}
+
+.kp-modal.kp-modal-yt-wide .ozmd-tpl-opt {
+  text-align: left;
+  white-space: normal;
+  min-height: 56px;
+  cursor: pointer;
+}
+
+.yt-pip-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+
+.yt-pip-bar:active {
+  cursor: grabbing;
+}
+
+.yt-pip-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ddd;
+}
+
+.yt-pip-close {
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.yt-pip-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.yt-pip-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.75) 50%);
+  border-bottom-right-radius: 12px;
+  z-index: 2;
+}

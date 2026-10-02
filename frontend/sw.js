@@ -1,13 +1,43 @@
 /* ============================== STUDYFLOW PWA — SERVICE WORKER ============================== */
 
 const CACHE_NAME = 'studyflow-pwa-v2';
+// v27: the generated NotebookLM test must render as a quiz. Installed PWAs
+// were still serving the pre-fix ai.js, where the test landed as raw JSON in
+// a `content` block, so a reload looked like the bug was unfixed. Bump so
+// the precache is refetched.
 // v24: content-blocks.js now sanitises through html-sanitizer.js, so embedded
 // <img>/<audio> render instead of showing as escaped text. Bump so installed
 // PWAs stop serving the old renderer.
 // v20 (#8 fix): v2Restore modal had `onConfirm` vs `onDone` typo — the
 // "Migrar a v3" button threw on click. Fixed + added a deferred-data
 // warning. Bump so installed PWAs stop serving the broken modal.
-const ASSET_CACHE = 'studyflow-assets-v26';
+// v29: course cards are flex rows again, so the drag grip sits beside the
+// title instead of above it. Both stylesheets are precached, so installed
+// PWAs would keep serving the broken layout until the cache is rebuilt.
+// v30: imported/generated courses rendered stale until a full reload.
+// courses-api.js now expires its per-session cache (TTL + revalidate on
+// tab focus) and pdf-import.js stops bypassing the cache layer, but both are
+// precached, so installed PWAs need the bump to pick any of it up.
+// v35: the five insert-flow polish fixes (#8c501f4) touched four precached
+// assets — ai.js, courses.js, markdown-editor.js and studyflow-editor.css —
+// and v34 was left in place. Static assets are cache-first, and the service
+// worker only re-installs when sw.js itself changes, so every installed PWA
+// kept serving the pre-fix code with no update prompt: the "Nueva versión
+// disponible" banner in app.js never fired because no new worker was ever
+// installed. Bump so the precache is refetched. tests/test_sw_asset_version.py
+// now fails the build if a precached asset changes without this bump, so this
+// cannot silently recur.
+// v36: por_tema now splits a NotebookLM YouTube run into one markdown block
+// per `## ` section (ai.js), and the nav no longer prefixes a 📝 to blocks
+// whose title already carries an emoji (courses-sidebar.js). Both are
+// precached, so installed PWAs need the bump to pick them up. The digest
+// guard added in v35 caught this omission at build time, which is the whole
+// point of having added it.
+// v37: courses-sidebar.js only. The first attempt at the duplicate-icon fix
+// matched a hand-written list of eight emoji, and real titles proved it
+// incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
+// off Unicode Extended_Pictographic, so no future title prefix can outrun it.
+const ASSET_CACHE = 'studyflow-assets-v67'; // +67: semana - cierra el title espurio, sin cap 60vh, carriles alineados al ancho dibujado;right:1px, de modo que dos sesiones a la misma hora ocupaban el mismo rectangulo y solo se veia la ultima. Ahora: colorAlpha() resuelve el color, lane-packer.js reparte en carriles, y el mes usa /agenda/month/<y>/<m>/sessions. // // +56: font-size:inherit en la casilla; sin eso los em se resolvian contra el 13.33px por defecto del input y la caja seguia midiendo 15px en la tarjeta. // +55: la casilla de tarea se mide en em, no en px. Con 15px fijos se veía correcta en el overlay (16px) y desproporcionada en la tarjeta de agenda (11px), donde ocupaba mas que la linea de texto. // +51: los botones borrar/mover/copiar ya no desaparecen al parar el timer (el return temprano de completed se comia la fila entera) // +50: 7 líneas al expandir notas, alturas iguales en vista/editar, overlay con eliminar/mover/copiar // +49: overlay de sesion con Eliminar / Mover / Copiar (los 3 endpoints ya existian); notas expandidas a 7 lineas; textarea y vista markdown a la misma altura // +48: el boton del chip ahora sincroniza de verdad (POST /calendar/sync) y luego lista las nuevas; antes solo leia avisos y por eso decia «todo bien» tras borrar // +47: el chip es un boton; al pulsarlo se abre el panel con las nuevas y "Copiar todo" // +46: el banner de avisos se pintaba antes de que existiera API y el ReferenceError lo tragaba el catch, asi que nunca aparecia; ahora espera al load. Tambien se serializa init_db con pg_advisory_lock para evitar el deadlock entre workers // +45: el observer se realimentaba con su propio textContent y congelaba la pestaña; ahora filtra mutaciones y guarda reentrada // +44: // +44: el chip de estado se quedaba en «comprobando…» por una carrera entre el fetch y el render; ahora repinta desde cache // +43: // +43: chip de estado de sincronización del calendario junto a «Calendarios» // +42: calendario auto-import // +42: calendario auto-import (banner de avisos con copiar, opción 60d, nuevo calendar-import-notice.js) // +41: cabecera de provenance (chip de proveedor + enlace) dentro del bloque markdown // +40: AI titles clean (no emoji prefix), markdown blocks no auto icon
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -24,7 +54,6 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/courses.js',
   '/features/studyflow/courses-api.js',
   '/features/studyflow/courses-blocks.js',
-  '/features/studyflow/courses-notes.js',
   '/features/studyflow/courses-dnd.js',
   '/features/studyflow/courses-dashboard.js',
   '/features/studyflow/openzen-settings.js',
@@ -68,18 +97,49 @@ const PRECACHE_ASSETS = [
   // while online — unacceptable for a headline feature of an offline PWA.
   '/shared/backup-restore.js',
   '/shared/v2-restore-modal.js',
+  // S5: quiz ecosystem. Same reason as above: index.html loads these with
+  // <script src>, so a single missing entry means no test, no failed pool
+  // and no summary while offline — the feature is simply gone.
+  '/features/quiz/quiz-api.js',
+  '/features/quiz/quiz-runner.js',
+  '/features/quiz/quiz-pool.js',
+  '/features/quiz/quiz-summary.js',
+  '/features/quiz/quiz-center.js',
+  '/features/quiz/quiz.css',
 ];
 
 // Maximum age for cached API responses (5 minutes)
 const API_CACHE_MAX_AGE = 5 * 60 * 1000;
 
 // Install event: cache basic assets
+//
+// Deliberately NOT cache.addAll(). addAll() is atomic: a single 404 rejects
+// the whole promise and leaves the precache completely empty, so one stale
+// entry takes offline support down with it and nothing in the app notices —
+// the SW installs, the update banner still fires, and only the failure to
+// precache is invisible. That is exactly what happened: /features/studyflow/
+// courses-notes.js was listed here but never existed in the repo, so the
+// precache had been failing silently for a long time and the cache we
+// inspected had in fact been filled by the runtime cache-first path instead.
+//
+// allSettled keeps every asset that does resolve and reports the rest.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(ASSET_CACHE)
       .then((cache) => {
         console.log('[SW] Precaching assets');
-        return cache.addAll(PRECACHE_ASSETS.map(url => new Request(url, { credentials: 'same-origin' })));
+        return Promise.allSettled(
+          PRECACHE_ASSETS.map(url =>
+            cache.add(new Request(url, { credentials: 'same-origin' }))
+          )
+        ).then((results) => {
+          const failed = PRECACHE_ASSETS.filter((_, i) => results[i].status === 'rejected');
+          if (failed.length) {
+            console.error('[SW] Precache failed for', failed.length, 'asset(s):', failed);
+          } else {
+            console.log('[SW] Precached', PRECACHE_ASSETS.length, 'assets');
+          }
+        });
       })
       .then(() => self.skipWaiting())
   );

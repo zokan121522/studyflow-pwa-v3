@@ -109,19 +109,23 @@
 
 /* ─── Tables ─────────────────────────────────────────────── */
 .md-view table, .sf-td-block-content table,
-.md-preview table, .ct-preview table {
+.md-preview table, .ct-preview table,
+.so-notes-rendered table {
   width: 100%; border-collapse: collapse; font-size: 13px;
   margin: 10px 0; display: block; overflow-x: auto;
 }
 .md-view th, .md-view td,
 .sf-td-block-content th, .sf-td-block-content td,
-.md-preview th, .md-preview td, .ct-preview th, .ct-preview td {
+.md-preview th, .md-preview td, .ct-preview th, .ct-preview td,
+.so-notes-rendered th, .so-notes-rendered td {
   padding: 7px 10px; border: 1px solid var(--border);
 }
 .md-view th, .sf-td-block-content th,
-.md-preview th, .ct-preview th {
+.md-preview th, .ct-preview th,
+.so-notes-rendered th {
   background: var(--surface); font-weight: 600; text-align: left;
 }
+.so-notes-rendered tbody tr:nth-child(even) { background: var(--bg); }
 .md-view tr:nth-child(even),
 .sf-td-block-content tr:nth-child(even),
 .md-preview tr:nth-child(even), .ct-preview tr:nth-child(even) {
@@ -213,5 +217,47 @@
 }
 textarea + .md-toolbar { border-top: 1px solid var(--border); border-radius: 6px 6px 0 0; }
 
-/* (re-applied for sessions textarea) */
-#so-notes { border-top-left-radius: 0; border-top-right-radius: 0; }
+/* (re-applied for sessions textarea)
+   Height must match .so-notes-rendered exactly, or switching between the
+   View and Edit tabs makes the notes block jump: the preview was 320px/55vh
+   and the textarea had no height of its own, so it fell back to rows. */
+#so-notes {
+  border-top-left-radius: 0; border-top-right-radius: 0;
+  min-height: 320px; max-height: 55vh; padding: 10px 12px;
+  font-size: 14px; line-height: 1.7; background: var(--bg);
+  color: var(--text); border: 1px solid var(--border);
+  overflow-y: auto; resize: vertical;
+}
+/* ─── Task lists (- [ ] / - [x]) ─────────────────────────────────
+   The parser emits a real <input type="checkbox" disabled> so the state
+   survives into the preview. It is disabled on purpose: this is the View
+   tab, and a box you can tick but cannot save is worse than no box. The
+   accent colour comes from the theme so a ticked item reads as done in
+   both light and dark, instead of the browser's greyed-out default. */
+   Every length here is in em, never px, and that is load-bearing. The same
+   rendered HTML is dropped into two containers with wildly different type
+   sizes: the session overlay reads at 16px, the agenda card at 11px
+   (.s-card .sc-sub). A 15px box is 0.94em in the overlay and 1.36em in the
+   card — bigger than the line it sits in. Sizing in em makes one rule fit
+   both. Do not "tidy" these back into pixels. */
+.task-list { list-style: none; padding-left: 0.15em; }
+.task-list .task-item {
+  display: flex; align-items: flex-start; gap: 0.5em;
+  padding: 0.2em 0; margin: 0;
+}
+.task-list .task-item input[type="checkbox"] {
+  flex: 0 0 auto; margin: 0.22em 0 0; width: 1.15em; height: 1.15em;
+  /* font-size: inherit is load-bearing, not tidying. Form controls do not
+     inherit type size from their parent — Chrome hands an <input> its own
+     13.33px default — so every em below would resolve against that instead
+     of the container. In the agenda card that worked out at 1.15 x 13.33 =
+     15px, exactly the px value this rule was written to stop using. */
+  font-size: inherit;
+  accent-color: var(--primary); cursor: default;
+}
+/* A ticked item is struck through so the state is readable even when the
+   box itself is hard to make out against the background. */
+.task-list .task-item:has(input:checked) { color: var(--text-muted); }
+.task-list .task-item:has(input:checked) .task-label {
+  text-decoration: line-through; text-decoration-thickness: 1px;
+}

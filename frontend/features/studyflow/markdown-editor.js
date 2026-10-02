@@ -307,14 +307,22 @@ window.App.MarkdownEditor = (function () {
   // trackSelection listeners (so 🎨 wraps the last selection even after
   // focus leaves the textarea), and the editor↔preview scroll sync.
   //
-  // Idempotent: safe to call twice on the same node. Marks the form with
-  // data-sf-md-live="1" so a second call is a no-op.
+  // Idempotent **per pair of nodes**, not per form element. The caller
+  // re-renders the form's innerHTML on every entry into edit mode, so the
+  // textarea and preview are brand-new elements each time while the
+  // `.sf-td-edit-form` wrapper is reused. A marker on the wrapper alone
+  // therefore made the SECOND edit of a block come up with a blank preview
+  // and no scroll sync: the fresh nodes were never wired and never rendered.
+  // We remember which nodes we wired and re-wire when they are replaced.
   // ───────────────────────────────────────────────────────────────
   function attachLivePreview(formEl) {
-    if (!formEl || formEl.dataset.sfMdLive === "1") return;
+    if (!formEl) return;
     const editor = formEl.querySelector(".md-editor");
     const preview = formEl.querySelector(".md-preview");
     if (!editor || !preview) return;
+    if (formEl._sfMdWired && formEl._sfMdWired.editor === editor
+        && formEl._sfMdWired.preview === preview) return;
+    formEl._sfMdWired = { editor, preview };
     formEl.dataset.sfMdLive = "1";
 
     const renderMd = () => {

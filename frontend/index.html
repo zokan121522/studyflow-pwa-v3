@@ -45,6 +45,7 @@
   <link rel="stylesheet" href="/features/agenda/agenda-timeline.css">
   <link rel="stylesheet" href="/features/habits/habits.css">
   <link rel="stylesheet" href="/features/studyflow/content-blocks.css">
+  <link rel="stylesheet" href="/features/studyflow/youtube-embed.css">
   <link rel="stylesheet" href="/features/studyflow/courses.css">
   <link rel="stylesheet" href="/features/studyflow/studyflow-blocks.css">
   <link rel="stylesheet" href="/features/studyflow/courses-sidebar-blocks.css">
@@ -54,6 +55,8 @@
   <link rel="stylesheet" href="/features/studyflow/study-scheduler.css">
   <link rel="stylesheet" href="/features/studyflow/ai.css">
   <link rel="stylesheet" href="/features/studyflow/knowledge-pipeline.css">
+  <!-- S5: ecosistema Quiz (sesión paginada, falladas, resumen) -->
+  <link rel="stylesheet" href="/features/quiz/quiz.css">
   <!-- SA: addons management overlay (App.Addons + App.AddonsManager) -->
   <link rel="stylesheet" href="/features/addons/addons.css">
   
@@ -288,8 +291,15 @@
           </div>
         </div>
         <div class="so-acts">
-          <button class="ht-btn" id="so-cancel">Cancelar</button>
-          <button class="ht-btn p" id="so-save">➕ Guardar sesión</button>
+          <div class="so-acts-danger" id="so-danger-acts" hidden>
+            <button type="button" class="ht-btn" id="so-move" title="Mover a otro día">📅 Mover</button>
+            <button type="button" class="ht-btn" id="so-copy" title="Copiar sesión">📋 Copiar</button>
+            <button type="button" class="ht-btn danger" id="so-delete" title="Eliminar sesión">🗑 Eliminar</button>
+          </div>
+          <div class="so-acts-main">
+            <button class="ht-btn" id="so-cancel">Cancelar</button>
+            <button class="ht-btn p" id="so-save">➕ Guardar sesión</button>
+          </div>
         </div>
       </div>
     </div>
@@ -385,6 +395,7 @@
               <label style="cursor:pointer;"><input type="radio" name="cal-days" value="7" checked style="vertical-align:middle;margin-right:2px;">7d</label>
               <label style="cursor:pointer;"><input type="radio" name="cal-days" value="15" style="vertical-align:middle;margin-right:2px;">15d</label>
               <label style="cursor:pointer;"><input type="radio" name="cal-days" value="30" style="vertical-align:middle;margin-right:2px;">30d</label>
+              <label style="cursor:pointer;"><input type="radio" name="cal-days" value="60" style="vertical-align:middle;margin-right:2px;" title="Dos meses">60d</label>
             </div>
             <button class="ht-btn p" id="cal-import-btn" style="font-size:11px;">📥 Importar</button>
           </div>
@@ -397,6 +408,10 @@
 
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
+  <!-- Lane packer: assigns horizontal columns to overlapping sessions so
+       simultaneous events sit side by side. Loaded before the agenda
+       timeline files because they call App.Lanes.pack() at render time. -->
+  <script src="/shared/lane-packer.js"></script>
   <!-- Issue #9: allowlist HTML sanitizer for v2 content blocks (infographic
        <img>, audio <audio>, NotebookLM HTML). Loads right after ui-common so
        any feature can use App.UI.sanitizeHtml. -->
@@ -414,6 +429,13 @@
          small-subset renderer. -->
   <script src="/features/studyflow/content-blocks.js"></script>
   <script src="/features/studyflow/courses-api.js"></script>
+  <!-- S5: ecosistema Quiz. quiz-api → quiz-runner → quiz-pool/summary →
+       quiz-center, y quiz-embed (que monta el runner) después. -->
+  <script src="/features/quiz/quiz-api.js"></script>
+  <script src="/features/quiz/quiz-runner.js"></script>
+  <script src="/features/quiz/quiz-pool.js"></script>
+  <script src="/features/quiz/quiz-summary.js"></script>
+  <script src="/features/quiz/quiz-center.js"></script>
   <!-- Issue #10: quiz por bloque (exercise) — embeds the block's test
        after the panel paints (patrón PdfViewer). -->
   <script src="/features/studyflow/quiz-embed.js"></script>
@@ -473,6 +495,11 @@
   <script src="/features/studyflow/knowledge-pipeline.js"></script>
   <script src="/features/studyflow/english-grammar.js"></script>
   <script src="/features/studyflow/ai.js"></script>
+  <!-- Phase 8 — YouTubeZen: PiP markdown embed card + floating queue panel.
+       youtube-queue.js reads window.App.AI._onContentSuccess, so it MUST come
+       AFTER ai.js (unlike v2's placement). youtube-embed.js is self-contained. -->
+  <script src="/features/studyflow/youtube-embed.js?v=2"></script>
+  <script src="/features/studyflow/youtube-queue.js?v=1"></script>
   <!-- Agenda (sub-phase B port): glue first, then ported v2 modules in dependency order.
        agenda-glue.js defines STATE, App.Auth.authHeaders, App.UI.displayTitle,
        App.ContentBlocks._renderMd (fallback only), App.Courses.applyMarkdown,
@@ -499,6 +526,8 @@
   <script src="/features/agenda/agenda-month-view.js"></script>
   <script src="/features/agenda/agenda-core.js"></script>
   <script src="/features/agenda/agenda-calendars.js"></script>
+  <script src="/features/agenda/calendar-import-notice.js"></script>
+  <script src="/features/agenda/calendar-import-status.js"></script>
   <script src="/features/agenda/agenda.js"></script>
   <script src="/features/agenda/agenda-handlers.js"></script>
   <script src="/app.js"></script>

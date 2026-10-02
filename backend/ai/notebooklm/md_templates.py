@@ -246,9 +246,31 @@ _ROLE_INFOGRAPHIC = (
 
 # ─── Role registry ──────────────────────────────────────────
 
+_ROLE_VERBATIM = (
+    "Transcribe the attached PDF into Markdown, exactly as written.\n\n"
+    "1. Copy the text word for word. Same sentences, same terms, same "
+    "wording. Do not paraphrase, do not reword, do not correct grammar or "
+    "spelling, do not shorten anything. Write in the document's own "
+    "language, without translating.\n"
+    "2. Keep the document's own structure: its headings in its order, its "
+    "lists, its tables as Markdown tables with every row, its code as "
+    "fenced blocks unchanged, its formulas as they appear.\n"
+    "3. Add nothing of your own. No summary, no \"key points\", no extra "
+    "examples, no explanations, no emojis, no callouts, no closing remark. "
+    "Start directly with the document's first line.\n"
+    "4. Where the document shows an image, diagram or chart, put in its "
+    "place a line reading `> **Figura N** — <caption or short literal "
+    "description>`.\n"
+    "5. Write `<!-- p. N -->` at the start of each new PDF page, so any "
+    "passage can be located in the original. It stays invisible when "
+    "rendered.\n"
+    "6. If something is illegible, write `[ilegible]`. Never guess."
+)
+
 _ROLES_BY_ID: dict[str, str] = {
     "notas-estandar": _ROLE_STANDARD,
     "transcripcion": _ROLE_TRANSCRIPTION,
+    "transcripcion-fiel": _ROLE_VERBATIM,
     "tutorial": _ROLE_TUTORIAL,
     "comparativa": _ROLE_COMPARISON,
     "glosario": _ROLE_GLOSSARY,

@@ -22,6 +22,16 @@
 }
 
 .course-item {
+  /* Issue #12 follow-up: the drag grip is a direct child of this card, so
+     the card has to be a flex ROW. It was not: the grip is an inline <span>
+     and .ci-body is a block <div>, which forced a line break and parked the
+     grip on its own line ABOVE the title — every course card rendered about
+     a line taller than its topic/block siblings, whose rows already were
+     flex (.topic-item, .block-item). `flex-start` keeps the grip on the
+     title's line instead of centring it on an expanded card's full height. */
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   padding: 8px 6px;
   margin-bottom: 4px;
   border-radius: 8px;
@@ -37,7 +47,9 @@
 }
 .course-item.expanded { border-color: var(--border-light); }
 
-.ci-body { display: block; }
+/* flex item of .course-item: take the width the grip leaves, and allow
+   shrinking so .ci-title-text can ellipsise a long course name. */
+.ci-body { display: block; flex: 1; min-width: 0; }
 .ci-title {
   display: flex;
   align-items: center;

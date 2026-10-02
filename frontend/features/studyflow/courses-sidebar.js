@@ -21,7 +21,34 @@ window.App.CoursesSidebar = (function () {
     separator: "➖", interactive: "🌐"
   };
 
+  // AI-generated blocks already carry an emoji in the title ("📚 NotebookLM",
+  // "🎥 YouTube Zen", "📊 PDF - RA1", "❓ Class notes"), which is what tells
+  // you where the block came from. Pairing that with the type icon rendered
+  // every one of them with two icons for a single fact — "📝 📚 RA1_CLAS_01",
+  // "📄 📊 PDF", even "❓ ❓ Class notes". Dropping the type icon whenever the
+  // title already leads with a pictograph leaves the block with exactly one
+  // marker, and costs nothing for hand-made blocks ("Nuevo Markdown" starts
+  // with a letter, so it keeps its 📝).
+  //
+  // This started as a hand-written list of the eight emoji ai.js happened to
+  // use, and the browser check caught the rest the moment real data went
+  // through: 🎵 📊 ❓ ✨ 🌙 were missing and every one of them was still
+  // double-iconed. Unicode's Extended_Pictographic is the actual definition
+  // of "this is an emoji", so it cannot fall behind a new title prefix.
+  const TITLE_EMOJI_PREFIX = /^\p{Extended_Pictographic}\s*/u;
+
+  function hasTitleEmojiPrefix(title) {
+    return TITLE_EMOJI_PREFIX.test((title || "").trim());
+  }
+
   function getBlockIcon(block) {
+    if (hasTitleEmojiPrefix(block.title)) return "";
+    // Markdown blocks get no automatic type icon. The 📝 was the one icon the
+    // user could never remove: it is painted here, not stored in the title, so
+    // editing the title to get rid of the AI's 🎥 only handed the screen over
+    // to this one — the two swapped places instead of disappearing. A
+    // hand-written title is the whole point of a block, so it is left alone.
+    if (block.type === "markdown") return "";
     if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
     // content-type title prefixes from v2 AI blocks
     if (block.type === "content" && block.title) {
@@ -250,17 +277,18 @@ window.App.CoursesSidebar = (function () {
     const safeBlockTitle = escHtml(b.title || "Sin título").replace(/'/g, "\\'");
     const isSep = b.type === "separator";
     const sepCls = isSep ? ` separator${(b.title || "").trim() ? " has-label" : " no-label"}` : "";
-    const dblClick = isSep
-      ? `ondblclick="event.stopPropagation();window.App.Courses._inlineRenameBlockTitle('${courseId}','${b.id}')" title="Doble clic para editar"`
-      : "";
+    // The separator title used to be renamed on double click, which fired by
+    // accident while selecting text and is undiscoverable next to a single
+    // click that selects the block. The ⋮ menu below already offers
+    // "✏️ Editar título" for exactly the same action, so the affordance is not
+    // lost — it just lives in one predictable place.
 
     return `<div class="block-item ${isActive ? "active" : ""}${sepCls}" data-block-id="${b.id}" data-course-id="${courseId}" data-topic-id="${topicId}" data-block-idx="${idx}">
       <span class="drag-handle" draggable="true" title="Arrastrar para mover" aria-hidden="true">⠿</span>
       <label class="bi-check" onclick="event.stopPropagation()">
         <input type="checkbox" ${checked} onchange="window.App.Courses._toggleBlockDone('${courseId}','${b.id}')">
       </label>
-      <span class="bi-icon">${icon}</span>
-      <span class="bi-title" ${dblClick}>${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
+      ${icon ? `<span class="bi-icon">${icon}</span>` : ""}      <span class="bi-title">${escHtml(isSep ? (b.title || "") : (b.title || "Sin título"))}</span>
       <div class="topic-menu-wrap">
         <button class="topic-menu-toggle" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')">⋮</button>
         <div class="topic-menu">
@@ -385,14 +413,8 @@ window.App.CoursesSidebar = (function () {
         }
 
         // Click elsewhere on header → toggle expand/collapse
-        const s = window.STATE || {};
-        s._expandedTopics = s._expandedTopics || {};
-        const expanded = s._expandedTopics[topicId] === true;
-        s._expandedTopics[topicId] = !expanded;
-        const blocksDiv = topicItem.querySelector(".topic-blocks");
-        if (blocksDiv) blocksDiv.style.display = !expanded ? "block" : "none";
-        const arrow = topicItem.querySelector(".topic-arrow");
-        if (arrow) arrow.textContent = !expanded ? "▼" : "▶";
+        const currentlyExpanded = (window.STATE?._expandedTopics || {})[topicId] === true;
+        setTopicExpanded(topicId, !currentlyExpanded);
         return;
       }
 
@@ -445,11 +467,33 @@ window.App.CoursesSidebar = (function () {
     if (window.App.CoursesDND) window.App.CoursesDND.attach(leftEl);
   }
 
+  // ── setTopicExpanded(topicId, expanded) → bool ──────────────────
+  // Single place that decides whether a topic shows its blocks in the nav.
+  // Flips the state flag AND the DOM, so both the chevron and "open this
+  // topic from the body" can drive it without one path updating state and
+  // the other only the markup. Returns false if the topic is not in the
+  // nav (course collapsed), which is not an error — a later re-render reads
+  // the flag and will show it expanded.
+  function setTopicExpanded(topicId, expanded) {
+    const s = window.STATE || (window.STATE = {});
+    s._expandedTopics = s._expandedTopics || {};
+    s._expandedTopics[topicId] = !!expanded;
+    const item = document.querySelector(`.topic-item[data-topic-id="${topicId}"]`);
+    if (item) {
+      const blocksDiv = item.querySelector(".topic-blocks");
+      if (blocksDiv) blocksDiv.style.display = expanded ? "block" : "none";
+      const arrow = item.querySelector(".topic-arrow");
+      if (arrow) arrow.textContent = expanded ? "▼" : "▶";
+    }
+    return !!item;
+  }
+
   // ── Public API ───────────────────────────────────────────────
   return {
     renderCourseTree,
     attachSidebarEvents,
     updateSelection,
+    setTopicExpanded,
   };
 })();
 

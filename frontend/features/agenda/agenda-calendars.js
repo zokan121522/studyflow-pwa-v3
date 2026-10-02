@@ -9,6 +9,12 @@ window.App.AgendaCalendars = (function () {
   // ─── State ────────────────────────────────────────────────────────
   let _onRefresh = null;     // callback to re-render the agenda after import
   let _calendars = [];       // [{id, name, url_masked}, ...]
+  // Mirrors calendar_import.window.VALID_DAYS — 60 is the "2 meses"
+  // option. Kept as a literal rather than fetched: one extra round trip
+  // to render three radios is not worth it, and test_js_day_options.py
+  // fails if the two ever drift.
+  var VALID_DAYS = [7, 15, 30, 60];
+
   let _days = 7;             // selected import range
 
   // ─── Render the panel contents ────────────────────────────────────
@@ -246,7 +252,7 @@ window.App.AgendaCalendars = (function () {
     document.querySelectorAll('input[name="cal-days"]').forEach(function (r) {
       r.addEventListener("change", function () {
         var v = parseInt(r.value, 10);
-        if (v === 7 || v === 15 || v === 30) _days = v;
+        if (VALID_DAYS.indexOf(v) !== -1) _days = v;
       });
     });
 
@@ -261,7 +267,7 @@ window.App.AgendaCalendars = (function () {
       var days = parseInt(
         (document.querySelector('input[name="cal-days"]:checked') || {}).value, 10
       );
-      if (days !== 7 && days !== 15 && days !== 30) days = 7;
+      if (VALID_DAYS.indexOf(days) === -1) days = 7;
       var tplEl = document.getElementById("cal-template-notes");
       // Read raw — backend trims + caps. undefined ⇒ don't send the key at all.
       var templateNotes = tplEl ? tplEl.value : undefined;

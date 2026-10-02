@@ -15,8 +15,13 @@ Registered by the server under the ``/api`` prefix, so full routes are:
   GET  /api/ai/notebooklm/audio/<filename>      → serve generated audio
   GET  /api/ai/notebooklm/infographic/<filename>→ serve generated PNG
 
-YouTubeZen routes (youtube-zen, queue, retry/continue) are intentionally NOT
-registered until the OpenZEN deferred sub-phase.
+YouTubeZen routes (Phase 8):
+POST /api/ai/notebooklm/youtube-zen              → local yt-dlp + OpenZEN
+POST /api/ai/notebooklm/youtube-zen/queue        → enqueue up to 20 URLs (FIFO)
+GET  /api/ai/notebooklm/youtube-zen/queue/status → snapshot for the queue panel
+POST /api/ai/notebooklm/youtube-zen/<id>/retry-chunk
+POST /api/ai/notebooklm/youtube-zen/<id>/continue-without
+POST /api/ai/notebooklm/youtube-zen/<id>/retry-now
 """
 
 import os
@@ -66,13 +71,22 @@ def _parse_block_ids(data: dict) -> list[str] | None:
 def youtube_to_markdown(current_user_id: int):
     """POST /api/ai/notebooklm/youtube-to-markdown
 
-    Body: { "url": "https://youtube.com/watch?v=...", "topic_id": "...", "block_id": "..." }
+    Body: { "url": "https://youtube.com/watch?v=...", "topic_id": "...",
+    "block_id": "...", "template_id": "tutorial", "depth": "standard",
+    "mode": "unitema", "language": "es" }  // issue #13: all optional
     Returns: { "task_id": "..." }
     """
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     topic_id = (data.get("topic_id") or "").strip()
     block_id = (data.get("block_id") or "").strip()
+    # Issue #13 — the dialog now sends the YouTubeZen controls. Every one
+    # is optional; with all of them absent the prompt is byte-identical to
+    # the pre-#13 fixed prompt.
+    template_id = (data.get("template_id") or "").strip() or None
+    depth = (data.get("depth") or "standard").strip().lower()
+    mode = (data.get("mode") or "unitema").strip().lower()
+    language = (data.get("language") or "auto").strip().lower()
 
     if not url:
         return jsonify(error="Missing required field: url"), 400
@@ -81,6 +95,7 @@ def youtube_to_markdown(current_user_id: int):
         from ai.notebooklm.youtube import create_youtube_md_task
         result = create_youtube_md_task(
             url=url, topic_id=topic_id, block_id=block_id, user_id=current_user_id,
+            template_id=template_id, depth=depth, mode=mode, language=language,
         )
         return jsonify(result)
     except ValueError as e:
@@ -385,3 +400,187 @@ def serve_infographic(current_user_id: int, filename: str):
     if not os.path.isfile(path):
         return jsonify(error="File not found"), 404
     return send_file(path, mimetype="image/png")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# YouTubeZen — Local yt-dlp + OpenZEN structuring
+# ═══════════════════════════════════════════════════════════════════
+
+
+@bp.route("/ai/notebooklm/youtube-zen", methods=["POST"])
+@token_required
+def youtube_zen(current_user_id: int):
+    """POST /api/ai/notebooklm/youtube-zen
+
+    Body: { "url": "https://youtube.com/watch?v=...", "topic_id": "...",
+    "block_id": "...", "format": "markdown",
+    "depth": "standard", "mode": "unitema", "language": "es",
+    "template_id": "tutorial" }  // optional — template from MD_TEMPLATES
+    Returns: { "task_id": "..." }
+    """
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    topic_id = (data.get("topic_id") or "").strip()
+    block_id = (data.get("block_id") or "").strip()
+    fmt = (data.get("format") or "markdown").strip().lower()
+    depth = (data.get("depth") or "standard").strip().lower()
+    mode = (data.get("mode") or "unitema").strip().lower()
+    language = (data.get("language") or "es").strip().lower()
+    template_id = (data.get("template_id") or "").strip() or None
+
+    if not url:
+        return jsonify(error="Missing required field: url"), 400
+
+    try:
+        from ai.notebooklm.youtube_zen import create_youtube_zen_task
+        result = create_youtube_zen_task(
+            url=url, topic_id=topic_id, block_id=block_id,
+            user_id=current_user_id, fmt=fmt,
+            depth=depth, mode=mode, language=language,
+            template_id=template_id,
+        )
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/notebooklm/youtube-zen/queue", methods=["POST"])
+@token_required
+def youtube_zen_queue(current_user_id: int):
+    """POST /api/ai/notebooklm/youtube-zen/queue
+
+    Enqueue up to 20 YouTube URLs as FIFO tasks (Phase 58, issue #225).
+    A single daemon worker processes them one at a time in order.
+
+    Body: { "urls": ["https://youtube.com/watch?v=..."],
+    "topic_id": "...", "block_id": "...", "format": "markdown",
+    "depth": "standard", "mode": "unitema", "language": "es",
+    "template_id": "tutorial" }
+    Returns: { "task_ids": ["...", "..."] }
+    """
+    data = request.get_json(silent=True) or {}
+    urls = [u.strip() for u in (data.get("urls") or []) if u and u.strip()]
+    if not urls:
+        return jsonify(error="Missing required field: urls (non-empty array)"), 400
+    if len(urls) > 20:
+        return jsonify(error="Máximo 20 URLs por lote"), 400
+
+    topic_id = (data.get("topic_id") or "").strip()
+    block_id = (data.get("block_id") or "").strip()
+    fmt = (data.get("format") or "markdown").strip().lower()
+    depth = (data.get("depth") or "standard").strip().lower()
+    mode = (data.get("mode") or "unitema").strip().lower()
+    language = (data.get("language") or "es").strip().lower()
+    template_id = (data.get("template_id") or "").strip() or None
+
+    # Security (audit run-1, ytzen-queue-unbounded): enforce queue depth
+    # limits — per-user (50) and global (500) — so one user cannot flood
+    # the single FIFO worker and starve everyone else.
+    try:
+        from backend import database as db
+        queued = db.query_one(
+            "SELECT COUNT(*) AS cnt FROM ai_tasks WHERE user_id = %s AND status = 'queued'",
+            (current_user_id,),
+        )
+        if queued and (queued["cnt"] or 0) + len(urls) > 50:
+            return jsonify(error="Límite de cola alcanzado (máx 50 tareas en cola por usuario)"), 400
+
+        global_q = db.query_one(
+            "SELECT COUNT(*) AS cnt FROM ai_tasks WHERE status = 'queued' AND task_type = 'youtube_zen'"
+        )
+        if global_q and (global_q["cnt"] or 0) + len(urls) > 500:
+            return jsonify(error="Cola global llena, inténtelo más tarde"), 429
+    except Exception as e:
+        return jsonify(error=f"Error al comprobar la cola: {str(e)}"), 500
+
+    try:
+        from ai.notebooklm.youtube_queue import enqueue_many
+        task_ids = enqueue_many(
+            urls=urls, topic_id=topic_id, block_id=block_id,
+            user_id=current_user_id, fmt=fmt,
+            depth=depth, mode=mode, language=language,
+            template_id=template_id,
+        )
+        return jsonify(task_ids=task_ids)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/notebooklm/youtube-zen/queue/status", methods=["GET"])
+@token_required
+def youtube_zen_queue_status(current_user_id: int):
+    """GET /api/ai/notebooklm/youtube-zen/queue/status
+
+    Snapshot for the floating queue panel:
+    { "queued": [...], "processing": [...], "recent_done": [...], "recent_error": [...] }
+    Done items carry result_content + coverage_data so the frontend can
+    insert the block via window.App.AI._onContentSuccess.
+    """
+    try:
+        from ai.notebooklm.youtube_queue import get_queue_status
+        return jsonify(get_queue_status(current_user_id))
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/notebooklm/youtube-zen/<task_id>/retry-chunk", methods=["POST"])
+@token_required
+def youtube_zen_retry_chunk(current_user_id: int, task_id: str):
+    """POST /api/ai/notebooklm/youtube-zen/<id>/retry-chunk
+
+    Regenerates the failed chunk of a detailed youtube_zen task and continues
+    the remaining chunks, reusing the saved plan (no re-plan, no re-download).
+
+    Returns: {"task_id": str} — poll GET /api/ai/tasks/<id> again.
+    """
+    try:
+        from ai.notebooklm.youtube_zen import resume_youtube_zen_task
+        result = resume_youtube_zen_task(
+            task_id, current_user_id, action="retry",
+        )
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify(error=str(e)), 409
+
+
+@bp.route("/ai/notebooklm/youtube-zen/<task_id>/continue-without", methods=["POST"])
+@token_required
+def youtube_zen_continue_without(current_user_id: int, task_id: str):
+    """POST /api/ai/notebooklm/youtube-zen/<id>/continue-without
+
+    Continues the generation skipping the failed chunk (its content is
+    omitted), reusing the saved plan and healthy chunks.
+
+    Returns: {"task_id": str} — poll GET /api/ai/tasks/<id> again.
+    """
+    try:
+        from ai.notebooklm.youtube_zen import resume_youtube_zen_task
+        result = resume_youtube_zen_task(
+            task_id, current_user_id, action="skip",
+        )
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify(error=str(e)), 409
+
+
+@bp.route("/ai/notebooklm/youtube-zen/<task_id>/retry-now", methods=["POST"])
+@token_required
+def youtube_zen_retry_now(current_user_id: int, task_id: str):
+    """POST /api/ai/notebooklm/youtube-zen/<id>/retry-now
+
+    While a detailed task is streaming, asks it to abort the CURRENT chunk so
+    it lands in the recoverable chunk_error state — the user can then
+    retry-chunk it immediately (not just after a real failure).
+
+    Returns: {"task_id": str} — poll GET /api/ai/tasks/<id> again.
+    """
+    try:
+        from ai.notebooklm.youtube_zen import request_chunk_retry
+        result = request_chunk_retry(task_id, current_user_id)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify(error=str(e)), 409

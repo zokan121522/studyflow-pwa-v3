@@ -132,6 +132,60 @@ function toggle(element) {
   if (element) element.classList.toggle('hidden');
 }
 
+// ── colorAlpha(color, alpha) ─────────────────────────────────────
+// Returns `color` at the given alpha, for category colours that arrive
+// as `var(--cat-mind)` rather than as a hex value.
+//
+// This exists because of a real bug, not tidiness. The timeline used to
+// build its backgrounds by pasting the alpha onto the end of the colour:
+//
+//     'background:' + 'var(--cat-mind)' + '15'   →  "var(--cat-mind)15"
+//
+// That is not valid CSS. The browser *stores* the token stream and then
+// throws it away when painting, so `background-color` fell back to its
+// initial value, transparent. Every class block rendered with no fill at
+// all, which read as "the sessions are gone" when they were in fact all
+// there, just unfilled.
+//
+// The reason it is worth a helper rather than an inline fix: CSS custom
+// properties are substituted as opaque token sequences, never re-lexed.
+// So `var(--cat-mind)15` can never work, no matter what follows it. The
+// only fixes are to resolve the variable to a concrete colour first
+// (which needs the computed value at paint time) or to stop using a
+// custom property here. Resolving it in JS and emitting rgba() does it
+// once, for every timeline view, instead of three times.
+function colorAlpha(color, alpha) {
+  if (!color) return "transparent";
+
+  // Already a concrete colour: alpha compositing works directly. Named
+  // colours and rgb()/hsl() are passed through too, but only after the
+  // string is left intact — compositing needs the browser to parse it,
+  // and it already knows how.
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
+    var hex = color.slice(1);
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    var n = parseInt(hex, 16);
+    return (
+      "rgba(" +
+      ((n >> 16) & 255) + ", " +
+      ((n >> 8) & 255) + ", " +
+      (n & 255) + ", " +
+      alpha + ")"
+    );
+  }
+
+  if (/^rgba?\(/i.test(color) || /^hsla?\(/i.test(color)) {
+    return color;
+  }
+
+  // A var() reference, a named colour, or anything else we do not parse:
+  // let the browser resolve it. color-mix() is the supported way to fade
+  // an unresolved colour without having to know what it resolves to.
+  return "color-mix(in srgb, " + color + " " + Math.round(alpha * 100) + "%, transparent)";
+}
+
 // Export to window.App.UI
 window.App = window.App || {};
 window.App.UI = {
@@ -150,7 +204,8 @@ window.App.UI = {
   clearError,
   show,
   hide,
-  toggle
+  toggle,
+  colorAlpha
 };
 
 console.log('[Shared] ui-common.js loaded');

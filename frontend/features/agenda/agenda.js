@@ -198,9 +198,31 @@ window.App.Agenda = (function () {
   // ==================================================================
   // AGENDA
   // ==================================================================
-  async function renderAgenda() {
-    // Clean up any running timer intervals before re-render
-    AgendaTimer.stopAll();
+  // ─── Calendar sync status ──────────────────────────────────────────
+  // Shared by the boot path and every re-render, so the chip always
+  // reflects the current state instead of whatever it was at page load.
+  // Silently does nothing if the module failed to load.
+  function _refreshCalendarStatus() {
+    if (!window.CalendarImportStatus) return;
+    // Repaint first from the cached value so a freshly inserted chip shows the
+    // real state immediately, then fetch. Without the repaint the chip sits on
+    // its "comprobando…" placeholder until the request comes back — which is
+    // exactly what it did before this.
+    if (typeof window.CalendarImportStatus.repaint === "function") {
+      window.CalendarImportStatus.repaint();
+    }
+    if (typeof window.CalendarImportStatus.refresh === "function") {
+      return window.CalendarImportStatus.refresh();
+    }
+  }
+
+async function renderAgenda() {
+      // Clean up any running timer intervals before re-render
+      AgendaTimer.stopAll();
+
+      // Runs before the DOM is rebuilt so the chip is painted once the new
+      // markup exists; renderAgenda replaces the whole side panel.
+      _refreshCalendarStatus();
 
     const weekId = STATE.currentWeek || getWeekId(todayStr());
     STATE.currentWeek = weekId;
@@ -245,9 +267,23 @@ window.App.Agenda = (function () {
   // ─── Init calendar import panel (Phase 71, #262) ──────────────────
   // Wired once at module load — the open/close API is then driven by the
   // "📅 Calendarios" button that AgendaCore renders in the centre column.
-  if (window.App.AgendaCalendars && typeof window.App.AgendaCalendars.init === "function") {
-    window.App.AgendaCalendars.init();
-  }
+if (window.App.AgendaCalendars && typeof window.App.AgendaCalendars.init === "function") {
+      window.App.AgendaCalendars.init();
+    }
+
+    // ─── Pending calendar-import notice (Phase 9) ────────────────────
+    // Asked for on open so a session imported overnight is visible without
+    // the user visiting the calendar panel. Failures stay silent — there is
+    // nothing for the user to do about a missing notice.
+    if (window.CalendarImportNotice && typeof window.CalendarImportNotice.refresh === "function") {
+      window.CalendarImportNotice.refresh();
+    }
+
+    // ─── Calendar sync status (Phase 9) ──────────────────────────────
+    // The user wants to know from the agenda alone whether the calendar is
+    // healthy. refresh() is re-run on every render, so the chip tracks the
+    // current state rather than whatever it was at boot.
+    _refreshCalendarStatus();
 
   // ─── Public API ──────────────────────────────────────────────────
   return {

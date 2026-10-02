@@ -14,6 +14,15 @@ FROM python:3.12-slim
 #                  import funciona y la llamada revienta.
 #   3. libpq     → psycopg2 (aunque uses -binary, el pool de Postgres
 #                  necesita las herramientas en runtime para el DDL).
+#   4. chrome    → el login de NotebookLM (`notebooklm login --browser
+#                  chrome`, backend/routes/notebooklm_login.py:191) pide el
+#                  Chrome DE ESCRITORIO, que Playwright NO incluye: son dos
+#                  navegadores distintos. Sin esto el botón «Iniciar sesión»
+#                  moría con "Google Chrome not found" y el perfil se quedaba
+#                  en 0 bytes — el usuario conectaba y la tarea siguiente
+#                  fallaba por sesión caducada. OJO: esto solo afecta al
+#                  login. PDF→MD, audio, infografías y flashcards usan el
+#                  Chromium bundled de arriba y nunca lo necesitan.
 # ─────────────────────────────────────────────────────────────────────
 
 ENV PYTHONUNBUFFERED=1 \
@@ -63,6 +72,32 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Playwright: descarga el Chromium en la ruta que fijamos arriba.
 RUN playwright install --with-deps chromium
+
+# Playwright: Chrome de escritorio, para el login de NotebookLM.
+#
+# `notebooklm login --browser chrome` lanza el Chrome del sistema vía el
+# `channel` de Playwright. El bundled Chromium NO sirve aquí: la librería lo
+# documenta en CHANNEL_BROWSERS ("system-installed, not the bundled
+# Chromium"). Sin esta línea el login falla al arrancar, deja el
+# storage_state.json a 0 bytes y el usuario ve un error que culpa a su
+# cuenta de Google en lugar de a la falta del navegador.
+#
+# `--no-sandbox`: corre como root dentro del contenedor.
+#
+# El canal `chrome` de Google NO existe para Linux Arm64: Playwright aborta
+# con "ERROR: not supported on Linux Arm64 / Failed to install browsers", y
+# como era una capa del build, el fallo tumbaba la imagen entera — no solo
+# NotebookLM, sino también el scraper de Selenium y cualquier otra cosa. Por
+# eso se salta en arm64 (Apple Silicon) y solo se instala donde existe.
+# Chromium, que sí tiene build arm64, se instala arriba y es el que usa el
+# scraper de Selenium vía _chromium_binary().
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        playwright install --with-deps chrome \
+        && playwright install-deps chrome; \
+    else \
+        echo "arm64: se omite el canal chrome (no existe para esta arquitectura)"; \
+    fi \
+    && rm -rf /var/lib/apt/lists/*
 
 # El código llega por bind-mount en tiempo de ejecución (ver compose), pero
 # se copia también para que la imagen sea autonomous (build sin compose).

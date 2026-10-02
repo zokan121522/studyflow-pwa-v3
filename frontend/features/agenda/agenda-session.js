@@ -58,12 +58,17 @@ window.App.AgendaSession = (function () {
     // Change title / save button text based on edit mode
     const titleEl = document.querySelector("#session-overlay .omodal-head h3");
     const saveBtn = document.getElementById("so-save");
+    // Delete / move / copy only make sense on a session that already exists.
+    // Hiding them on create avoids a "delete" button for something with no id.
+    const dangerActs = document.getElementById("so-danger-acts");
     if (session) {
       titleEl.textContent = `✏️ Editar sesión — ${dayName}`;
       saveBtn.textContent = "💾 Guardar cambios";
+      if (dangerActs) dangerActs.hidden = false;
     } else {
       titleEl.textContent = `➕ Nueva sesión — ${dayName}`;
       saveBtn.textContent = "➕ Guardar sesión";
+      if (dangerActs) dangerActs.hidden = true;
     }
 
     document.getElementById("so-titulo").value = session?.title || "";
@@ -152,6 +157,10 @@ window.App.AgendaSession = (function () {
 
   // ─── Init: wire overlay event handlers ───────────────────────────
   function init() {
+    // Delete / move / copy — bound once, since the buttons live in the static
+    // overlay markup and the overlay is shown/hidden rather than rebuilt.
+    _wireDangerActions();
+
     // Timer input change → update effective display
     ["so-te-h","so-te-m","so-te-s","so-tp-h","so-tp-m","so-tp-s"].forEach((id) => {
       const el = document.getElementById(id);
@@ -194,6 +203,83 @@ window.App.AgendaSession = (function () {
     });
   }
 
+  // ─── Delete / move / copy an existing session ───────────────────
+  // All three endpoints already existed and were used from the session cards;
+  // what was missing was a way to reach them once a session was opened. Being
+  // marked done is not a lock — it is a state, and the session stays editable.
+
+  function _toast(msg, isError) {
+    // Reuse the app's existing .br-toast rather than adding a second one.
+    let el = document.getElementById("br-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "br-toast";
+      el.className = "br-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.toggle("error", !!isError);
+    el.classList.add("show");
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove("show"), 3800);
+  }
+
+  function _afterMutation(message, isError) {
+    closeSessionOverlay();
+    if (window.App && window.App.Agenda && window.App.Agenda.renderAgenda) {
+      window.App.Agenda.renderAgenda();
+    }
+    if (message) _toast(message, isError);
+  }
+
+  function _confirmDelete() {
+    if (!_editingSessionId) return;
+    // Confirm on purpose: this is the only irreversible action in the app.
+    if (!window.confirm("¿Eliminar esta sesión?\n\nNo se puede deshacer.")) return;
+    API.del("/agenda/session/" + _editingSessionId)
+      .then(function () { _afterMutation("Sesión eliminada."); })
+      .catch(function (e) {
+          console.error("[agenda] delete failed", e);
+          _toast("No se pudo eliminar la sesión.", true);
+        });
+  }
+
+  function _copySession() {
+    if (!_editingSessionId) return;
+    API.post("/agenda/session/" + _editingSessionId + "/copy", {})
+      .then(function () { _afterMutation("Sesión copiada."); })
+      .catch(function (e) {
+          console.error("[agenda] copy failed", e);
+          _toast("No se pudo copiar la sesión.", true);
+        });
+  }
+
+  function _moveSession() {
+    if (!_editingSessionId) return;
+    var input = window.prompt("Mover a otro día (AAAA-MM-DD):", _sessionDate || "");
+    if (input === null) return;                   // cancelled
+    var target = String(input).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) {
+      window.alert("Formato inválido. Usa AAAA-MM-DD, por ejemplo 2026-10-15.");
+      return;
+    }
+    API.post("/agenda/session/" + _editingSessionId + "/move", { target_date: target })
+      .then(function () { _afterMutation("Sesión movida al " + target + "."); })
+      .catch(function (e) {
+          console.error("[agenda] move failed", e);
+          _toast("No se pudo mover la sesión.", true);
+        });
+  }
+
+  function _wireDangerActions() {
+    var del = document.getElementById("so-delete");
+    var mv = document.getElementById("so-move");
+    var cp = document.getElementById("so-copy");
+    if (del) del.addEventListener("click", _confirmDelete);
+    if (mv) mv.addEventListener("click", _moveSession);
+    if (cp) cp.addEventListener("click", _copySession);
+  }
+
   // ─── Public API ──────────────────────────────────────────────────
   return {
     init,
@@ -201,5 +287,6 @@ window.App.AgendaSession = (function () {
     openSessionOverlay,
     closeSessionOverlay,
     saveSession,
+    _wireDangerActions: _wireDangerActions,
   };
 })();

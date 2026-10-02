@@ -23,6 +23,14 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
   // ── Constants ───────────────────────────────────────────────────
   var HOUR_H = 40;             // px per hour row
   var TOTAL_H = 24 * HOUR_H;   // 960px
+  // A session whose start equals its end is an instant, not a missing end.
+  // renderBlock draws it as a MIN_BLOCK_H sliver, so the lane packer has to
+  // assume the same span: with its 60-minute default it believed a 14:03
+  // question ran until 15:03 and stole a lane from the 15:00 Studyflow block,
+  // which does not overlap it at all. Kept in px and converted once so the
+  // two can never drift apart again.
+  var MIN_BLOCK_H = 18;                              // px floor for a block
+  var ZERO_LEN_MIN = Math.round(MIN_BLOCK_H / HOUR_H * 60);  // = 27 minutes
   var DRAG_THRESHOLD = 5;      // px of movement required to commit a drag
   var SNAP_MIN = 10;           // 10-minute snap grid
 
@@ -94,8 +102,15 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     var durationMin = end
       ? Math.max(15, end.totalMin - start.totalMin)
       : 60;
-    var topPx = timeToPx(start);
-    var heightPx = Math.max(18, (durationMin / 1440) * TOTAL_H);
+var topPx = timeToPx(start);
+      // Keep short blocks inside the grid. A 23:59 start lands at 959.3px of a
+      // 960px grid, so the 18px floor for brief sessions pushed it to 977px
+      // and it spilled past the bottom edge, clipped. Slide such a block up so
+      // it is fully visible rather than shrinking it to an invisible sliver.
+      var MIN_H = MIN_BLOCK_H;
+      if (topPx + MIN_H > TOTAL_H) topPx = TOTAL_H - MIN_H;
+      var heightPx = Math.max(MIN_H, (durationMin / 1440) * TOTAL_H);
+      heightPx = Math.min(heightPx, TOTAL_H - topPx);
     var color = catColors[session.category] || "var(--border)";
     var icon = catIcons[session.category] || "";
     var timeStr = session.start_time + (session.end_time ? "–" + session.end_time : "");
@@ -103,12 +118,20 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     if (session.state === "completed") cls += " tl-block-done";
     if (session.timer_state === "running") cls += " tl-block-running";
     if (session.timer_state === "paused") cls += " tl-block-paused";
+    // Left/width come from the lane packer so simultaneous sessions sit
+    // side by side instead of stacked in the same rectangle.
+    var lane = session._lane || { index: 0, total: 1 };
+    var laneW = 100 / lane.total;
+    var laneLeft = lane.index * laneW;
     return '<div class="tl-block' + cls + '"' +
       ' data-sid="' + session.id + '"' +
       ' data-start="' + session.start_time + '"' +
       ' data-end="' + (session.end_time || "") + '"' +
       ' style="top:' + topPx + 'px;height:' + heightPx + 'px;' +
-      'background:' + color + '15;border-left-color:' + color + ';">' +
+      'left:calc(' + laneLeft + '% + 1px);' +
+      'width:calc(' + laneW + '% - 2px);' +
+      'background:' + App.UI.colorAlpha(color, 0.08) + ';' +
+      'border-left-color:' + color + ';">' +
       '<div class="tl-block-bar" style="background:' + color + ';"></div>' +
       '<div class="tl-block-body">' +
         '<span class="tl-block-title">' + displayTitle(icon, session.title) + '</span>' +
@@ -130,6 +153,9 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
     scheduled.sort(function (a, b) {
       return parseHHMM(a.start_time).totalMin - parseHHMM(b.start_time).totalMin;
     });
+    // Lanes for simultaneous sessions, after sorting so the packer's
+    // start-time order matches what is actually painted.
+    App.Lanes.pack(scheduled, { fallbackMinutes: ZERO_LEN_MIN });
     var blocksHtml = "";
     for (var j = 0; j < scheduled.length; j++) {
       var b = renderBlock(scheduled[j]);
@@ -337,17 +363,49 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
   // ── Shared pointer-event binding (mouse + touch) for day / week /
   // month drag handlers. Single helper so each bindDrag / bindWeekDrag /
   // bindMonthDrag only declares the four callbacks it needs.
+  //
+  // The move/up/cancel listeners live on `document` because a drag leaves
+  // the block. They are registered ONCE for the whole page: render() runs on
+  // every refresh, and adding a document listener per render would stack up
+  // unbounded duplicates that each re-run the drag handlers on every mouse
+  // move. Only the latest render's opts stay active in _activeDrag, and the
+  // stale closures of previous renders are dropped with it.
+  var _activeDrag = null;
+  var _docDragBound = false;
+
+  function _bindDocumentDragOnce() {
+    if (_docDragBound) return;
+    _docDragBound = true;
+    document.addEventListener("mousemove", function (e) {
+      if (_activeDrag) _activeDrag.onMove(e.clientX, e.clientY);
+    });
+    document.addEventListener("mouseup", function (e) {
+      if (_activeDrag) _activeDrag.onUp(e.clientX, e.clientY);
+    });
+    document.addEventListener("touchmove", function (e) {
+      if (!_activeDrag) return;
+      _activeDrag.onMove(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+    document.addEventListener("touchend", function (e) {
+      if (!_activeDrag) return;
+      _activeDrag.onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    });
+    document.addEventListener("touchcancel", function () {
+      if (_activeDrag) _activeDrag.onCancel();
+    });
+  }
+
   function bindPointerEvents(container, opts) {
+    if (!container) return;
+    _activeDrag = opts;
+    _bindDocumentDragOnce();
+    // The container is rebuilt on every render, so its own listeners die
+    // with the discarded node — no leak there, and it must not be skipped.
     container.addEventListener("mousedown", function (e) {
       var block = e.target.closest(opts.blockSelector);
       if (!block) return;
       opts.onDown(e, block);
-    });
-    document.addEventListener("mousemove", function (e) {
-      opts.onMove(e.clientX, e.clientY);
-    });
-    document.addEventListener("mouseup", function (e) {
-      opts.onUp(e.clientX, e.clientY);
     });
     container.addEventListener("touchstart", function (e) {
       var block = e.target.closest(opts.blockSelector);
@@ -355,14 +413,6 @@ window.App.AgendaTimeline = window.App.AgendaTimeline || (function () {
       opts.onDown(e.touches[0], block);
       e.preventDefault();
     }, { passive: false });
-    document.addEventListener("touchmove", function (e) {
-      opts.onMove(e.touches[0].clientX, e.touches[0].clientY);
-      e.preventDefault();
-    }, { passive: false });
-    document.addEventListener("touchend", function (e) {
-      opts.onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-    });
-    document.addEventListener("touchcancel", function () { opts.onCancel(); });
   }
 
   // ── Public API surface ──────────────────────────────────────────

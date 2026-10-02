@@ -88,7 +88,7 @@
 .sc-tag.project { background: #fffbeb; color: var(--cat-project); }
 .s-card .sc-sub { font-size: 11px; color: var(--text-secondary); }
 .s-card .sc-sub.collapsed { max-height: 2.5em; overflow: hidden; }
-.s-card .sc-sub:not(.collapsed) { max-height: 200px; overflow-y: auto; }
+.s-card .sc-sub:not(.collapsed) { max-height: calc(1.5em * 7); overflow-y: auto; }
 /* Rendered markdown inside sc-sub */
 .s-card .sc-sub p,
 .s-card .sc-sub ul,
@@ -188,6 +188,12 @@
 .so-row { display: flex; gap: 12px; }
 .so-row .so-field { flex: 1; }
 .so-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* Destructive actions sit on the left, save/cancel on the right, so the
+   delete button is never adjacent to "save" where a misclick can lose work. */
+.so-acts-danger { display: flex; gap: 8px; margin-right: auto; }
+.so-acts-danger[hidden] { display: none; }
+.ht-btn.danger { color: var(--red, #c62828); border-color: var(--red, #c62828); }
+.ht-btn.danger:hover { background: var(--red, #c62828); color: #fff; border-color: var(--red, #c62828); }
 
 /* ============================== SCROLL WRAPPERS ============================== */
 .sessions-scroll-wrapper {

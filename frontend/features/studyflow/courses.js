@@ -27,7 +27,7 @@ window.App.Courses = (function () {
     createCourse, renameCourse, updateDescription, deleteCourse,
     addTopic, renameTopic, deleteTopic,
     // Blocks (S3)
-    addBlock, toggleBlockDone, moveBlock,
+    addBlock, toggleBlockDone, moveBlock, updateBlock,
     // Favorites + course order (Issue #12)
     setFavorite, reorderCourses,
   } = window.App.CoursesAPI;
@@ -469,6 +469,14 @@ window.App.Courses = (function () {
       const full = await fetchCourseDetail(courseId);
       s._expandedCourseTopics = (full && full.topics) || [];
     }
+    // Opening a topic also unfolds it in the nav. Otherwise you click a topic
+    // in the body and the sidebar keeps it folded behind a ▶, so the blocks you
+    // just opened look absent from the outline. The flag survives any re-render
+    // (renderCourseTree reads _expandedTopics), and setTopicExpanded also flips
+    // the live markup, so the nav is correct before the tree is rebuilt.
+    if (window.App.CoursesSidebar && window.App.CoursesSidebar.setTopicExpanded) {
+      window.App.CoursesSidebar.setTopicExpanded(topicId, true);
+    }
     await updateCenter();
   }
 
@@ -486,6 +494,13 @@ window.App.Courses = (function () {
       if (window.App.AddonsManager
           && typeof window.App.AddonsManager.renderMarketplaceNav === "function") {
         window.App.AddonsManager.renderMarketplaceNav();
+      }
+    } catch (_) { /* nav is optional cosmetic */ }
+    // S5 — same treatment for the Quiz center nav (Resumen / Falladas).
+    try {
+      if (window.App.QuizCenter
+          && typeof window.App.QuizCenter.renderNav === "function") {
+        window.App.QuizCenter.renderNav();
       }
     } catch (_) { /* nav is optional cosmetic */ }
     await updateCenter();
@@ -556,11 +571,16 @@ window.App.Courses = (function () {
     if (!centerEl) return;
     const s = STATE();
 
-    // SA.2 — Marketplace view (AddonsManager). Routes BEFORE the
-    // topic/course branches so the catalog takes over the center
-    // panel when STATE._view === "addons". Sidebar nav (qs-nav-item
-    // [data-am-nav]) sets STATE._view and calls updateCenter().
-    if (s._view === "addons" && window.App.AddonsManager
+    // Center views that take over the panel, routed BEFORE the
+    // topic/course branches. Sidebar nav items (qs-nav-item [data-am-nav]
+    // for the marketplace, [data-qc-view] for S5) set STATE._view and call
+    // updateCenter().
+    //   "addons" → AddonsManager (SA.2 marketplace catalog)
+    //   "quiz"   → QuizCenter (S5 Resumen por Card / Preguntas Falladas)
+    if (s._view === "quiz" && window.App.QuizCenter
+        && typeof window.App.QuizCenter.renderView === "function") {
+      await window.App.QuizCenter.renderView(centerEl);
+    } else if (s._view === "addons" && window.App.AddonsManager
         && typeof window.App.AddonsManager.renderView === "function") {
       await window.App.AddonsManager.renderView(centerEl);
     } else if (s.selectedTopicId && s.currentCourseId) {
@@ -706,9 +726,12 @@ window.App.Courses = (function () {
     // On non-empty topics the create chips live inside each block's
     // unified toolbar (ai.js ➕ Añadir group, below NotebookLM/OpenZen).
     const addBar = blocks.length ? "" : Blocks._renderAddBar(courseId, topicId);
+    // The fold-all control reads the whole topic, not the filtered view, so
+    // "desplegar todo" from a single focused block would otherwise be a lie.
+    const allCollapsed = allBlocks.length > 0 && allBlocks.every((b) => !!b.collapsed);
 
     centerEl.innerHTML = `
-      <div class="sf-topic-detail">
+      <div class="sf-topic-detail" data-topic-id="${topicId}" data-course-id="${courseId}">
         <div class="sf-td-back" data-course-id="${courseId}">
           ← ${escHtml(course.title || "Curso")}
         </div>
@@ -718,7 +741,13 @@ window.App.Courses = (function () {
                data-course-id="${courseId}" data-topic-id="${topicId}">
                ☰ Ver todos los bloques (${allBlocks.length})
              </button>`
-          : ""}
+          : (allBlocks.length > 1
+            ? `<button type="button" class="sf-td-fold-all ht-btn"
+                 data-course-id="${courseId}" data-topic-id="${topicId}"
+                 title="Plegar o desplegar todos los bloques de golpe">
+                 ${allCollapsed ? "☰ Desplegar todo" : "☰ Plegar todo"}
+               </button>`
+            : "")}
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
@@ -738,6 +767,40 @@ window.App.Courses = (function () {
       showAllBtn.addEventListener("click", async () => {
         const st = STATE();
         st.selectedBlockId = null;
+        await updateCenter();
+      });
+    }
+    // Fold / unfold every block in the topic in one go. Goes through the same
+    // PUT {collapsed} the per-card arrow uses, so the server stays the source
+    // of truth and the flag survives a reload. Sequential on purpose: one
+    // request per block, and a 13-block topic should not be 13 parallel writes
+    // that can interleave with a collapse-all/expand-all double tap.
+    const foldAllBtn = centerEl.querySelector(".sf-td-fold-all");
+    if (foldAllBtn) {
+      foldAllBtn.addEventListener("click", async () => {
+        const cId = Number(foldAllBtn.dataset.courseId);
+        const tId = Number(foldAllBtn.dataset.topicId);
+        const cards = [...centerEl.querySelectorAll(".sf-block-card")];
+        if (!cards.length) return;
+        // Fold if anything is still open; unfold only when all are already
+        // folded. Anything else is a coin toss the user did not ask for.
+        const targetCollapsed = cards.some((c) => !c.classList.contains("is-collapsed"));
+        foldAllBtn.disabled = true;
+        try {
+          for (const card of cards) {
+            const bid = Number(card.dataset.blockId);
+            if (!bid) continue;
+            card.classList.toggle("is-collapsed", targetCollapsed);
+            const arrow = card.querySelector(".sf-bc-collapse");
+            if (arrow) arrow.textContent = targetCollapsed ? "▶" : "▼";
+            try {
+              await updateBlock(cId, bid, { collapsed: targetCollapsed });
+            } catch (_) { /* one failure must not abort the rest */ }
+          }
+        } finally {
+          foldAllBtn.disabled = false;
+        }
+        // Re-render so the button's own label flips to the other action.
         await updateCenter();
       });
     }
@@ -788,13 +851,66 @@ window.App.Courses = (function () {
     return String(a) === String(b);
   }
 
+  // ── _refreshSidebarNav() — rebuild ONLY the left tree ─────────
+  // renderStudyflow() does sidebar + center + the addon/quiz navs, which is
+  // far too much to run on every block mutation: it refetches the course
+  // list and re-renders the marketplace panels, which visibly fights the
+  // user while the AI is streaming results in.
+  //
+  // What the user needs after a block is inserted is for it to appear in the
+  // outline. Two details make this non-obvious:
+  //
+  //  1. The tree does NOT read the block list off `fetchCourses()`. It reads
+  //     `STATE._expandedCourseTopics`, which is only filled by
+  //     `fetchCourseDetail()`. Refetching the course list alone therefore
+  //     re-renders the tree with the SAME stale blocks — the outline looks
+  //     like it refreshed but the inserted block is still missing.
+  //  2. `fetchCourseDetail()` is cached, so the detail has to be invalidated
+  //     first or we re-read the pre-insert snapshot.
+  async function _refreshSidebarNav(courseId) {
+    const leftEl = document.getElementById("studyflow-left");
+    if (!leftEl || courseId == null) return;
+    const s = STATE();
+    // Only the open course carries blocks in the tree; refreshing other
+    // courses would be wasted work on every mutation.
+    if (!s.expandedCourseId || !_sameId(s.expandedCourseId, courseId)) return;
+    try {
+      if (typeof clearDetailCache === "function") clearDetailCache();
+      const [courses, full] = await Promise.all([
+        fetchCourses(),
+        fetchCourseDetail(courseId),
+      ]);
+      if (!courses) return;
+      s._expandedCourseTopics = (full && full.topics) || [];
+      s._expandedCourseBlocks = (full && full.blocks) || [];
+      const scrollTop = leftEl.scrollTop;
+      leftEl.innerHTML = renderCourseTree(courses, s);
+      // Re-rendering resets the scroll position; put it back so a long tree
+      // does not jump to the top every time a block is inserted.
+      leftEl.scrollTop = scrollTop;
+      if (window.App.CoursesSidebar && window.App.CoursesSidebar.updateSelection) {
+        window.App.CoursesSidebar.updateSelection(leftEl, s);
+      }
+    } catch (err) {
+      console.error("[blocks-changed] sidebar refresh failed:", err);
+    }
+  }
+
   function _onBlocksChanged(e) {
     const detail = (e && e.detail) || {};
     const s = STATE();
     if (detail.courseId != null && !_sameId(s.currentCourseId, detail.courseId)) return;
     if (detail.topicId != null && !_sameId(s.selectedTopicId, detail.topicId)) return;
     // Fire-and-forget: don't block the event handler.
+    //
+    // The sidebar and the center are refreshed TOGETHER but independently:
+    // the center renders the inserted block, while the tree is what makes it
+    // discoverable. Only refreshing the center left the outline stale, so the
+    // course looked unchanged until something else happened to re-render the
+    // nav. Neither is awaited by the other — a slow or failing tree render
+    // must not delay the block the user is waiting for.
     updateCenter().catch((err) => console.error("[blocks-changed]", err));
+    _refreshSidebarNav(detail.courseId != null ? detail.courseId : s.currentCourseId);
   }
   if (typeof window !== "undefined"
       && !window.__studyflowBlocksListenerMounted) {

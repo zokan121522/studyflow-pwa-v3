@@ -429,3 +429,18 @@ def generate_grammar_exercises(current_user_id: int):
         return jsonify(error=str(e)), 400
     except RuntimeError as e:
         return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/openzen-md-templates", methods=["GET"])
+@token_required
+def openzen_md_templates(current_user_id: int):
+    """GET /api/ai/openzen-md-templates — list OpenZEN markdown prompt templates.
+
+    Returns public metadata (id, name, emoji, description, mock) for the
+    YouTubeZen dialog template grid + live preview. Internal prompt builders
+    are NOT exposed.
+
+    Returns:
+        {"templates": [ {"id", "name", "emoji", "description", "mock"}, ... ]}
+    """
+    return jsonify(templates=list_md_templates()), 200

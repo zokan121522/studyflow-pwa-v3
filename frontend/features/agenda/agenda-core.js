@@ -52,32 +52,41 @@ window.App.AgendaCore = (function () {
     if (_viewMode === "month" && mode !== "month") _monthOffset = 0;
     _viewMode = mode;
   }
-  function getViewMode() { return _viewMode; }
+function getViewMode() { return _viewMode; }
 
-  // ── Single dblclick→edit handler (delegated, registered once) ────
-  var _latestDateStr = "";
-  var _latestWeekId = "";
-  var _latestRefresh = null;
-  var _dblEditRegistered = false;
+    // ── Single click -> open session overlay (registered once) ─────
+    var _curDateStr = "";
+    var _curWeekId = "";
+    var _curRefresh = null;
+    var _clickOpenRegistered = false;
+    var _downXY = null;
 
-  async function _dblEditHandler(e) {
-    var block = e.target.closest(".tl-block, .tlw-block, .tlm-session, .s-card");
-    if (!block) return;
-    var sid = block.dataset.sid || block.dataset.sessionId;
-    if (!sid) return;
-    e.stopPropagation();
-    try {
-      var session = await API.get("/agenda/session/" + sid);
-      AgendaSession.openSessionOverlay(
-        session.day_date || _latestDateStr,
-        _latestWeekId,
-        session,
-        _latestRefresh
-      );
-    } catch (err) { /* silent */ }
-  }
+    function _openSessionOnClick(e) {
+      if (e.target.closest("input, textarea, select, button, a, [data-action], .vt-btn, .sc-sub")) return;
+      var block = e.target.closest(".tl-block, .tlw-block, .tlm-session, .s-card");
+      if (!block) return;
+      var sid = block.dataset.sid || block.dataset.sessionId;
+      if (!sid) return;
+      if (_downXY && (Math.abs(e.clientX - _downXY[0]) > 5 || Math.abs(e.clientY - _downXY[1]) > 5)) return;
+      e.stopPropagation();
+      API.get("/agenda/session/" + sid)
+        .then(function (session) {
+          AgendaSession.openSessionOverlay(
+            session.day_date || block.dataset.date || _curDateStr,
+            _curWeekId, session, _curRefresh
+          );
+        })
+        .catch(function () { /* silent */ });
+    }
 
-  // ── Category lookup maps (extracted to keep render functions short) ──
+    function _registerClickOpen(el) {
+      if (_clickOpenRegistered) return;
+      el.addEventListener("pointerdown", function (e) { _downXY = [e.clientX, e.clientY]; }, true);
+      el.addEventListener("click", _openSessionOnClick);
+      _clickOpenRegistered = true;
+    }
+
+    // ── Category lookup maps (extracted to keep render functions short) ──
   var CAT_LABELS = {
     formal_study: { label: "Formal", cls: "formal" },
     self_study:   { label: "Self",   cls: "self" },
@@ -98,17 +107,23 @@ window.App.AgendaCore = (function () {
   // Splitting this out keeps _renderSessionCard readable.
   function _buildActionsHtml(s) {
     var ts = s.timer_state;
+    // Stopping the timer sets state to "completed" (see .btn-stop), which used
+    // to collapse the entire row into the "Hecho" label. Timer controls are
+    // meaningless once settled, but delete / move / copy still are: a finished
+    // session is the one you most often want to tidy up. So the status tag
+    // becomes a prefix and only the timer buttons are dropped.
+    var settled = s.state === "completed" || s.state === "cancelled";
+    var statusTag = "";
     if (s.state === "completed") {
-      return '<span style="font-size:11px;color:var(--green);font-weight:600;">✅ Hecho</span>';
+      statusTag = '<span style="font-size:11px;color:var(--green);font-weight:600;margin-right:4px;">✅ Hecho</span>';
+    } else if (s.state === "cancelled") {
+      statusTag = '<span style="font-size:11px;color:var(--text-muted);font-weight:600;margin-right:4px;">⏹ Cancelado</span>';
     }
-    if (s.state === "cancelled") {
-      return '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">⏹ Cancelado</span>';
-    }
-    var playDisabled  = ts === "running" ? "disabled" : "";
-    var pauseDisabled = ts !== "running" ? "disabled" : "";
-    var stopDisabled  = (ts !== "running" && ts !== "paused") ? "disabled" : "";
+    var playDisabled  = (settled || ts === "running") ? "disabled" : "";
+    var pauseDisabled = (settled || ts !== "running") ? "disabled" : "";
+    var stopDisabled  = (settled || (ts !== "running" && ts !== "paused")) ? "disabled" : "";
     var moveDelDisabled = (ts === "running" || ts === "paused") ? "disabled" : "";
-    return '' +
+    return statusTag +
       '<button class="btn-play" data-sid="' + s.id + '" title="Iniciar" draggable="false" ' + playDisabled + '>▶️</button>' +
       '<button class="btn-pause" data-sid="' + s.id + '" title="Pausar" draggable="false" ' + pauseDisabled + '>⏸</button>' +
       '<button class="btn-stop" data-sid="' + s.id + '" title="Detener" draggable="false" ' + stopDisabled + '>⏹</button>' +
@@ -187,8 +202,9 @@ window.App.AgendaCore = (function () {
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
         '<button class="ht-btn" data-action="add-session" style="font-size:10px;">➕ Añadir sesión</button>' +
-        '<button class="ht-btn" data-action="open-calendars" style="font-size:10px;">📅 Calendarios</button>' +
-        '<span style="font-size:11px;color:var(--text-muted);background:var(--surface);padding:2px 10px;border-radius:10px;border:1px solid var(--border);">' + daySessions.length + ' sesiones</span>' +
+'<button class="ht-btn" data-action="open-calendars" style="font-size:10px;">📅 Calendarios</button>' +
+          '<button type="button" class="cal-import-status" style="font-size:10px;color:var(--text-muted);padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:transparent;cursor:pointer;font-family:inherit;" title="Estado de la sincronización del calendario — clic para ver las nuevas">⏳ comprobando…</button>' +
+          '<span style="font-size:11px;color:var(--text-muted);background:var(--surface);padding:2px 10px;border-radius:10px;border:1px solid var(--border);">' + daySessions.length + ' sesiones</span>' +
       '</div>';
   }
 
@@ -375,27 +391,23 @@ window.App.AgendaCore = (function () {
   }
 
   // ── Render center column: session cards + habits table ───────────
-  async function renderAgendaCenter(dateStr, weekData, callbacks) {
-    callbacks = callbacks || {};
-    var onRefresh = callbacks.onRefresh;
-    _latestDateStr = dateStr;
-    _latestWeekId = (weekData && weekData.week_id) || "";
-    _latestRefresh = onRefresh;
+async function renderAgendaCenter(dateStr, weekData, callbacks) {
+      callbacks = callbacks || {};
+      var onRefresh = callbacks.onRefresh;
+      _curDateStr = dateStr;
+      _curWeekId = (weekData && weekData.week_id) || "";
+      _curRefresh = onRefresh;
 
-    var el = document.getElementById("agenda-center");
+      var el = document.getElementById("agenda-center");
     if (!el) return;
     var d = new Date(dateStr + "T12:00:00");
     var dayName = d.toLocaleDateString("es-ES", { weekday: "long" });
-    var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
-    var dayNameCapitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+var dayNum = d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+      var dayNameCapitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
 
-    // Single dblclick handler bound on first call
-    if (!_dblEditRegistered) {
-      el.addEventListener("dblclick", _dblEditHandler);
-      _dblEditRegistered = true;
-    }
+      _registerClickOpen(el);
 
-    // Month view is delegated to its own module
+      // Month view is delegated to its own module
     if (_viewMode === "month") {
       var monthMod = window.App.AgendaMonthView;
       if (monthMod) return monthMod.render(el, dateStr, callbacks);
@@ -427,12 +439,33 @@ window.App.AgendaCore = (function () {
     _wireDeleteButtons(el, callbacks, dateStr);
     _wireMoveCopyButtons(el, callbacks, weekData, dateStr);
     _wireExpandButtons(el);
-    _wireListDnD(el, callbacks, weekData, dateStr);
-    _wireCenterButtons(el, dateStr, weekData, callbacks);
+_wireListDnD(el, callbacks, weekData, dateStr);
+      _wireCenterButtons(el, dateStr, weekData, callbacks);
+      _wireTimelineDrag(el, onRefresh);
     _startTimerTicks(daySessions);
   }
 
-  // ─── Public API ──────────────────────────────────────────────────
+  // ── Attach drag & drop to the timeline views ─────────────────────
+    // bindWeekDrag / bindDrag existed and were exported by the timeline
+    // modules but nothing ever called them, so dragging a session was a
+    // no-op in the day and week views (only the month view was wired, in
+    // agenda-month-view.js). Wire them here, next to the other post-render
+    // hooks, so every render re-attaches to the fresh container.
+    function _wireTimelineDrag(el, onRefresh) {
+      var TL = window.App.AgendaTimeline;
+      if (!TL) return;
+      var weekCont = el.querySelector(".tlw-container");
+      if (weekCont && typeof TL.bindWeekDrag === "function") {
+        TL.bindWeekDrag(weekCont, { onRefresh: onRefresh });
+        return;
+      }
+      var dayCont = el.querySelector(".tl-container");
+      if (dayCont && typeof TL.bindDrag === "function") {
+        TL.bindDrag(dayCont, { onRefresh: onRefresh });
+      }
+    }
+
+    // ─── Public API ──────────────────────────────────────────────────
   return {
     renderAgendaCenter: renderAgendaCenter,
     setViewMode: setViewMode,

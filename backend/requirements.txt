@@ -28,3 +28,23 @@ notebooklm-py==0.7.2
 selenium==4.49.0        # requiere además un chromedriver en la imagen
 PyMuPDF==1.28.2         # importado como "fitz"
 Pillow==12.3.0          # importado como "PIL"
+
+# ── YouTubeZen (Phase 8) ──
+# yt-dlp se invoca como BINARIO por subprocess, no como librería
+# (backend/ai/notebooklm/youtube_zen.py: _ytdlp_base_cmd → ["yt-dlp", ...]).
+# El pip instala el ejecutable en /usr/local/bin, así que va aquí y no en el
+# Dockerfile, pero el fallo sigue siendo de runtime: sin él, toda la
+# extracción de subtítulos muere con FileNotFoundError.
+#
+# El suelo de versión NO es arbitrario. El código usa dos opciones que
+# yt-dlp renombró hace poco:
+#   --write-auto-sub / --write-sub   (antes: --write-auto-subs, con la s)
+#   --remote-components ejs:github   (nuevo; descarga el solver de JS)
+# Con una versión antigua el binario existe pero aborta con "unrecognized
+# option", que es un fallo mucho más confuso que el FileNotFoundError.
+# La ruta de subtítulos usa --skip-download, así que NO hace falta ffmpeg.
+yt-dlp>=2025.6.30
+# MD -> PDF (services/md_to_pdf.py). Necesita pango/cairo, que el
+# Dockerfile ya instala via apt. Se importaba sin declararse: al recrear
+# el contenedor la app no arrancaba (ModuleNotFoundError).
+weasyprint==62.3

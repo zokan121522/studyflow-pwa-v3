@@ -178,6 +178,13 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         { id: "audio", label: "Audio", icon: "🎵", cat: "generate", order: 60,
           md: "audio", pdf: "audio",
           task: { md: "opencode_audio", pdf: "opencode_audio" } },
+        // Phase 8 — YouTubeZen: local yt-dlp extracts subtitles, then OpenZEN
+        // (big-pickle via opencode-acp) structures them. It is NOT a NotebookLM
+        // feature, so it belongs to this addon, next to Audio. Opens the full
+        // zen dialog (template / depth / mode / language + FIFO queue).
+        { id: "youtube-zen", label: "YouTube Zen", icon: "🎥", cat: "generate", order: 61,
+          md: "youtube", pdf: "youtube",
+          task: { md: "youtube_zen", pdf: "youtube_zen" } },
       ],
     });
   }
@@ -233,6 +240,15 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         `<span class="sf-td-add-chip-icon">${m.icon}</span>${escHtml(m.label)}</button>`;
     }
     html += `</div>`;
+    // MD → PDF sits with the ➕ Añadir group: it acts on THIS block (turn its
+    // markdown into a stored PDF) rather than creating anything, so it reads
+    // as a per-block action and not as another block type to add.
+    if (scope === "md") {
+      html += `<div class="toolbar-group" data-addon="md2pdf">` +
+        `<button type="button" class="sf-md-pdf ai-btn"`
+        + `${bidAttr}${topicAttr}`
+        + ` title="Convertir este markdown en PDF">📄→PDF</button></div>`;
+    }
     html += `<div class="ai-status" data-ai-status="${escHtml(blockId)}" style="display:none;flex-basis:100%;"></div>`;
     return html;
   }
@@ -306,6 +322,13 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       else _showStatus(bid, "⚠️ Módulo de generación no disponible", true);
     } else if (action === "notebooklm-youtube") {
       _showYoutubeDialog(tid, cid, { provider: "notebooklm" });
+    } else if (action === "youtube") {
+      // Phase 8 — YouTubeZen dialog (full zen controls: template/depth/mode).
+      if (tid) {
+        _showYoutubeDialog(tid, cid);
+      } else {
+        _showStatus(bid, "⚠️ No se pudo determinar el tema", true);
+      }
     } else if (action === "nb-test" || action === "notebooklm-test") {
       // Phase 7.7 — test config modal (10/20/30 questions)
       const modals = window.App.AiModals;
@@ -367,13 +390,289 @@ window.App.AI = Object.assign(window.App.AI, (function () {
 
   /** Minimal YouTube URL dialog (native NotebookLM ingestion). */
   function _showYoutubeDialog(topicId, courseId, opts = {}) {
-    const url = prompt("🎬 Pega la URL de YouTube:");
-    if (!url || !url.trim()) return;
-    const gen = window.App.AI.Generation;
-    if (!gen) return;
-    const norm = url.trim();
-    // md scope when launched from md toolbar; format = markdown
-    gen.youtubeToMd("", topicId, norm);
+    // Issue #13 — the NotebookLM YouTube button now gets the full YouTubeZen
+    // controls (template / depth / mode / language), the same as OpenZen.
+    //
+    // Phase 64 (#255) hid them because the native endpoint only read
+    // url + topic_id. The native path now composes its prompt from these
+    // four options, so they are real for both providers.
+    //
+    // nbNative survives ONLY to pick the submit path: YouTubeZen goes
+    // through the FIFO queue, the native NotebookLM path posts one task
+    // per URL. It no longer hides any control.
+    const nbNative = !!(opts && opts.provider === "notebooklm");
+
+    // Remove any existing panel
+    const existing = document.getElementById("youtube-dialog-overlay");
+    if (existing) existing.remove();
+
+    const html = `
+      <div class="kp-overlay" id="youtube-dialog-overlay">
+        <div class="kp-modal kp-modal-yt-wide" id="yt-dialog-modal">
+          <div class="kp-modal-header">
+            <span class="kp-modal-icon">🎬</span>
+            <span class="kp-modal-title">${nbNative ? "YouTube → Contenido · NotebookLM" : "YouTube → Contenido"}</span>
+            <button class="kp-modal-close" id="yt-dialog-close" title="Cerrar">✕</button>
+          </div>
+          <div class="kp-modal-body">
+            <label class="kp-label" for="yt-url-input">🔗 URLs de vídeos (una por línea):</label>
+            <textarea
+              id="yt-url-input"
+              class="kp-textarea"
+              rows="3"
+              style="padding:10px 14px;"
+              placeholder="https://youtube.com/watch?v=...&#10;https://youtu.be/... (máx 20)"
+            ></textarea>
+            <label class="kp-label">🎛️ Plantilla de prompt (opcional):</label>
+            <div class="ozmd-grid">
+              <div class="ozmd-templates" id="yt-templates">
+                <div style="color:#aaa;padding:6px 2px;">Cargando plantillas…</div>
+              </div>
+              <div class="ozmd-preview">
+                <div class="ozmd-preview-title">👁️ Vista previa</div>
+                <div class="ozmd-preview-body" id="yt-preview-body">
+                  <div style="color:#aaa;padding:6px 2px;">Sin plantilla — prompt estándar YouTube</div>
+                </div>
+              </div>
+            </div>
+            <label class="kp-label">Profundidad:</label>
+            <div class="kp-depth-row">
+              <button class="kp-depth-btn" data-depth="concise">
+                <span class="kp-depth-icon">📄</span>
+                <span class="kp-depth-name">Conciso</span>
+                <span class="kp-depth-desc">1-3 párrafos</span>
+              </button>
+              <button class="kp-depth-btn selected" data-depth="standard">
+                <span class="kp-depth-icon">📝</span>
+                <span class="kp-depth-name">Estándar</span>
+                <span class="kp-depth-desc">Def + ejemplos</span>
+              </button>
+              <button class="kp-depth-btn" data-depth="detailed">
+                <span class="kp-depth-icon">📚</span>
+                <span class="kp-depth-name">Detallado</span>
+                <span class="kp-depth-desc">Curso completo</span>
+              </button>
+            </div>
+            <label class="kp-label">Modo:</label>
+            <div class="kp-mode-row">
+              <button class="kp-mode-btn selected" data-mode="unitema">
+                <span class="kp-mode-icon">📄</span>
+                <span class="kp-mode-name">Un tema</span>
+                <span class="kp-mode-desc">Todo en un bloque</span>
+              </button>
+              <button class="kp-mode-btn" data-mode="por_tema">
+                <span class="kp-mode-icon">📑</span>
+                <span class="kp-mode-name">Por tema</span>
+                <span class="kp-mode-desc">Sección = bloque nuevo</span>
+              </button>
+            </div>
+            <label class="kp-label">Idioma:</label>
+            <div class="kp-lang-row">
+              <button class="kp-lang-btn selected" data-lang="es">🇪🇸 Español</button>
+              <button class="kp-lang-btn" data-lang="en">🇬🇧 English</button>
+            </div>
+            <div id="yt-dialog-status" style="font-size:12px;color:var(--text-muted,#888);display:none;padding:8px 12px;border-radius:6px;background:var(--surface-raised,#252535);margin-top:12px;"></div>
+          </div>
+          <div class="kp-modal-footer">
+            <button class="kp-btn kp-btn-cancel" id="yt-dialog-cancel">Cancelar</button>
+            <button class="kp-btn kp-btn-submit" id="yt-dialog-generate">${nbNative ? "📥 Generar (NotebookLM)" : "📥 Encolar vídeos"}</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML("beforeend", html);
+
+    const overlay = document.getElementById("youtube-dialog-overlay");
+    const input = document.getElementById("yt-url-input");
+    const status = document.getElementById("yt-dialog-status");
+    const generateBtn = document.getElementById("yt-dialog-generate");
+
+    let selectedDepth = "standard";
+    let selectedLang = "es";
+    let selectedMode = "unitema";
+    let selectedTemplate = ""; // '' = generic YT prompt (backward compatible)
+
+    const escHtml = (s) => String(s == null ? "" : s);
+
+    // ── Helpers ──────────────────────────────────────────────────
+    function _setStatus(msg, isError) {
+      status.textContent = msg;
+      status.style.display = "block";
+      status.style.color = isError ? "#e74c3c" : "#f0c040";
+    }
+
+    function _hideStatus() {
+      status.style.display = "none";
+    }
+
+    // ── Templates grid + live preview (same pattern as OpenZEN md) ──
+    const templatesEl = document.getElementById("yt-templates");
+    const previewBody = document.getElementById("yt-preview-body");
+
+    // The FULL backend catalog is shown (10 templates), in insertion order
+    // from GET /api/ai/openzen-md-templates.
+    const YT_TEMPLATE_IDS = null;
+
+    (async () => {
+      let templates = [];
+      try {
+        const resp = await window.API.get("/ai/openzen-md-templates");
+        const src = resp.templates || [];
+        // Preserve backend insertion order when no allow-list is configured.
+        templates = YT_TEMPLATE_IDS
+          ? src
+              .filter((t) => YT_TEMPLATE_IDS.includes(t.id))
+              .sort((a, b) => YT_TEMPLATE_IDS.indexOf(a.id) - YT_TEMPLATE_IDS.indexOf(b.id))
+          : src.slice();
+      } catch (err) {
+        templatesEl.innerHTML = `<div style="color:#e57373;padding:6px 2px;">❌ No se pudieron cargar plantillas</div>`;
+        return;
+      }
+      const renderPreview = (tpl) => {
+        const cb = window.App.ContentBlocks;
+        previewBody.innerHTML = cb && cb._renderMd ? cb._renderMd(tpl.mock || "") : `<pre>${escHtml(tpl.mock || "")}</pre>`;
+      };
+
+      const cardEls = [];
+      const cards = templates.map((t, i) => {
+        const elId = `yt-tpl-${i}`;
+        cardEls.push({ elId, tpl: t });
+        return `<div class="inf-config-style-opt ozmd-tpl-opt" id="${elId}" data-template-id="${t.id}" title="${escHtml(t.description)}" data-tpl-idx="${i}">
+          <div class="inf-config-style-label">${t.emoji} ${escHtml(t.name)}</div>
+          <div class="inf-config-style-desc">${escHtml(t.description)}</div>
+        </div>`;
+      }).join("");
+      templatesEl.innerHTML =
+        `<div class="inf-config-style-opt ozmd-tpl-opt ozmd-tpl-none selected" data-template-id="" data-tpl-idx="-1">
+          <div class="inf-config-style-label">⚡ Sin plantilla</div>
+          <div class="inf-config-style-desc">Prompt estándar YouTube (comportamiento actual)</div>
+        </div>${cards}`;
+
+      templatesEl.querySelectorAll(".ozmd-tpl-opt").forEach((el) => {
+        el.addEventListener("click", () => {
+          templatesEl.querySelectorAll(".ozmd-tpl-opt").forEach((o) => o.classList.remove("selected"));
+          el.classList.add("selected");
+          selectedTemplate = el.dataset.templateId || "";
+          const idx = parseInt(el.dataset.tplIdx, 10);
+          const tpl = idx >= 0 ? templates[idx] : null;
+          if (tpl) renderPreview(tpl);
+          else previewBody.innerHTML = `<div style="color:#aaa;padding:6px 2px;">Sin plantilla — prompt estándar YouTube</div>`;
+        });
+      });
+    })();
+
+    function _getUrls() {
+      const urls = input.value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (!urls.length) {
+        _setStatus("⚠️ Introduce al menos una URL de YouTube", true);
+        input.focus();
+        return [];
+      }
+      const bad = urls.find((u) => !u.match(/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//));
+      if (bad) {
+        _setStatus(`⚠️ URL de YouTube no válida: ${bad}`, true);
+        return [];
+      }
+      if (urls.length > 20) {
+        _setStatus("⚠️ Máximo 20 URLs por lote", true);
+        return [];
+      }
+      return urls;
+    }
+
+    function _launchGeneration() {
+      const urls = _getUrls();
+      if (!urls.length) return;
+
+      _hideStatus();
+      overlay.remove();
+
+      const gen = window.App.AI.Generation;
+      if (!gen) return;
+        if (nbNative) {
+          // Native NotebookLM: one backend task per URL (sequential).
+          // Issue #13 — the dialog options now travel with the request so
+          // the native path composes its prompt from them, exactly as
+          // YouTubeZen does.
+          //
+          // The language is sent as selected, NOT mapped to 'auto'. Mapping
+          // it would leave the Español button (the default selection)
+          // doing nothing, i.e. a decorative control. Forcing it is the
+          // parity the issue asks for, and it is a deliberate change: the
+          // native default output is now pinned to Spanish like YouTubeZen.
+          const opts = {
+            template: selectedTemplate,
+            depth: selectedDepth,
+            mode: selectedMode,
+            language: selectedLang,
+          };
+          (async () => {
+            for (const url of urls) {
+              try { await gen.youtubeToMd("", topicId, url, opts); }
+              catch (err) { _showStatus("", `❌ YouTube: ${err.message}`, true); }
+            }
+          })();
+          return;
+        }
+      if (urls.length === 1) {
+        // Single URL → legacy flow (stream modal + manual insert)
+        gen.youtubeZen("", topicId, urls[0], "markdown", selectedDepth, selectedMode, selectedLang, selectedTemplate);
+      } else {
+        // Multiple URLs → FIFO queue + floating panel
+        gen.youtubeZenQueue(urls, topicId, "markdown", selectedDepth, selectedMode, selectedLang, selectedTemplate);
+      }
+    }
+
+    // ── Wire events ──────────────────────────────────────────────
+
+    // Close button
+    document.getElementById("yt-dialog-close").addEventListener("click", () => overlay.remove());
+    document.getElementById("yt-dialog-cancel").addEventListener("click", () => overlay.remove());
+
+    // Click backdrop to close
+    overlay.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) overlay.remove();
+    });
+
+    // Depth / Mode / Language selectors (same wiring as Content Generator)
+    overlay.querySelectorAll(".kp-depth-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-depth-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedDepth = btn.dataset.depth;
+      });
+    });
+    overlay.querySelectorAll(".kp-mode-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-mode-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedMode = btn.dataset.mode;
+      });
+    });
+    overlay.querySelectorAll(".kp-lang-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        overlay.querySelectorAll(".kp-lang-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedLang = btn.dataset.lang;
+      });
+    });
+
+    // Generate button
+    generateBtn.addEventListener("click", _launchGeneration);
+
+    // Ctrl+Enter → enqueue (Enter alone adds a new line in the textarea)
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        _launchGeneration();
+      }
+    });
+
+    // Focus input
+    setTimeout(() => input.focus(), 100);
   }
 
   function initSectionEvents(container) {
@@ -395,10 +694,47 @@ window.App.AI = Object.assign(window.App.AI, (function () {
   }
 
   /**
+   * Resolve the course that OWNS `topicId`.
+   *
+   * `addBlock` posts to /courses/<cid>/topics/<tid>/blocks, so a cid that
+   * does not own the topic gets a 404 "Topic not found in this course". The
+   * youtube-zen queue finishes tasks long after they were enqueued and calls
+   * _onContentSuccess without a courseIdHint, so the ambient
+   * STATE.currentCourseId is whatever course the user happens to have open
+   * at insert time. Deriving the owner from the topic makes the insert
+   * correct no matter where the user navigated meanwhile.
+   *
+   * @returns {Promise<string|null>} course id, or null when unresolvable
+   */
+  async function _resolveCourseIdForTopic(topicId, hint) {
+    // A course id is always numeric. The zen flow used to pass the *depth*
+    // ("standard"/"detailed") in the courseIdHint slot, so trusting any
+    // truthy hint produced POST /courses/standard/topics/<id>/blocks -> 405.
+    const isCourseId = (v) => /^\d+$/.test(String(v == null ? "" : v).trim());
+    const tid = topicId ? String(topicId) : null;
+
+    // The topic is the authority: it decides which course the block belongs
+    // to, so prefer its owner even when a hint is present. This also repairs
+    // a hint that is numeric but points at the wrong course.
+    if (tid) {
+      try {
+        const list = await window.App.CoursesAPI.fetchCourses();
+        for (const course of list || []) {
+          const owns = (course.topics || []).some((t) => String(t.id) === tid);
+          if (owns) return String(course.id);
+        }
+      } catch { /* fall through to the hints */ }
+    }
+    if (isCourseId(hint)) return String(hint).trim();
+    const current = (typeof STATE !== "undefined" && STATE.currentCourseId) || "";
+    return isCourseId(current) ? String(current) : null;
+  }
+
+  /**
    * Create a block in the topic and move it right after the source block.
    * v3 has per-block POST + move (no v2 bulk PATCH with full blocks).
    */
-  async function _addBlockAfterSource(courseId, sourceBlockId, blockData) {
+  async function _addBlockAfterSource(courseId, sourceBlockId, blockData, indexOffset = 0) {
     const newBlock = await window.App.CoursesAPI.addBlock(courseId, {
       topic_id: blockData.topic_id || undefined,
       type: blockData.type || "markdown",
@@ -418,9 +754,12 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         }
         const idx = (blocks || []).findIndex((b) => b.id === sourceBlockId);
         if (idx !== -1 && window.App.CoursesAPI.moveBlock) {
+          // indexOffset keeps a multi-block insert in order: each call targets
+          // the same slot (idx + 1), so without it every new block pushes the
+          // previous one down and the sections come out reversed.
           await window.App.CoursesAPI.moveBlock(newBlock.id, {
             target_topic_id: blockData.topic_id,
-            index: idx + 1,
+            index: idx + 1 + (indexOffset || 0),
           });
         }
       } catch (err) {
@@ -430,40 +769,217 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     return newBlock.id;
   }
 
+  /**
+   * Does this task want one block per topic?
+   *
+   * Covers the NotebookLM YouTube path (format "markdown"/"md") alongside the
+   * Knowledge Pipeline and YouTube Zen formats v2 handled, so a per-topic run
+   * is split no matter which tool produced it.
+   */
+  function _isPorTemaTask(task, format) {
+    const mode = task && task.coverage_data && task.coverage_data.mode;
+    if (mode !== "por_tema") return false;
+    return format === "markdown" || format === "md"
+      || format === "ytd_zen" || format === "knowledge_pipeline";
+  }
+
+  /**
+   * Split markdown into one section per `## ` heading.
+   * Ported from v2's _parseKpSections. Only level-2 headings split, so `###`
+   * sub-headings stay inside their section instead of becoming their own
+   * ("bloques que no tocan").
+   */
+  function _parsePorTemaSections(content) {
+    if (!content) return [];
+    const sections = [];
+    const parts = String(content).split(/(?=^##\s)/m);
+    for (const part of parts) {
+      const match = part.match(/^(##)\s+(.+?)\n([\s\S]*)$/);
+      if (!match) continue;
+      const title = match[2].replace(/\*\*/g, "").replace(/[#*]/g, "").trim();
+      const body = match[3].trim();
+      if (title && body && body.length > 20) sections.push({ title, body });
+    }
+    return sections;
+  }
+
+  // ─── Provenance header (who generated this, from what, and the source) ──
+  //
+  // A generated block looks like any other once it lands in a course, and a
+  // 40-chunk course is impossible to audit later. Two lines travel with the
+  // content: what produced it, and where it came from. Both are already on
+  // the task row — coverage_data holds url / template_id / depth / video_title
+  // on both the NotebookLM and the YouTube Zen paths — so this reads rather
+  // than invents.
+
+  const _PROV_TEMPLATES = {
+    "notas-estandar": ["📝", "Notas estándar"],
+    "transcripcion": ["🧠", "Reconstrucción de transcripción"],
+    "tutorial": ["⚙️", "Tutorial / How-To"],
+    "comparativa": ["🔀", "Comparativa"],
+    "glosario": ["📚", "Glosario / Términos"],
+    "resumen-ejecutivo": ["🎯", "Resumen ejecutivo"],
+    "por-temas": ["🧩", "Por temas"],
+    "faq": ["❓", "FAQ"],
+    "arquitectura-tecnica": ["🏗️", "Arquitectura técnica"],
+    "infografia-textual": ["📊", "Infografía textual"],
+  };
+
+  const _PROV_DEPTH = {
+    concise: "resumido",
+    standard: "estándar",
+    detailed: "detallado",
+  };
+
+  /**
+   * Identify the engine behind a finished task.
+   * The notebook format only exists on the native NotebookLM path; the zen
+   * formats only on YouTube Zen. `model_used` is the tiebreaker and the
+   * fallback when the format is unknown.
+   */
+  function _provenanceProvider(task, format) {
+    if (format === "ytd_zen") return { name: "OpenZen", emoji: "☁️" };
+    if (format === "markdown" || format === "md" || format === "html") {
+      return { name: "NotebookLM", emoji: "🧠" };
+    }
+    const model = String((task && task.model_used) || "");
+    if (/zen|openzen/i.test(model)) return { name: "OpenZen", emoji: "☁️" };
+    if (/notebook/i.test(model)) return { name: "NotebookLM", emoji: "🧠" };
+    return null;
+  }
+
+  /**
+   * Build the two provenance lines for a generated block.
+   *
+   * @returns {{chip:?string, link:?string, url:string, provider:?object}}
+   *   chip — "🧠 NotebookLM · 📝 Notas estándar · 🎯 detallado"
+   *   link — "[Título del vídeo](https://…)" or null when there is no URL
+   */
+  function _provenance(task, format) {
+    const cov = (task && task.coverage_data) || {};
+    const provider = _provenanceProvider(task, format);
+    const url = cov.video_url || cov.url || "";
+
+    if (provider) {
+      const tpl = cov.template_id && _PROV_TEMPLATES[cov.template_id];
+      const tplLabel = tpl ? `${tpl[0]} ${tpl[1]}` : "📄 Por defecto";
+      const depth = _PROV_DEPTH[cov.depth] || cov.depth || "estándar";
+      var chip = `${provider.emoji} ${provider.name} · ${tplLabel} · 🎯 ${depth}`;
+    } else {
+      var chip = null;
+    }
+
+    var link = null;
+    if (url) {
+      const title = (cov.video_title || cov.title || "").trim() || "Vídeo de origen";
+      // Guard against a title that would break out of the markdown link
+      link = `[${title.replace(/[[\]]/g, "")}](${url})`;
+    }
+    return { chip: chip, link: link, url: url, provider: provider };
+  }
+
+  /**
+   * Render the provenance as the markdown header that opens a generated block.
+   *
+   * Option A (the user's choice): both lines live INSIDE the block, as a
+   * blockquote, so they travel with the content and disappear when the block is
+   * deleted. Two separate blocks above it would have put 2 extra rows into the
+   * tree for every generation — 80 rows on a 40-chunk course.
+   *
+   * Returns "" when there is nothing worth saying (a PDF or an unknown
+   * provider), so the block content is left exactly as generated.
+   */
+  function _provenanceHeader(task, format) {
+    const p = _provenance(task, format);
+    const lines = [];
+    if (p.chip) lines.push(`> ${p.chip}`);
+    if (p.link) lines.push(`> 🎬 ${p.link}`);
+    if (!lines.length) return "";
+    return lines.join("\n") + "\n\n";
+  }
+
   // ─── Content success callback ──────────────────────────────────
   async function _onContentSuccess(task, blockId, topicId, format, courseIdHint) {
-    const courseId = courseIdHint
-      || (typeof STATE !== "undefined" && STATE.currentCourseId)
-      || "";
+    // Resolve the owning course from the topic when the caller has no hint:
+    // the zen queue inserts long after enqueue, so STATE.currentCourseId is
+    // the course open *now*, which is often a different one -> 404 on insert.
+    const courseId = await _resolveCourseIdForTopic(topicId, courseIdHint);
     if (!courseId) {
       _showStatus(blockId, "❌ No hay curso activo", true);
       return;
     }
 
-    let blockType, label, emoji;
+    // Titles are left exactly as generated — no emoji prefix. The user asked for
+    // this: the 🎥 was a "this came from YouTube" marker they could delete by
+    // hand, and deleting it only made the sidebar's 📝 type icon reappear, so
+    // the icon they could remove was trading places with the one they could
+    // not. The block's origin is recorded in the content instead (see
+    // _provenance), which travels with the block and can be edited.
+    let blockType, label;
     if (format === "markdown" || format === "md") {
-      blockType = "markdown"; label = "NotebookLM"; emoji = "📚";
+      blockType = "markdown"; label = "NotebookLM";
+    } else if (format === "ytd_zen") {
+      // Phase 8 — youtube-zen queue. Must be handled explicitly: without it
+      // it falls through to the generic branch and the block is titled
+      // "Markdown", hiding which tool produced it.
+      blockType = "markdown"; label = "YouTube Zen";
     } else if (format === "html") {
-      blockType = "content"; label = "NotebookLM HTML"; emoji = "📚";
+      blockType = "content"; label = "NotebookLM HTML";
     } else if (format === "audio") {
-      blockType = "content"; label = "Audio"; emoji = "🎵";
+      blockType = "content"; label = "Audio";
     } else if (format === "infographic") {
-      blockType = "content"; label = "Infografía"; emoji = "📊";
+      blockType = "content"; label = "Infografía";
     } else if (format === "knowledge_pipeline") {
-      blockType = "markdown"; label = "Gen. Contenido"; emoji = "🧠";
+      blockType = "markdown"; label = "Gen. Contenido";
     } else {
-      blockType = "markdown"; label = "Markdown"; emoji = "🤖";
+      blockType = "markdown"; label = "Markdown";
     }
 
-    let sourceTitle = label;
-    try {
-      const list = await window.App.CoursesAPI.fetchCourses();
-      const course = (list || []).find((c) => c.id === courseId) || {};
-      const sourceBlock = (course.blocks || []).find((b) => b.id === blockId);
-      if (sourceBlock && sourceBlock.title) {
-        sourceTitle = _cleanBlockTitle(sourceBlock.title) || label;
+    // Title the block after WHAT WAS GENERATED, not after the generic tool
+    // name. See _blockTitleForTask for the preference order.
+    const sourceTitle = await _blockTitleForTask(task, courseId, blockId, label);
+
+    // ── por_tema → one markdown block per `## ` section ──────────────
+    // v2 only split for the Knowledge Pipeline and YouTube Zen formats:
+    //     if ((isKp || format === "ytd_zen") && task.coverage_data?.mode === "por_tema")
+    // The NotebookLM YouTube endpoint sends format "markdown", so once #13 gave
+    // that dialog the real per-topic mode, the mode arrived and was ignored —
+    // a "por tema" run inserted one block with every section inside it. The
+    // format check was the gate, and the gate was never widened.
+    //
+    // The mode itself was also being lost before it got this far: the worker
+    // rewrote coverage_data with just {video_title, video_url}, wiping the
+    // `mode` that create_youtube_md_task had stored. See _merge_coverage in
+    // backend/ai/notebooklm/youtube.py.
+    if (_isPorTemaTask(task, format)) {
+      const sections = _parsePorTemaSections(task.result_content || "");
+      if (sections.length > 0) {
+        try {
+          for (let i = 0; i < sections.length; i++) {
+            // Every section carries the header, not just the first. They all
+            // come from one task, but a section is a standalone block once it
+            // is in the tree: dragged somewhere else, or read on its own, it
+            // should still say what produced it.
+            await _addBlockAfterSource(courseId, blockId, {
+              type: "markdown",
+              title: sections[i].title,
+              content: _provenanceHeader(task, format) + sections[i].body,
+              topic_id: topicId,
+            }, i);
+          }
+          window.App.CoursesAPI.clearDetailCache(courseId);
+          window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
+            detail: { courseId, topicId }
+          }));
+          _showStatus(blockId, `✅ ${sections.length} bloques insertados en el tema`);
+        } catch (err) {
+          console.error("[AI] por_tema insert failed:", err);
+          _showStatus(blockId, `❌ Error al crear bloques desde el contenido: ${err.message}`, true);
+        }
+        return; // do not also insert the whole thing as one block
       }
-    } catch { /* fallback to label */ }
+      console.warn("[AI] por_tema: no `##` sections parsed, falling back to one block");
+    }
 
     let blockContent = task.result_content || "";
     if (format === "audio") {
@@ -473,48 +989,180 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       blockContent = `<img src="${blockContent.replace(/"/g, "&quot;")}" style="max-width:100%;height:auto;border-radius:8px;">`;
     }
 
+    // Provenance opens the markdown block. Guarded on blockType: audio and
+    // infographic content is a bare <audio>/<img> tag, and a blockquote in
+    // front of it would either be stripped by the sanitiser or show as
+    // literal text above the media.
+    if (blockType === "markdown") {
+      blockContent = _provenanceHeader(task, format) + blockContent;
+    }
+
     try {
       const newId = await _addBlockAfterSource(courseId, blockId, {
         type: blockType,
-        title: `${emoji} ${sourceTitle}`,
+        title: sourceTitle,
         content: blockContent,
         topic_id: topicId,
       });
-      _showStatus(blockId, `✅ ${label} generado`, true);
       // Trigger the v3 re-render event so the block shows immediately.
       window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
         detail: { courseId, topicId }
       }));
+      // The result is in the tree now, so the "generado" banner has done its
+      // job. It used to be left up (persistent) until the user re-rendered
+      // the screen by hand, sitting under the very block it was announcing.
+      _showStatus(blockId, `✅ ${label} generado`, true);
+      setTimeout(() => _clearStatus(blockId), 4000);
       return newId;
     } catch (err) {
       console.error("[AI] insert block failed:", err);
-      _showStatus(blockId, "❌ Error al guardar el bloque", true);
+      // Surface the real reason: a generic "Error al guardar el bloque" sent
+      // debugging this through the UI nowhere.
+      const why = (err && (err.message || err.statusText)) || "error desconocido";
+      _showStatus(blockId, `❌ Error al guardar: ${why}`, true);
     }
   }
 
+  // ─── clearStatus(blockId) — drop a status line immediately ─────
+  // `_showStatus(..., true)` marks a message persistent so it survives long
+  // enough to be read. For a generation result that outlives its usefulness:
+  // the new block is in, the tree has it, and the banner is now just in the
+  // way until the user re-renders something by hand.
+  function _clearStatus(blockId) {
+    const container = document.querySelector(`[data-ai-status="${blockId}"]`);
+    if (!container) return;
+    clearTimeout(container._sfStatusTimer);
+    container._sfStatusTimer = null;
+    container.textContent = "";
+    container.style.display = "none";
+  }
+
+  // ─── blockTitleForTask(task, blockId, fallback) ──────────────
+  // A generated block used to be titled after whatever it was generated FROM,
+  // which for a launch from the topic toolbar is no block at all — so the user
+  // got "🤖 NotebookLM" and had to open every block to tell them apart.
+  //
+  // Prefer, in order:
+  //   1. the source video title the YouTube worker already stored in
+  //      coverage_data (authoritative, and free — no extra round trip);
+  //   2. the first markdown H1 of the generated content, which is what the
+  //      model was told to lead with;
+  //   3. the caller's fallback.
+  async function _blockTitleForTask(task, courseId, blockId, fallback) {
+    const content = (task && task.result_content) || "";
+
+    // 1. video title from the task row
+    const coverage = task && task.coverage_data;
+    if (coverage && typeof coverage === "object") {
+      const vTitle = _cleanBlockTitle(coverage.video_title || "");
+      if (vTitle) return vTitle;
+    }
+
+    // 2. first H1 / H2 in the generated markdown
+    const heading = content.match(/^\s{0,3}#{1,2}\s+(.+?)\s*#*\s*$/m);
+    if (heading) {
+      const h = _cleanBlockTitle(heading[1]);
+      if (h) return h;
+    }
+
+    // 3. fall back to the source block's title, then the generic label
+    try {
+      const list = await window.App.CoursesAPI.fetchCourses();
+      const course = (list || []).find((c) => c.id === courseId) || {};
+      const sourceBlock = (course.blocks || []).find((b) => b.id === blockId);
+      if (sourceBlock && sourceBlock.title) {
+        const t = _cleanBlockTitle(sourceBlock.title);
+        if (t) return t;
+      }
+    } catch { /* fallback below */ }
+
+    return fallback;
+  }
+
   // ─── Test success callback ─────────────────────────────────────
+  // The generated test is a JSON array of {question, options, correct,
+  // explanation}. It used to be dropped verbatim into a `content` block, so
+  // the user got a wall of raw JSON instead of a test: only `exercise` blocks
+  // are rendered by App.QuizEmbed, and that reads the questions from
+  // quiz_questions. So: create an exercise block with an EMPTY stem (the
+  // questions are the content) and import them where the renderer looks.
   async function _onTestSuccess(task, blockId, topicId) {
-    const courseId = (typeof STATE !== "undefined" && STATE.currentCourseId) || "";
+    const courseId = await _resolveCourseIdForTopic(topicId, null);
     if (!courseId) {
       _showStatus(blockId, "❌ No hay curso activo", true);
       return;
     }
-    const raw = task.result_content || "";
+
+    let questions = [];
     try {
-      const newId = await _addBlockAfterSource(courseId, blockId, {
-        type: "content",
-        title: `❓ Test`,
-        content: raw,
+      const parsed = JSON.parse(task.result_content || "[]");
+      questions = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+    } catch {
+      _showStatus(blockId, "❌ No se pudo interpretar el test generado", true);
+      return;
+    }
+    // Drop anything the quiz API would reject instead of failing the import.
+    const usable = questions.filter(
+      (q) => q && q.question && Array.isArray(q.options) && q.options.length >= 2
+    );
+    if (!usable.length) {
+      _showStatus(blockId, "❌ El test generado no tiene preguntas válidas", true);
+      return;
+    }
+
+    // Name the block after its source, like v2 did.
+    let sourceTitle = "Test";
+    try {
+      const list = await window.App.CoursesAPI.fetchCourses();
+      const course = (list || []).find((c) => String(c.id) === String(courseId)) || {};
+      const src = (course.blocks || []).find((b) => String(b.id) === String(blockId));
+      if (src && src.title) sourceTitle = _cleanBlockTitle(src.title) || "Test";
+    } catch { /* fall back to "Test" */ }
+
+    let newId;
+    try {
+      newId = await _addBlockAfterSource(courseId, blockId, {
+        type: "exercise",
+        title: `❓ ${sourceTitle}`,
+        content: "",   // no JSON as stem — QuizEmbed paints the questions
         topic_id: topicId,
       });
-      _showStatus(blockId, "✅ Test generado", true);
-      window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
-        detail: { courseId, topicId }
-      }));
-      return newId;
     } catch (err) {
-      _showStatus(blockId, "❌ Error al guardar el test", true);
+      _showStatus(blockId, `❌ Error al crear el bloque: ${err.message || err}`, true);
+      return;
     }
+
+    try {
+      const res = await window.API.post("/quiz/questions/bulk", {
+        block_id: newId,
+        course_id: Number(courseId),
+        topic_id: topicId ? Number(topicId) : null,
+        replace: true,
+        questions: usable,
+      });
+      const inserted = (res && res.inserted) || usable.length;
+      const skipped = usable.length - inserted;
+      _showStatus(
+        blockId,
+        skipped
+          ? `✅ Test: ${inserted} preguntas (${skipped} descartadas)`
+          : `✅ Test generado (${inserted} preguntas)`,
+        true
+      );
+    } catch (err) {
+      // The block exists but has no questions: say so instead of claiming
+      // the test is ready — QuizEmbed would render an empty quiz.
+      _showStatus(
+        blockId,
+        `⚠️ Bloque creado, pero falló la importación de preguntas: ${err.message || err}`,
+        true
+      );
+    }
+
+    window.dispatchEvent(new CustomEvent("studyflow:blocks-changed", {
+      detail: { courseId, topicId }
+    }));
+    return newId;
   }
 
   // ─── Public exports ────────────────────────────────────────────
@@ -531,9 +1179,11 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     },
     // Internal callbacks (used by ai-tasks.js streaming poll)
     _showStatus,
+    _clearStatus,
     _onContentSuccess,
     _onTestSuccess,
     _addBlockAfterSource,
+    _provenance,
   };
 })());
 

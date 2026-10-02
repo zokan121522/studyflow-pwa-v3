@@ -441,6 +441,38 @@
   gap: 8px;
   margin-top: 10px;
 }
+
+/* ── Chunk recovery bar ─────────────────────────────────────────────
+   Shown when a YouTubeZen detailed chunk fails: the user can retry just
+   that chunk, skip it and keep the healthy ones, or discard the task. */
+.sf-ai-chunkbar {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(224, 138, 44, 0.5);
+  background: rgba(224, 138, 44, 0.10);
+}
+.sf-ai-chunkbar-msg { font-size: 12.5px; line-height: 1.5; color: var(--text, #e8eefc); }
+.sf-ai-chunkbar-msg strong { color: #f0b464; }
+.sf-ai-chunkbar-tries { color: var(--text-muted, #93a0b8); font-weight: 500; }
+.sf-ai-chunkbar-reason {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted, #93a0b8);
+  word-break: break-word;
+}
+.sf-ai-chunkbar-kept {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7bc98f;
+}
+.sf-ai-chunkbar-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sf-ai-chunkbar .sf-ai-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .sf-ai-actions-right { display: flex; align-items: center; gap: 10px; }
 .sf-ai-timer { font-size: 12px; color: var(--text-muted, #93a0b8); }
 .sf-ai-btn {

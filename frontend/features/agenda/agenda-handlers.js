@@ -86,15 +86,9 @@
         if (main) main.classList.toggle("sf-focus-mode");
       }
     });
-    var mainEl = document.querySelector(".main");
-    if (mainEl) {
-      mainEl.addEventListener("dblclick", function (e) {
-        if (e.target.closest("input, textarea, .s-card, .sc-sub")) return;
-        e.currentTarget.classList.toggle("sf-focus-mode");
-      });
-    }
+// dblclick eliminado a petición del usuario (no le gustaba)
 
-    // Category overlay
+      // Category overlay
     document.getElementById("category-overlay")?.addEventListener("click", function (e) {
       if (e.target === e.currentTarget) closeCategoryOverlay();
     });

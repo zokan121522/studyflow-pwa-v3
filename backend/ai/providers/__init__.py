@@ -1,16 +1,18 @@
 """AI providers package — NotebookLM provider (and registry)."""
 
 from ai.providers.notebooklm_provider import NotebookLMProvider
+from ai.providers.opencode_provider import OpenCodeProvider
 
 
 # ─── Registry ───────────────────────────────────────────────────────
 #
 # v3 note: v2 also registered "opencode-acp" (OpenZEN / OpenCode sidecar).
-# OpenZen is deferred in v3 until the OpenCode server infra exists
-# (nothing listens on :54321 locally) — it will be added to this registry
-# in its own sub-phase, keeping the exact v2 name "opencode-acp".
+# The OpenZen panel and its sidecar landed first (d382f55, aa2c925) and the
+# provider is now registered under the exact v2 name, so the deferred
+# sub-phase is closed.
 _PROVIDERS: dict[str, type] = {
     "notebooklm": NotebookLMProvider,
+    "opencode-acp": OpenCodeProvider,
 }
 
 
@@ -18,8 +20,7 @@ def get_provider(name: str = "notebooklm", **kwargs) -> object:
     """Resolve an AI provider by name.
 
     Args:
-        name: Provider key (``"notebooklm"`` for now; ``"opencode-acp"``
-              arrives with OpenZen).
+        name: Provider key (``"notebooklm"`` or ``"opencode-acp"``).
         **kwargs: Additional keyword arguments passed to the provider
                   constructor.
 

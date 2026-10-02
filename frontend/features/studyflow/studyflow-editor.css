@@ -146,6 +146,15 @@
   border-radius: 0 0 6px 6px;
   overflow: hidden;
   background: var(--bg);
+  /* The container owns the height, NOT the panes.
+     Both panes used to size themselves to the content, and since the preview
+     is a flex sibling it got stretched to the textarea's full height. With
+     both panes as tall as the document neither one ever overflowed, so the
+     editor↔preview scroll sync in attachLivePreview() had nothing to sync —
+     it was dead code on long notes. Capping the container gives each pane a
+     real scrollbar of its own, which is what makes the ratio-based sync
+     meaningful. Viewport-relative so it adapts to the window. */
+  height: clamp(320px, 58vh, 900px);
 }
 .md-edit-split .md-editor {
   flex: 1;
@@ -153,8 +162,12 @@
   border: none !important;
   border-right: 1px solid var(--border) !important;
   border-radius: 0 !important;
-  resize: vertical;
-  min-height: 260px;
+  /* The container resizes, not the textarea — a textarea with resize:vertical
+     grows the whole split again and re-breaks the fixed height above. */
+  resize: none;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
   box-sizing: border-box;
   padding: 10px 12px;
   background: var(--bg);
@@ -170,8 +183,11 @@
 .md-edit-split .md-preview {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 600px;
+  /* Unbounded: the container's clamp() is the cap now. */
+  max-height: none;
   padding: 10px 14px;
   box-sizing: border-box;
   background: var(--surface);
@@ -291,11 +307,18 @@
 @media (max-width: 720px) {
   .md-edit-split {
     flex-direction: column;
+    /* Stacked panes get half the height each, so both keep their own
+       scrollbar and the sync stays useful. A single tall container would
+       put the preview off-screen below the textarea. */
+    height: clamp(420px, 70vh, 900px);
   }
   .md-edit-split .md-editor {
     border-right: none !important;
     border-bottom: 1px solid var(--border) !important;
-    min-height: 160px;
+    height: 50%;
+  }
+  .md-edit-split .md-preview {
+    height: 50%;
   }
   .md-color-panel { right: auto; left: 0; }
 }

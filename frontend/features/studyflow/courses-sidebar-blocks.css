@@ -38,6 +38,13 @@
 .course-item:hover > .drag-handle,
 .topic-item:hover > .topic-header > .drag-handle,
 .block-item:hover > .drag-handle { opacity: .85; }
+/* .course-item is align-items: flex-start (see courses.css) while its
+   topic/block siblings centre their grip in a one-line flex row. Without
+   this nudge the 10px grip sits flush with the top of the ~19.5px title
+   line and reads as slightly too high. Scoped to the course card on
+   purpose: a global margin-top would push the already-centred grips in
+   .topic-header and .block-item out of alignment. */
+.course-item > .drag-handle { margin-top: 4px; }
 .drag-handle:hover { opacity: 1 !important; }
 .drag-handle:active { cursor: grabbing; }
 .dragging > .drag-handle,

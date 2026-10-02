@@ -23,11 +23,13 @@ from routes.agenda_state import bp as agenda_state_bp
 from routes.agenda_categories import bp as agenda_categories_bp
 from routes.quick_notes import bp as quick_notes_bp
 from routes.calendar import bp as calendar_bp
+from calendar_import.routes import bp as calendar_import_bp
 from routes.habits import bp as habits_bp
 from routes.courses import bp as courses_bp
 from routes.courses_aliases import bp as courses_aliases_bp
 from routes.blocks import bp as blocks_bp
 from routes.pdf import bp as pdf_bp
+from routes.pdf_md2pdf import bp as pdf_md2pdf_bp
 from routes.quiz import bp as quiz_bp
 from routes.addons import bp as addons_bp
 from routes.todos import bp as todos_bp
@@ -39,6 +41,7 @@ from routes.notebooklm_settings import bp as notebooklm_settings_bp
 from routes.notebooklm_login import bp as notebooklm_login_bp
 from routes.ai import bp as ai_bp
 from routes.notebooklm_content import bp as notebooklm_content_bp
+from routes.yt_meta import bp as yt_meta_bp
 from routes.backup import bp as backup_bp
 
 
@@ -71,12 +74,13 @@ def _register_blueprints(app: Flask) -> None:
     blueprints = [
         health_bp, auth_bp, agenda_bp, agenda_sessions_bp,
         agenda_state_bp, agenda_categories_bp,
-        quick_notes_bp, calendar_bp,
+        quick_notes_bp, calendar_bp, calendar_import_bp,
         habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
-        pdf_bp, quiz_bp, addons_bp,
+        pdf_bp, pdf_md2pdf_bp, quiz_bp, addons_bp,
         todos_bp, audio_bp, tts_bp, settings_bp,
         notebooklm_settings_bp, notebooklm_login_bp,
         ai_bp, notebooklm_content_bp, backup_bp,
+        yt_meta_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp, url_prefix='/api')
@@ -106,6 +110,35 @@ def _register_error_handlers(app: Flask) -> None:
 
 # Create app instance for gunicorn
 app = create_app()
+
+
+def _start_calendar_scheduler() -> None:
+    """Kick off the daily calendar import, once per worker process.
+
+    Delayed 60 s by the scheduler itself so it never competes with boot.
+    Every gunicorn worker runs this, which is why the job takes an advisory
+    lock inside: only one of them actually imports.
+    """
+    import database as db
+
+    from calendar_import.scheduler import start
+    from calendar_import.window import JOB_DAYS
+
+    def conn_factory():
+        return db.get_connection()
+
+    try:
+        start(conn_factory, JOB_DAYS)
+    except Exception:
+        # The app must still serve even if scheduling cannot start.
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "calendar_scheduler_start_failed"
+        )
+
+
+_start_calendar_scheduler()
 
 if __name__ == '__main__':
     # Development only

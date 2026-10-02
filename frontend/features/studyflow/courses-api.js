@@ -14,18 +14,48 @@ window.App.CoursesAPI = (function () {
   "use strict";
 
   // ── Caches (per-session; reset on hard reload) ────────────────
+  // TTL bounds how stale a cached read can ever be. The mutation helpers
+  // below all call clearDetailCache(), but plenty of writes never pass
+  // through this module: the knowledge-pipeline skill writes straight to
+  // PostgreSQL over SSH, the PDF/SCORM importer below uses a raw fetch, and
+  // a second tab can change anything. Without a TTL those reads stay stale
+  // for the rest of the session and the only cure is a full page reload —
+  // which is exactly the "I have to refresh before I can edit it" report.
+  const CACHE_TTL_MS = 4000;
   let _listCache = null;
+  let _listCacheAt = 0;
   const _detailCache = {};
+  const _detailCacheAt = {};
+
+  const _fresh = (at) => (Date.now() - at) < CACHE_TTL_MS;
+  let _wiredRevalidate = false;
+
+  // Coming back to the tab is the most likely moment for data to have
+  // changed elsewhere (another tab, a terminal running the pipeline, a
+  // generation that finished while the user was away). Re-reading then is
+  // cheap and removes the "reload to make it appear" trap.
+  function _wireRevalidateOnFocus() {
+    if (_wiredRevalidate || typeof window === "undefined") return;
+    _wiredRevalidate = true;
+    const drop = () => {
+      if (document.visibilityState === "hidden") return;
+      clearDetailCache();
+    };
+    window.addEventListener("focus", drop);
+    window.addEventListener("visibilitychange", drop);
+  }
 
   // ── fetchCourses(force) — List with topics[] ─────────────────
   async function fetchCourses(force) {
-    if (!force && _listCache) return _listCache;
+    _wireRevalidateOnFocus();
+    if (!force && _listCache && _fresh(_listCacheAt)) return _listCache;
     try {
       const data = await API.get("/courses");
       _listCache = (data && data.courses) || [];
     } catch (_) {
       _listCache = [];
     }
+    _listCacheAt = Date.now();
     return _listCache;
   }
 
@@ -33,7 +63,10 @@ window.App.CoursesAPI = (function () {
   // Returns { id, title, …, topics: [{ id, title, …, blocks: [...] }] }
   // Topics are hydrated with their ordered blocks (S3+).
   async function fetchCourseDetail(courseId, force) {
-    if (!force && _detailCache[courseId]) return _detailCache[courseId];
+    _wireRevalidateOnFocus();
+    if (!force && _detailCache[courseId] && _fresh(_detailCacheAt[courseId])) {
+      return _detailCache[courseId];
+    }
     try {
       const data = await API.get(`/courses/${courseId}`);
       const course = (data && data.course) || { topics: [], blocks: [] };
@@ -42,6 +75,7 @@ window.App.CoursesAPI = (function () {
         blocks: [], ...t,
       }));
       _detailCache[courseId] = course;
+      _detailCacheAt[courseId] = Date.now();
       return course;
     } catch (_) {
       return { topics: [], blocks: [] };
@@ -52,9 +86,15 @@ window.App.CoursesAPI = (function () {
   // After mutations that change structure, drop caches so the next
   // fetchCourses / fetchCourseDetail hits the network.
   function clearDetailCache(courseId) {
-    if (courseId != null) delete _detailCache[courseId];
-    else Object.keys(_detailCache).forEach((k) => delete _detailCache[k]);
+    if (courseId != null) {
+      delete _detailCache[courseId];
+      delete _detailCacheAt[courseId];
+    } else {
+      Object.keys(_detailCache).forEach((k) => delete _detailCache[k]);
+      Object.keys(_detailCacheAt).forEach((k) => delete _detailCacheAt[k]);
+    }
     _listCache = null;
+    _listCacheAt = 0;
     if (typeof STATE !== "undefined") {
       STATE._expandedCourseBlocks = [];
       STATE._expandedCourseTopics = [];

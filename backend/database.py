@@ -28,11 +28,27 @@ def init_db() -> None:
         cursor_factory=RealDictCursor
     )
 
-    # Create tables
-    with get_db() as conn:
-        with conn.cursor() as cur:
+    # Create tables (serialised across workers)
+    # We need a connection before the pool is returned; use a one-off connection
+    # to hold the advisory lock while creating/migrating tables.
+    conn = psycopg2.connect(dsn=database_url, cursor_factory=RealDictCursor)
+    try:
+        cur = conn.cursor()
+        try:
+            try:
+                cur.execute("SELECT pg_advisory_lock(0)")
+            except Exception:
+                pass
             _create_tables(cur)
-        conn.commit()
+            conn.commit()
+        finally:
+            try:
+                cur.execute("SELECT pg_advisory_unlock(0)")
+            except Exception:
+                pass
+            cur.close()
+    finally:
+        conn.close()
 
     # Seed local user (id=1) for single-user mode
     _seed_local_user()
@@ -40,6 +56,15 @@ def init_db() -> None:
     # Sub-phase SA — seed the addon catalog (idempotent upsert).
     from addons_seed import seed_addon_catalog
     seed_addon_catalog()
+
+    # Phase 9 — calendar import notices. The DDL lives in the feature
+    # package; database.py is already over the size limit and must not grow
+    # a table definition (see Phase 9 out-of-scope).
+    from calendar_import.schema import create_calendar_import_tables
+    with get_db() as c2:
+        with c2.cursor() as cur2:
+            create_calendar_import_tables(cur2)
+        c2.commit()
 
 
 def _seed_local_user() -> None:
@@ -209,17 +234,42 @@ def _create_ai_usage_log(cur) -> None:
     task_type for the daily-limit counters shown in the ✨ toolbar.
     """
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS ai_usage_log (
-            id          SERIAL PRIMARY KEY,
-            user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            task_type   TEXT DEFAULT '',
-            source      TEXT DEFAULT '',
-            model_id    TEXT DEFAULT '',
-            provider_id TEXT DEFAULT '',
-            tokens      INTEGER DEFAULT 0,
-            cost        REAL DEFAULT 0,
-            created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        )
+              CREATE TABLE IF NOT EXISTS ai_usage_log (
+                  id          SERIAL PRIMARY KEY,
+                  user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                  task_type   TEXT DEFAULT '',
+                  source      TEXT DEFAULT '',
+                  model_id    TEXT DEFAULT '',
+                  provider_id TEXT DEFAULT '',
+                  tokens      INTEGER DEFAULT 0,
+                  cost        REAL DEFAULT 0,
+                  created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                  -- audio.py registra el consumo de TTS y v2_domains.py el de
+                  -- OpenZen. Ambas escribían columnas que no existían aquí, así
+                  -- que el INSERT fallaba al final de la tarea —con el audio ya
+                  -- generado— y el consumo se perdía.
+                  task_id            TEXT,
+                  duration           TEXT,
+                  input_tokens       INTEGER DEFAULT 0,
+                  output_tokens      INTEGER DEFAULT 0,
+                  reasoning_tokens   INTEGER DEFAULT 0,
+                  cache_read_tokens  INTEGER DEFAULT 0,
+                  cache_write_tokens INTEGER DEFAULT 0,
+                  total_tokens       INTEGER DEFAULT 0
+              )
+          """)
+    # ALTER por si la tabla ya existía de una versión anterior: el
+    # CREATE TABLE de arriba no cambia nada si la tabla está creada.
+    cur.execute("""
+        ALTER TABLE ai_usage_log
+            ADD COLUMN IF NOT EXISTS task_id            TEXT,
+            ADD COLUMN IF NOT EXISTS duration           TEXT,
+            ADD COLUMN IF NOT EXISTS input_tokens       INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS output_tokens      INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS reasoning_tokens   INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS cache_read_tokens  INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS total_tokens       INTEGER DEFAULT 0
     """)
     cur.execute(
         "CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date "
@@ -550,6 +600,31 @@ _TABLE_DDL = [
     )
     """,
     """
+    -- S5 (quíntesis del ecosistema Quiz v2): pool de falladas.
+    -- v2 lo guardaba en el sidecar con claves TEXT (topic/tpl = títulos),
+    -- sin block_id, lo que dejó 12 filas huérfanas al migrar (Engram
+    -- migration/v2-quiz-history-deferred). Aquí se ancla a question_id,
+    -- que es lo único estable, y se heredan course/topic/block de la
+    -- pregunta (igual que quiz_results) para no depender de joins.
+    --
+    -- resolved_at en vez de DELETE: v2 borraba la fila al acertar, lo que
+    -- destruía el histórico. Acertar la marca resuelta (sale de la pool,
+    -- se puede reabrir) y el badge "falladas" conserva la trazabilidad.
+    CREATE TABLE IF NOT EXISTS quiz_errors (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        question_id INTEGER NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+        block_id INTEGER REFERENCES blocks(id) ON DELETE CASCADE,
+        wrong_count INTEGER NOT NULL DEFAULT 1,
+        last_wrong_answer INTEGER,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        last_failed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS todos (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -666,6 +741,17 @@ _POST_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_blocks_course ON blocks(course_id)",
     "CREATE INDEX IF NOT EXISTS idx_blocks_topic_order ON blocks(topic_id, order_index)",
     "CREATE INDEX IF NOT EXISTS idx_blocks_user_course ON blocks(user_id, course_id)",
+    # Pool de falladas. El UNIQUE parcial es la garantía de integridad que
+    # le faltaba a v2 (append-only duplicaba la misma fallada cada intento):
+    # como mucho UNA fila abierta por pregunta. Por eso el ON CONFLICT del
+    # upsert debe repetir el predicado `WHERE resolved_at IS NULL`.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_quiz_errors_open "
+    "ON quiz_errors(user_id, question_id) WHERE resolved_at IS NULL",
+    # Índice de la consulta que la UI ejecuta siempre: la pool abierta.
+    "CREATE INDEX IF NOT EXISTS idx_quiz_errors_open "
+    "ON quiz_errors(user_id, last_failed_at DESC) WHERE resolved_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS idx_quiz_errors_block "
+    "ON quiz_errors(block_id, resolved_at)",
 ]
 
 

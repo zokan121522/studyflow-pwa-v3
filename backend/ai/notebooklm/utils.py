@@ -30,6 +30,8 @@ COOKIE_DIR = os.environ.get(
     os.path.join(os.path.expanduser("~"), ".notebooklm"),
 )
 ACTIVE_FILE = os.path.join(COOKIE_DIR, "active.txt")
+PROFILES_DIR = os.path.join(COOKIE_DIR, "profiles")
+STORAGE_FILENAME = "storage_state.json"
 
 
 def _new_task_id() -> str:
@@ -41,23 +43,138 @@ def _new_task_id() -> str:
     return str(uuid.uuid4())
 
 
-def get_active_profile() -> str | None:
-    """Read the active profile email from active.txt.
+def _local_part(email: str) -> str:
+    """`zokan121522@gmail.com` → `zokan121522`.
 
-    Returns:
-        The email string, or None if no active profile is set
-        (→ falls back to global cookie file).
+    Profile dirs are written from the upload/export path with the bare
+    local-part while active.txt holds the full address, so an exact match
+    is not available when resolving. Comparing local parts is what lets
+    `active.txt` find its own directory.
+    """
+    return email.strip().split("@", 1)[0].lower()
+
+
+def _storage_ok(directory: str) -> bool:
+    """True when `directory` holds a non-empty storage_state.json.
+
+    A zero-byte file is not a session: it is what an interrupted login left
+    behind, and passing it to the SDK fails later with a confusing error.
     """
     try:
-        raw = Path(ACTIVE_FILE).read_text().strip()
-        if raw:
-            logger.info("[NotebookLM] Active profile: %s", raw)
-        else:
-            logger.warning("[NotebookLM] active.txt is empty — falling back to global cookies")
-        return raw if raw else None
-    except (FileNotFoundError, OSError):
-        logger.warning("[NotebookLM] active.txt not found at %s — falling back to global cookies", ACTIVE_FILE)
+        storage = Path(PROFILES_DIR) / directory / STORAGE_FILENAME
+        return storage.is_file() and storage.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def _profile_has_cookies(profile: str | None) -> bool:
+    """True when `profile` resolves to a directory with a usable session."""
+    return _resolve_profile_dir(profile) is not None if profile else False
+
+
+def _resolve_profile_dir(profile: str) -> str | None:
+    """Directory for `profile` **that actually holds a session**.
+
+    Two wrinkles this absorbs, both seen on the user's server:
+
+      * ``active.txt`` holds a full address while the directory created by
+        the upload/export path is named after the local part
+        (``zokan121522`` vs ``zokan121522@gmail.com``).
+      * BOTH directories can exist, and the exact-match one can be the empty
+        leftover of an interrupted login. So candidates are tried in order
+        (exact name, then local-part match) and the first one **with
+        cookies** wins; a name that resolves to an empty dir is not a match.
+
+    Returns the directory name as it exists on disk, or None.
+    """
+    if not profile:
         return None
+    try:
+        entries = [p.name for p in Path(PROFILES_DIR).iterdir() if p.is_dir()]
+    except OSError:
+        return None
+
+    wanted = profile.strip().lower()
+    candidates = [wanted] if wanted in entries else []
+    wanted_local = _local_part(wanted)
+    candidates += [
+        name for name in entries
+        if name != wanted and _local_part(name) == wanted_local
+    ]
+
+    for name in candidates:
+        if _storage_ok(name):
+            return name
+    return None
+
+
+def _connected_profiles() -> list[str]:
+    """Every profile under profiles/ with a usable session, sorted."""
+    try:
+        entries = sorted(p.name for p in Path(PROFILES_DIR).iterdir() if p.is_dir())
+    except OSError:
+        return []
+    return [name for name in entries if _profile_has_cookies(name)]
+
+
+def get_active_profile() -> str | None:
+    """Resolve which NotebookLM profile to authenticate as.
+
+    Resolution order, each step replacing a fallback that used to be silent:
+
+      1. ``active.txt`` — written when the user picks a profile. Resolved
+         through ``_resolve_profile_dir`` because the file holds a full
+         address while the directory may be named after the local part.
+      2. The only connected profile, when there is exactly one. This is the
+         case that bit the user on 2026-10-01: active.txt had gone missing
+         while a valid 15 KB session sat in the profiles dir, so every
+         generation fell through to an empty ``default/`` directory and
+         failed with "Storage file not found".
+      3. ``None`` — genuinely ambiguous, or nothing is connected. The log
+         says which, so the cause is diagnosable instead of a dead end.
+
+    Never returns a profile whose storage_state.json is missing or empty:
+    handing the SDK an empty session only moves the failure later.
+    """
+    raw = ""
+    try:
+        raw = Path(ACTIVE_FILE).read_text().strip()
+    except (FileNotFoundError, OSError):
+        logger.warning(
+            "[NotebookLM] active.txt not found at %s — resolving from profiles",
+            ACTIVE_FILE,
+        )
+
+    if raw:
+        directory = _resolve_profile_dir(raw)
+        if directory and _profile_has_cookies(directory):
+            logger.info("[NotebookLM] Active profile: %s", directory)
+            return directory
+        logger.warning(
+            "[NotebookLM] active.txt points at %s but no connected profile "
+            "matches it — ignoring it", raw,
+        )
+
+    connected = _connected_profiles()
+    if len(connected) == 1:
+        logger.info(
+            "[NotebookLM] active.txt unusable; single connected profile "
+            "recovered: %s", connected[0],
+        )
+        return connected[0]
+
+    if connected:
+        logger.warning(
+            "[NotebookLM] No usable active profile and %d connected profiles "
+            "%s — the caller must disambiguate (pick one in Ajustes)",
+            len(connected), connected,
+        )
+    else:
+        logger.warning(
+            "[NotebookLM] No active profile and no connected profiles — "
+            "the user must re-authenticate (subir cookies o script Chrome)",
+        )
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════

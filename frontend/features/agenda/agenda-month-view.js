@@ -102,15 +102,21 @@ window.App.AgendaMonthView = (function () {
     });
   }
 
-  // ── Fetch month data (delegates to API; uses /agenda/month?date=)
-  async function _loadMonthData(year, month) {
-    var monthStr = year + "-" + (month < 10 ? "0" + month : month) + "-01";
-    try {
-      return await API.get("/agenda/month?date=" + monthStr);
-    } catch (err) {
-      return { year: year, month: month, days: {} };
+// ── Fetch month data ────────────────────────────────────────────
+    // Uses /agenda/month/<y>/<m>/sessions, NOT /agenda/month?date=.
+    //
+    // The ?date= endpoint returns per-day counters only ({total,
+    // completed}) and no sessions array, which is why the month grid
+    // rendered empty: every cell got `sessions: []` from a dayData that
+    // had no sessions to give. The /sessions endpoint returns
+    // {date, day, sessions}, which is the shape the grid reads.
+    async function _loadMonthData(year, month) {
+      try {
+        return await API.get("/agenda/month/" + year + "/" + month + "/sessions");
+      } catch (err) {
+        return { year: year, month: month, days: {} };
+      }
     }
-  }
 
   // ── Render a placeholder shell before async month data arrives ──
   function _renderLoadingShell(el, year, month) {

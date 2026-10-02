@@ -14,7 +14,14 @@
 .tl-header-title { font-weight: 600; color: var(--text); }
 .tl-header-count { font-size: 10px; color: var(--text-muted); }
 
-.tl-body { display: flex; max-height: 60vh; overflow-y: auto; position: relative; }
+/* No max-height and no overflow-y here on purpose. Capping the timeline at
+     60vh put a second scroll box inside the page's own scroll, which showed
+     only 8.6 of the 24 hours: every session from 09:00 onwards sat below the
+     visible edge, crammed against the bottom, and the hour gutter — pinned
+     to the capped height — stopped at 08. Letting the grid take its natural
+     height (24 x 40px) means the page scrolls once, the hour labels stay
+     aligned with their rows by construction, and the whole day is visible. */
+.tl-body { display: flex; position: relative; }
 .tl-gutter { flex-shrink: 0; width: 44px; background: var(--surface); border-right: 1px solid var(--border); z-index: 1; }
 .tl-hour { display: flex; align-items: flex-start; justify-content: center; font-size: 10px; color: var(--text-muted); padding-top: 1px; border-bottom: 1px solid var(--border); }
 
@@ -24,7 +31,9 @@
 
 .tl-blocks { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .tl-block {
-  position: absolute; left: 4px; right: 4px; border-radius: 5px; cursor: grab; user-select: none;
+  /* left/width are set inline by the lane packer. Do not hard-code
+     left/right here or the lanes get overridden. */
+  position: absolute; left: 4px; width: calc(100% - 8px); border-radius: 5px; cursor: grab; user-select: none;
   border-left: 3px solid; pointer-events: auto; transition: box-shadow .12s; overflow: hidden;
   display: flex; align-items: stretch; min-height: 18px;
 }
@@ -75,7 +84,11 @@
 .tlw-day-num { display: block; font-size: 9px; color: var(--text-muted); margin-top: 1px; }
 .tlw-day-header.today .tlw-day-name { color: var(--primary); }
 
-.tlw-body { display: flex; max-height: 60vh; overflow-y: auto; position: relative; }
+/* Same reasoning as .tl-body above: a 60vh cap nested a second scroll box
+   inside the page's own scroll, cropping the day columns and squeezing the
+   hour gutter. .tlw-gutter already carries flex-shrink:0, so the labels now
+   stretch to the full week height instead of stopping mid-grid. */
+.tlw-body { display: flex; position: relative; }
 .tlw-gutter { flex-shrink: 0; width: 44px; background: var(--surface); border-right: 1px solid var(--border); z-index: 1; }
 
 .tlw-col { flex: 1; position: relative; min-width: 0; }
@@ -90,7 +103,14 @@
 .tlw-blocks { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
 
 .tlw-block {
-  position: absolute; left: 1px; right: 1px; border-radius: 3px; cursor: grab; user-select: none;
+  /* left/width come inline from the lane packer (shared/lane-packer.js):
+     left = index/total, width = 1/total. This used to be `left:1px;
+     right:1px`, which is full column width for every block, so two
+     sessions in the same hour occupied the identical rectangle and only
+     the last one in DOM order was visible. Do not reintroduce a static
+     left/width here — it would override the lanes. */
+  position: absolute; left: 1px; width: calc(100% - 2px); border-radius: 3px;
+  cursor: grab; user-select: none;
   border-left: 3px solid; pointer-events: auto; transition: box-shadow .12s; overflow: hidden;
   display: flex; align-items: stretch; min-height: 14px;
 }
@@ -143,11 +163,11 @@
 .tlm-week:last-child { border-bottom: none; }
 
 .tlm-cell {
-  min-height: 80px; padding: 3px 4px; cursor: pointer; position: relative;
-  border-right: 1px solid var(--border); background: var(--surface);
-  transition: background .12s; display: flex; flex-direction: column;
-  overflow: hidden;
-}
+    min-height: 110px; padding: 3px 4px; cursor: pointer; position: relative;
+    border-right: 1px solid var(--border); background: var(--surface);
+    transition: background .12s; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
 .tlm-cell:last-child { border-right: none; }
 .tlm-cell:hover { background: var(--surface-hover); }
 .tlm-cell.tlm-empty { cursor: default; background: var(--bg); }
@@ -157,7 +177,21 @@
 
 .tlm-day-num { font-size: 11px; font-weight: 500; color: var(--text-secondary); line-height: 1; margin-bottom: 2px; }
 
-.tlm-sessions { display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; }
+/* Days with more sessions than fit get their own scrollbar rather than
+     silently clipping — that was why a busy day looked empty. Auto (not
+     always-visible) so quiet cells show no scrollbar at all. */
+  .tlm-sessions {
+    display: flex; flex-direction: column; gap: 1px; flex: 1;
+    overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    overscroll-behavior: contain;
+  }
+  .tlm-sessions::-webkit-scrollbar { width: 5px; }
+  .tlm-sessions::-webkit-scrollbar-track { background: transparent; }
+  .tlm-sessions::-webkit-scrollbar-thumb {
+    background: var(--border); border-radius: 3px;
+  }
+  .tlm-sessions::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 .tlm-session {
   display: flex; align-items: center; gap: 3px; padding: 1px 3px; border-radius: 2px;

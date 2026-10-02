@@ -435,6 +435,94 @@ class QuizResult:
 
 
 @dataclass
+class QuizError:
+    """A question sitting in the failed pool (S5).
+
+    `resolved_at IS NULL` means "still to review". Answering it correctly
+    stamps `resolved_at` instead of deleting the row, so the history of
+    what was missed survives — v2 deleted it and lost the trail.
+    """
+
+    id: int
+    user_id: int
+    question_id: int
+    course_id: Optional[int] = None
+    topic_id: Optional[int] = None
+    block_id: Optional[int] = None
+    wrong_count: int = 1
+    last_wrong_answer: Optional[int] = None
+    resolved_at: Optional[datetime] = None
+    last_failed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    # Denormalised from the joined question so the pool view can render a
+    # row (and launch a practice session) without a second round-trip.
+    question: Optional[str] = None
+    options: List[str] = None
+    correct_answer: Optional[int] = None
+    explanation: Optional[str] = None
+    block_title: Optional[str] = None
+    course_title: Optional[str] = None
+    topic_title: Optional[str] = None
+
+    def __post_init__(self):
+        if self.options is None:
+            self.options = []
+
+    @property
+    def is_open(self) -> bool:
+        return self.resolved_at is None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'question_id': self.question_id,
+            'course_id': self.course_id,
+            'topic_id': self.topic_id,
+            'block_id': self.block_id,
+            'wrong_count': self.wrong_count,
+            'last_wrong_answer': self.last_wrong_answer,
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+            'last_failed_at': self.last_failed_at.isoformat() if self.last_failed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'is_open': self.is_open,
+            'question': self.question,
+            'options': self.options,
+            'correct_answer': self.correct_answer,
+            'explanation': self.explanation,
+            'block_title': self.block_title,
+            'course_title': self.course_title,
+            'topic_title': self.topic_title,
+        }
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> 'QuizError':
+        options = row.get('options')
+        if isinstance(options, str):
+            options = json.loads(options)
+        return cls(
+            id=row['id'],
+            user_id=row['user_id'],
+            question_id=row['question_id'],
+            course_id=row.get('course_id'),
+            topic_id=row.get('topic_id'),
+            block_id=row.get('block_id'),
+            wrong_count=row.get('wrong_count', 1),
+            last_wrong_answer=row.get('last_wrong_answer'),
+            resolved_at=row.get('resolved_at'),
+            last_failed_at=row.get('last_failed_at'),
+            created_at=row.get('created_at'),
+            question=row.get('question'),
+            options=options,
+            correct_answer=row.get('correct_answer'),
+            explanation=row.get('explanation'),
+            block_title=row.get('block_title'),
+            course_title=row.get('course_title'),
+            topic_title=row.get('topic_title'),
+        )
+
+
+@dataclass
 class Todo:
     id: int
     user_id: int
