@@ -174,24 +174,31 @@ def _length_instruction(length: str) -> str:
     """
     if length == "concise":
         return (
-            "Keep the output CONCISE: short paragraphs that still cover each "
-            "key idea in full sentences, up to 2 callouts per section, and "
-            "skip filler or repetition — but do NOT cut necessary explanations.\n"
+            "Keep the output TIGHT: 1-2 short paragraphs per section and at "
+            "most 2 callouts per section. Cover only the essential idea, in "
+            "complete sentences. Omit examples, repetition and optional "
+            "elaboration, but never leave a key idea unexplained and never "
+            "invent facts beyond the source.\n"
         )
     if length == "standard":
         return (
-            "Give the output FULL DEVELOPMENT: every section substantially "
-            "explained with complete sentences and concrete references to the "
-            "source, plus 2-3 callouts per section when the content supports "
-            "them. Do not leave any section as a stub — expand each idea "
-            "enough to stand alone.\n"
+            "Give BALANCED development: 2-3 paragraphs per section covering "
+            "each key idea with concrete references to the source, plus 2-3 "
+            "callouts per section when the content supports them. Every "
+            "section should stand on its own, but do not pad it with optional "
+            "material.\n"
         )
     if length == "detailed":
         return (
-            "Expand each section moderately: add relevant context and one or "
-            "two extra examples when the content supports them, and mention "
-            "edge cases only when they clarify the concept. Avoid exhaustive "
-            "catalogues. Do not invent facts beyond the source.\n"
+            "Give MAXIMUM development — noticeably richer and longer than a "
+            "standard treatment of the same content. Work every idea all the "
+            "way through: explain the underlying reasoning step by step, add "
+            "several concrete examples per section wherever the source "
+            "supports them, connect the concepts to each other and to their "
+            "practical consequences, and include the edge cases, caveats and "
+            "common misconceptions that clarify the idea. Use 4-6 callouts "
+            "per section. Completeness matters more than brevity here. Do not "
+            "invent facts beyond the source.\n"
         )
     return ""
 
