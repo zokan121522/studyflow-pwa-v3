@@ -71,6 +71,7 @@ window.App.AI.Tasks = (function () {
         <div class="sf-ai-last" id="sf-ai-last"></div>
           <div class="sf-ai-log" id="sf-ai-log"></div>
           <div class="sf-ai-chunkbar" id="sf-ai-chunkbar" style="display:none"></div>
+          <div class="sf-ai-preview" id="sf-ai-preview" style="display:none"></div>
           <div class="sf-ai-actions">
           <button class="sf-ai-btn sf-ai-btn-danger" id="stream-cancel-btn">⏹ Cancelar</button>
           <span class="sf-ai-actions-right">
@@ -145,6 +146,48 @@ window.App.AI.Tasks = (function () {
     if (!lastEl) return;
     lastEl.textContent = text;
     lastEl.className = "sf-ai-last " + (kind || "");
+  }
+
+  /**
+   * Clear the thumbnail area. Called when a new stream task starts, because
+   * _showStreamModal reuses one panel for every task and the previous
+   * thumbnail would otherwise be read as this task's result.
+   */
+  function _resetResultPreview() {
+    const box = document.getElementById("sf-ai-preview");
+    if (!box) return;
+    box.innerHTML = "";
+    box.style.display = "none";
+  }
+
+  /**
+   * Show a thumbnail of a finished image task, so the user can look at it
+   * before choosing Insert.
+   *
+   * Only images. An infographic's result_content is a bare URL like
+   * "/api/ai/notebooklm/infographic/xxx.png"; markdown/audio results are
+   * prose and would be nonsense inside an <img>. Same-origin relative path
+   * only — the value comes from a task row, so it is not interpolated blind.
+   */
+  function _showResultPreview(finalContent, format) {
+    const box = document.getElementById("sf-ai-preview");
+    if (!box) return;
+    const value = String(finalContent || "").trim();
+    const isImageUrl = format === "infographic"
+      && /^\/api\/[\w/-]+\.(png|jpg|jpeg|gif|webp)$/i.test(value);
+    if (!isImageUrl) return;
+    box.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = value;
+    img.alt = "Vista previa de la infografía generada";
+    img.loading = "lazy";
+    // A broken preview must not look like a rendering failure of the whole
+    // task: the image itself is already saved and Insertar still works.
+    img.addEventListener("error", () => {
+      box.innerHTML = '<div class="sf-ai-preview-err">No se pudo cargar la vista previa — la imagen sigue guardada.</div>';
+    });
+    box.appendChild(img);
+    box.style.display = "block";
   }
 
   function _showStreamModal(title, modelName) {
@@ -402,6 +445,11 @@ window.App.AI.Tasks = (function () {
    */
   function startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert) {
     _hideStreamModal();
+    // The modal is reused across tasks, so the previous task's thumbnail has
+    // to go: left in place it would sit under the new task's log showing the
+    // *old* result, and a stale "could not load" note would blame a task that
+    // never had a preview.
+    _resetResultPreview();
 
     const meta = _STREAM_META[format] || {
       title: "✨ Task en progreso", model: ""
@@ -518,6 +566,13 @@ window.App.AI.Tasks = (function () {
             titleEl.textContent = `✅ ${old}`;
           }
           _setLast("Listo — revisa y pulsa Insertar", "ok");
+
+          // An infographic's result is a bare image URL, so there is nothing to
+          // read in the log — only the "done" line. Show the image itself next
+          // to the Insert button, before the user commits to it: generating
+          // costs a NotebookLM run, and a thumbnail is the only way to judge
+          // whether it was worth it.
+          _showResultPreview(finalContent, format);
 
           // Resolve insert on this specific task
           const onDone = onInsert || defaultInsert;

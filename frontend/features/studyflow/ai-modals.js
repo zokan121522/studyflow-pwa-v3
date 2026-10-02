@@ -204,6 +204,15 @@ window.App.AiModals = (function () {
     { id: "scientific",   emoji: "🔬", label: "Scientific",  desc: "Formal, datos y gráficos" },
   ];
 
+  // Same ids the backend speaks (md_templates/tasks_pdf validate
+  // 'concise' | 'standard' | 'detailed'), so the value travels unchanged from
+  // this modal to the NotebookLM prompt.
+  const INFO_DEPTHS = [
+    { id: "concise",  emoji: "⚡", label: "Resumido",  desc: "Lo esencial, sin rodeos" },
+    { id: "standard", emoji: "📊", label: "Estándar",  desc: "Equilibrio de detalle" },
+    { id: "detailed", emoji: "🔬", label: "Detallado", desc: "Máximo desarrollo" },
+  ];
+
   function openInfographicConfig(config) {
     const { onSubmit, title = "📊 Configurar Infografía", submitLabel = "📊 Generar Infografía" } = config || {};
     if (typeof onSubmit !== "function") throw new Error("[AiModals] openInfographicConfig requires onSubmit");
@@ -216,10 +225,25 @@ window.App.AiModals = (function () {
       </div>`
     ).join("");
 
+    // The backend has always taken a detail level (generateInfographic sends
+    // detail_level, defaulting to "standard") — the modal just never offered
+    // it, so the choice NotebookLM itself asks for was unreachable. Same three
+    // values the rest of the app speaks: concise | standard | detailed.
+    const depthOpts = INFO_DEPTHS.map((d) =>
+      `<div class="inf-config-style-opt ${d.id === "standard" ? "selected" : ""}" data-depth="${d.id}">
+        <div class="inf-config-style-label">${d.emoji} ${d.label}</div>
+        <div class="inf-config-style-desc">${escHtml(d.desc)}</div>
+      </div>`
+    ).join("");
+
     const html = _shell(title, `
       <div class="inf-config-section aimodal-section">
         <div class="inf-config-section-title">🎨 Estilo visual</div>
         <div class="inf-config-style-grid" id="inf-style-grid">${styleOpts}</div>
+      </div>
+      <div class="inf-config-section aimodal-section">
+        <div class="inf-config-section-title">📏 Nivel de detalle</div>
+        <div class="inf-config-style-grid" id="inf-depth-grid">${depthOpts}</div>
       </div>
       <div class="inf-config-section aimodal-section">
         <div class="inf-config-section-title">🌐 Idioma</div>
@@ -239,22 +263,29 @@ window.App.AiModals = (function () {
 
     _wireLang("inf-lang-toggle", "inf-lang-dropdown");
 
-    const styleEls = overlay.querySelectorAll("#inf-style-grid .inf-config-style-opt");
-    styleEls.forEach((el) => {
-      el.addEventListener("click", () => {
-        styleEls.forEach((o) => o.classList.remove("selected"));
-        el.classList.add("selected");
+    function _wireExclusive(sel) {
+      const els = overlay.querySelectorAll(`${sel} .inf-config-style-opt`);
+      els.forEach((el) => {
+        el.addEventListener("click", () => {
+          els.forEach((o) => o.classList.remove("selected"));
+          el.classList.add("selected");
+        });
       });
-    });
+      return els;
+    }
+
+    const styleEls = _wireExclusive("#inf-style-grid");
+    _wireExclusive("#inf-depth-grid");
     // Pre-select "auto" style card
     const autoEl = overlay.querySelector('#inf-style-grid .inf-config-style-opt[data-style="auto"]');
     if (autoEl) autoEl.classList.add("selected");
 
     overlay.querySelector("[data-aimodal-submit]").addEventListener("click", () => {
       const style = overlay.querySelector("#inf-style-grid .inf-config-style-opt.selected")?.dataset?.style || "auto";
+      const detailLevel = overlay.querySelector("#inf-depth-grid .inf-config-style-opt.selected")?.dataset?.depth || "standard";
       const lang = _selectedLang("inf-lang-dropdown");
       closeIt();
-      onSubmit({ style, language: lang });
+      onSubmit({ style, language: lang, detail_level: detailLevel });
     });
   }
 
