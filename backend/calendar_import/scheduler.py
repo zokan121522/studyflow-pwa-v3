@@ -112,8 +112,30 @@ def _run_once(conn_factory, days):
             logger.exception("calendar_import_error_log_failed")
         raise
     finally:
-        # Closing releases the advisory lock.
-        conn.close()
+        # The connection came from the pool, so it has to go back to the pool.
+        # Closing it here instead is what killed the pool: ThreadedConnectionPool
+        # counts a connection as checked out until putconn() returns it, so
+        # close() consumed one of the maxconn slots permanently. After ten
+        # imports getconn() raised PoolError and the whole app failed while
+        # Postgres sat idle with nothing on it.
+        #
+        # The advisory lock is session-scoped, so it does NOT drop just because
+        # the connection is reused — it has to be released by hand first. Skip
+        # that and every future tick is skipped in silence: the calendar stops
+        # importing and the panel keeps showing the last good run.
+        try:
+            # Clear any aborted transaction first, or the unlock itself errors
+            # with InFailedSqlTransaction and the lock survives the reuse.
+            conn.rollback()
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (_LOCK_ID,))
+                cur.fetchone()
+        except Exception:
+            # Never let cleanup stop the connection from going back: a leaked
+            # slot is the failure we are here to fix.
+            logger.exception("calendar_advisory_unlock_failed")
+        finally:
+            db.put_connection(conn)
 
 
 def _loop(conn_factory, days, interval, startup_delay):

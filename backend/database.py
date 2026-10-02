@@ -21,9 +21,14 @@ def init_db() -> None:
     if not database_url:
         raise RuntimeError('DATABASE_URL environment variable not set')
 
+    # maxconn=20: gunicorn runs 2 workers x 4 threads (see Dockerfile), so the
+    # pool is per-process and each one can hold up to 20. Sized above the
+    # concurrency it serves so a burst of parallel requests has headroom
+    # instead of queueing on getconn(). The scheduler's daily import also
+    # borrows one while requests are in flight.
     _connection_pool = pool.ThreadedConnectionPool(
         minconn=1,
-        maxconn=10,
+        maxconn=20,
         dsn=database_url,
         cursor_factory=RealDictCursor
     )
