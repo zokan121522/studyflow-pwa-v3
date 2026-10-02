@@ -1560,3 +1560,82 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 }
 .br-toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 .br-toast.error { border-left-color: #e74c3c; }
+
+/* ─── Header now-playing player (shared/session-miniplayer.js) ─────────
+   Takes over .header-week while a session is live. The week nav is hidden
+   rather than pushed aside so the strip never reflows mid-session. */
+.header-week.is-playing > #week-label,
+.header-week.is-playing > .arr { display: none; }
+
+.header-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--accent, #4f8cff);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.hp-title {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 2px 4px;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+.hp-title:hover { text-decoration: underline; }
+.hp-title:focus-visible { outline: 2px solid var(--accent, #4f8cff); outline-offset: 1px; }
+
+.hp-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums; /* stop the pill jittering every second */
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hp-btn {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+.hp-btn:hover { background: var(--hover, rgba(127,127,127,.15)); }
+.hp-btn:focus-visible { outline: 2px solid var(--accent, #4f8cff); outline-offset: 1px; }
+.hp-stop:hover { color: #e74c3c; }
+
+/* Paused: it must be obvious something is still live, otherwise the whole
+   point of this pill is lost. A slow border/opacity pulse reads as "held"
+   rather than "playing" — a flash of colour would read as an error. */
+@keyframes hp-paused-pulse {
+  0%, 100% { opacity: 1; border-color: var(--accent, #4f8cff); }
+  50%      { opacity: .55; border-color: var(--text-muted, #888); }
+}
+.header-player.paused {
+  animation: hp-paused-pulse 1.6s ease-in-out infinite;
+}
+.header-player.paused .hp-time::after { content: " · en pausa"; }
+
+@media (prefers-reduced-motion: reduce) {
+  .header-player.paused { animation: none; opacity: .8; }
+}
+
+/* Narrow screens: the title is the first thing to go, never the controls —
+   stopping the session is the action this pill exists for. */
+@media (max-width: 720px) {
+  .hp-title { max-width: 14ch; }
+  .header-player { gap: 4px; padding: 3px 6px; }
+}

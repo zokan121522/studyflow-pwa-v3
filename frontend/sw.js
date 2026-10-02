@@ -37,7 +37,8 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // matched a hand-written list of eight emoji, and real titles proved it
 // incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
 // off Unicode Extended_Pictographic, so no future title prefix can outrun it.
-const ASSET_CACHE = 'studyflow-assets-v77'; // +77: boton fuera de .header-logo, grid colapsado y observer de clase
+// +78: pill de 'sonando ahora' en el header (titulo + contador + play/stop)
+const ASSET_CACHE = 'studyflow-assets-v78';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -96,6 +97,7 @@ const PRECACHE_ASSETS = [
   // These were missing from the precache, so the toolbar buttons only worked
   // while online — unacceptable for a headline feature of an offline PWA.
   '/shared/backup-restore.js',
+  '/shared/session-miniplayer.js',
   '/shared/v2-restore-modal.js',
   // S5: quiz ecosystem. Same reason as above: index.html loads these with
   // <script src>, so a single missing entry means no test, no failed pool

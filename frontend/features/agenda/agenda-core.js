@@ -233,12 +233,24 @@ function getViewMode() { return _viewMode; }
   }
 
   // ── Wire the per-card action buttons (play/pause/stop/del/move/copy/expand)
+  // The timer buttons also drive the header "now playing" pill. Without it the
+  // running session was only visible on its own card, so switching tab hid it
+  // and the session ran on forgotten.
   function _wireCardActions(el, callbacks, weekData, dateStr) {
+    var Mini = window.App.SessionMiniPlayer;
+    function _syncPlayer(sid, timerState) {
+      if (!Mini) return;
+      Mini.setContext({ dateStr: dateStr, weekId: weekData.week_id,
+                        onRefresh: callbacks.onRefresh });
+      // After the list repaints, so the card's .te dataset is already fresh.
+      setTimeout(function () { Mini.sync(sid, timerState); }, 60);
+    }
     el.querySelectorAll(".btn-play").forEach(function (b) {
       b.addEventListener("click", async function (e) {
         e.stopPropagation();
         await AgendaTimer.patchSession(b.dataset.sid, "in_progress", "running");
         if (callbacks.onRefresh) callbacks.onRefresh();
+        _syncPlayer(b.dataset.sid, "running");
       });
     });
     el.querySelectorAll(".btn-pause").forEach(function (b) {
@@ -246,6 +258,7 @@ function getViewMode() { return _viewMode; }
         e.stopPropagation();
         await AgendaTimer.patchSession(b.dataset.sid, "in_progress", "paused");
         if (callbacks.onRefresh) callbacks.onRefresh();
+        _syncPlayer(b.dataset.sid, "paused");
       });
     });
     el.querySelectorAll(".btn-stop").forEach(function (b) {
@@ -253,6 +266,7 @@ function getViewMode() { return _viewMode; }
         e.stopPropagation();
         await AgendaTimer.patchSession(b.dataset.sid, "completed", "stopped");
         if (callbacks.onRefresh) callbacks.onRefresh();
+        if (Mini) Mini.hide();
       });
     });
   }
