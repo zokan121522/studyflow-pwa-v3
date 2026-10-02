@@ -172,13 +172,15 @@ window.App.AI.Generation = (function () {
       const tasks = Tasks();
       if (tasks) {
         const label = fmt === "html" ? "🤖 YouTubeZen → HTML" : "🤖 YouTubeZen → Markdown";
-        tasks.showStreamModal(label, "OpenZEN");
-        // startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert).
+        // startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert, opts).
         // `depth` used to be passed in the courseIdHint slot, so the insert
         // POSTed to /courses/standard/topics/<id>/blocks and died. Capture the
         // real course now; the resolver still falls back to the topic owner.
+        // This format has no entry in _STREAM_META, so the label is passed as
+        // an override — otherwise the panel announced "Task en progreso".
         const courseId = (window.STATE && window.STATE.currentCourseId) || "";
-        tasks.startStreamPoll(resp.task_id, blockId, "ytd_zen", topicId || "", courseId);
+        tasks.startStreamPoll(resp.task_id, blockId, "ytd_zen", topicId || "", courseId,
+          undefined, { title: label, model: "OpenZen" });
       }
     } catch (err) {
       Status(blockId, `❌ Error: ${err.message}`, true);

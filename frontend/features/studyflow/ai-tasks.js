@@ -460,8 +460,12 @@ window.App.AI.Tasks = (function () {
    * @param {string} topicId — topic to attach the result block to
    * @param {string} courseIdHint — course captured at generation start
    * @param {function} [onInsert] — override; defaults to ai._onContentSuccess / _onTestSuccess
+   * @param {object} [opts] — {title, model} to override the label for this
+   *   run. Needed because `_STREAM_META` is keyed by `format`, and two
+   *   providers share the "markdown" format: without an override, OpenZen's
+   *   own task is announced as "✨ NotebookLM generando Markdown".
    */
-  function startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert) {
+  function startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert, opts) {
     _hideStreamModal();
     // The modal is reused across tasks, so the previous task's thumbnail has
     // to go: left in place it would sit under the new task's log showing the
@@ -469,8 +473,12 @@ window.App.AI.Tasks = (function () {
     // never had a preview.
     _resetResultPreview();
 
-    const meta = _STREAM_META[format] || {
+    const fallback = _STREAM_META[format] || {
       title: "✨ Task en progreso", model: ""
+    };
+    const meta = {
+      title: (opts && opts.title) || fallback.title,
+      model: (opts && opts.model) || fallback.model,
     };
     _showStreamModal(meta.title, meta.model);
     _streamState.taskId = taskId;

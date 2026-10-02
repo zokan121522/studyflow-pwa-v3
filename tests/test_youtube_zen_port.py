@@ -285,6 +285,28 @@ def test_zen_queue_passes_the_zen_format():
     assert "ytd_zen" in call.group(1), "la cola no pasa el formato ytd_zen"
 
 
+def _split_args(text):
+    """Split a call's arguments on top-level commas only.
+
+    A plain str.split(",") also cuts inside ``{ title: x, model: y }``, which
+    silently turns one argument into two.
+    """
+    args, depth, buf = [], 0, ""
+    for ch in text:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            args.append(buf.strip())
+            buf = ""
+        else:
+            buf += ch
+    if buf.strip():
+        args.append(buf.strip())
+    return args
+
+
 def test_start_stream_poll_call_does_not_pass_depth_as_the_course():
     """startStreamPoll(taskId, blockId, format, topicId, courseIdHint, onInsert).
     The zen flow passed `depth` in the courseIdHint slot, so the insert
@@ -295,8 +317,10 @@ def test_start_stream_poll_call_does_not_pass_depth_as_the_course():
         r'startStreamPoll\((?:[^()]|\([^()]*\))*?"ytd_zen"(?:[^()]|\([^()]*\))*\)', src, re.S
     )
     assert call, "no se encuentra la llamada a startStreamPoll con formato ytd_zen"
-    args = [a.strip() for a in call.group(0)[len("startStreamPoll("): -1].split(",")]
-    assert len(args) == 5, f"se esperaban 5 argumentos, hay {len(args)}: {args}"
+    args = _split_args(call.group(0)[len("startStreamPoll("): -1])
+    # Arity grew when startStreamPoll gained an optional opts override, so the
+    # invariant to protect is the SLOT, not the count.
+    assert len(args) >= 5, f"faltan argumentos en la llamada: {args}"
     assert "depth" not in args[4], (
         f"el 5º argumento es courseIdHint pero se le pasa {args[4]!r} "
         "(depth) -> POST /courses/standard/topics/<id>/blocks -> 405"

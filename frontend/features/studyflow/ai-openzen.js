@@ -62,8 +62,12 @@ window.App.AI = window.App.AI || {};
       });
       const tasks = Tasks();
       if (tasks) {
-        tasks.showStreamModal("✍️ OpenZen generando Markdown", "OpenZen");
-        tasks.startStreamPoll(resp.task_id, blockId, "markdown", topicId || "");
+        // No showStreamModal() here: startStreamPoll hides and reopens the
+        // panel from _STREAM_META["markdown"], which is NotebookLM's title.
+        // The override is what actually decides the label.
+        tasks.startStreamPoll(resp.task_id, blockId, "markdown", topicId || "",
+          undefined, undefined,
+          { title: "✍️ OpenZen generando Markdown", model: "OpenZen" });
       }
     } catch (err) {
       Status(blockId, `❌ Error: ${err.message}`, true);
