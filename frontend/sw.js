@@ -44,7 +44,12 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // text window.API actually throws. Both files are precached, and editing a
 // precached file is NOT enough on its own: the SW only re-precaches on
 // install, so without this bump installed PWAs keep serving the old JS.
-const ASSET_CACHE = 'studyflow-assets-v81';
+// v83: the update notice is now mandatory. The worker waits in
+// registration.waiting and app.js announces it, instead of skipWaiting()
+// activating silently mid-session. v81/v82 never left this machine — they
+// were local iterations while diagnosing why the OpenZen fix had reached the
+// server but not the browser.
+const ASSET_CACHE = 'studyflow-assets-v84';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -150,9 +155,27 @@ self.addEventListener('install', (event) => {
           }
         });
       })
-      .then(() => self.skipWaiting())
   );
 });
+
+// NO skipWaiting() in the install handler, deliberately.
+//
+// skipWaiting() here makes the new worker activate the instant it finishes
+// precaching — mid-session, under the user's feet. The page keeps running the
+// old JS while the cache underneath it has already been swapped, which is
+// version skew: one codebase, two versions in play. That is exactly how a
+// fix reached the server and never reached the browser here: assets changed,
+// /sw.js did not, so no install ran and the old cache kept serving.
+//
+// So the new worker waits in `registration.waiting` and app.js shows
+// "Nueva versión disponible". The user clicks, we postMessage('skipWaiting')
+// (see the message listener at the bottom of this file), and only then does
+// activate run and delete the old caches. Assets change only at a reload the
+// user chose.
+//
+// The install handler above must therefore resolve to undefined. Adding a
+// skipWaiting() back silently disables the update notice, and
+// test_sw_asset_version.py asserts its absence for exactly that reason.
 
 // Activate event: cleanup old caches
 self.addEventListener('activate', (event) => {

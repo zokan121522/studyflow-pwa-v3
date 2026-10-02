@@ -10,20 +10,62 @@ const API_URL = (() => {
 
 
 // ─── Service Worker Registration ────────────────────────────────────
+//
+// The worker waits instead of skipWaiting()ing on install, so an update sits
+// in `registration.waiting` until the user accepts it. Two things make that
+// notice reliable, and both were missing before:
+//
+//  1. The browser can fire `updatefound` BEFORE `register()` resolves. A
+//     listener attached inside `.then()` therefore never sees it, and the
+//     update lands silently. So we also look at `registration.waiting`.
+//  2. Reloading straight after postMessage('skipWaiting') races the
+//     activation: the page can come back up still controlled by the OLD
+//     worker, which then serves the old cache again. Reload on
+//     `controllerchange` instead — that is the signal the new worker is live.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
+
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then((registration) => {
         console.log('[PWA] Service Worker registered:', registration.scope);
-        
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+
+        const watchInstalling = (worker) => {
+          if (!worker) return;
+          worker.addEventListener('statechange', () => {
+            // 'installed' while an older worker still controls the page means
+            // a new version is ready and waiting for the user.
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
               console.log('[PWA] New version available');
               showUpdateNotification();
             }
           });
+        };
+
+        registration.addEventListener('updatefound', () => {
+          watchInstalling(registration.installing);
+        });
+
+        // The case `updatefound` misses: the update was already discovered
+        // during registration and the worker is sitting in `waiting`.
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          console.log('[PWA] New version already waiting');
+          showUpdateNotification();
+        }
+
+        // Returning to the tab is the moment an update is most useful, and the
+        // cheapest moment to notice a stale worker.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible') return;
+          registration.update().catch(() => {});
+          if (registration.waiting && navigator.serviceWorker.controller) {
+            showUpdateNotification();
+          }
         });
       })
       .catch((error) => {
@@ -32,7 +74,13 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+let _updateNoticeShown = false;
 function showUpdateNotification() {
+  // updatefound, the post-register check and visibilitychange can all land on
+  // the same update; without this the user gets a stack of identical banners.
+  if (_updateNoticeShown) return;
+  _updateNoticeShown = true;
+
   const notification = document.createElement('div');
   notification.className = 'update-notification';
   notification.innerHTML = `
@@ -40,11 +88,16 @@ function showUpdateNotification() {
     <button id="update-btn">Actualizar</button>
   `;
   document.body.appendChild(notification);
-  
-  document.getElementById('update-btn').addEventListener('click', () => {
-    if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage('skipWaiting');
-      window.location.reload();
+
+  // No window.location.reload() here on purpose: the reload belongs to the
+  // controllerchange listener, which fires once the new worker is actually in
+  // control.
+  document.getElementById('update-btn').addEventListener('click', async () => {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    const reg = regs && regs[0] ? regs[0] : null;
+    const target = reg && reg.waiting ? reg.waiting : (navigator.serviceWorker.controller || null);
+    if (target) {
+      target.postMessage('skipWaiting');
     }
   });
 }

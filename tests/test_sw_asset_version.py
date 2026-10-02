@@ -121,11 +121,48 @@ def test_cache_is_not_reused_across_versions():
     )
 
 
-def test_install_calls_skip_waiting():
-    """Otherwise the new worker waits for every tab to close to take over."""
+def test_install_does_not_skip_waiting():
+    """install must NOT skipWaiting: the user has to be told first.
+
+    skipWaiting() in install activates the new worker mid-session, while the
+    page still runs the old JS. Assets then change under a live client with no
+    notice, which is how a frontend fix reached the server and never reached
+    the browser: /sw.js was never touched, so no install ran at all.
+
+    The update therefore waits in registration.waiting until app.js shows
+    "Nueva versión disponible" and the user accepts, which postMessage()s
+    skipWaiting through the listener at the bottom of sw.js.
+    """
     src = _sw_source()
     install = src.split("self.addEventListener('install'", 1)[1].split("\n});", 1)[0]
-    assert "skipWaiting" in install, "install does not call skipWaiting()"
+    assert "skipWaiting" not in install, (
+        "install calls skipWaiting(): updates activate silently and the update "
+        "notice in app.js can never be reached"
+    )
+    # The opt-in path must still exist, or accepting the notice does nothing.
+    assert "skipWaiting" in src, (
+        "sw.js no longer handles the 'skipWaiting' message, so the update "
+        "button in app.js would never activate the new worker"
+    )
+
+
+def test_update_notice_cannot_be_raced():
+    """app.js must survive updatefound firing before register() resolves.
+
+    That race is why the notice silently stopped appearing: the listener was
+    attached inside .then(), and the browser had usually already emitted the
+    event by then.
+    """
+    app_js = (ROOT / "frontend" / "app.js").read_text()
+    assert "registration.waiting" in app_js, (
+        "app.js never inspects registration.waiting, so an update discovered "
+        "during registration is never announced"
+    )
+    assert "controllerchange" in app_js, (
+        "app.js must reload on controllerchange; reloading right after "
+        "postMessage('skipWaiting') races the activation and can land the page "
+        "back on the old worker"
+    )
 
 
 def test_install_precache_is_not_atomic():
