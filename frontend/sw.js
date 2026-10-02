@@ -39,7 +39,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // off Unicode Extended_Pictographic, so no future title prefix can outrun it.
 // +78: pill de 'sonando ahora' en el header (titulo + contador + play/stop)
 // +79: formatTimer trunca los segundos (EXTRACT(EPOCH) devolvia decimales)
-const ASSET_CACHE = 'studyflow-assets-v79';
+const ASSET_CACHE = 'studyflow-assets-v80';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -83,6 +83,7 @@ const PRECACHE_ASSETS = [
   // + streaming task poll/modal + toolbar styles.
   '/features/studyflow/ai-tasks.js',
   '/features/studyflow/ai-notebooklm.js',
+  '/features/studyflow/ai-openzen.js',
   '/features/studyflow/ai-config-modal.js',
   '/features/studyflow/ai-modals.js',
   '/features/studyflow/ai.js',

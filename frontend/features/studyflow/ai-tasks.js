@@ -597,6 +597,33 @@ window.App.AI.Tasks = (function () {
           // whether it was worth it.
           _showResultPreview(finalContent, format);
 
+          // A task that is "done" may still be missing sections: the OpenZen
+          // path skips a section that exhausted its retries and finishes with
+          // the rest, because losing 8 of 9 sections beats losing all 9. The
+          // user has to be told, and offered both ways out — regenerate the
+          // section, or accept the document without it.
+          const gen = ai && ai.Generation;
+          if (gen && typeof gen.renderChunkWarning === "function") {
+            let state = task.coverage_data;
+            if (typeof state === "string") {
+              try { state = JSON.parse(state); } catch (_) { state = null; }
+            }
+            if (state && (state.failed_chunks || []).length) {
+              const bar = gen.renderChunkWarning(taskId, state, blockId);
+              if (bar) {
+                const host = document.getElementById("stream-log") ||
+                             document.querySelector(".stream-modal__log");
+                if (host) {
+                  host.appendChild(bar);
+                  bar.scrollIntoView({ block: "nearest" });
+                }
+                const n = state.failed_chunks.length;
+                _log("⚠️", `${n} ${n > 1 ? "secciones no se pudieron" : "sección no se pudo"} generar — el resto del documento está completo`);
+                _setLast(`⚠️ ${n} ${n > 1 ? "secciones" : "sección"} pendiente${n > 1 ? "s" : ""} — regenerar o continuar`, "warn");
+              }
+            }
+          }
+
           // Resolve insert on this specific task
           const onDone = onInsert || defaultInsert;
           const insBtn = document.getElementById("stream-insert-btn");

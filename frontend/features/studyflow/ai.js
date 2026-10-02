@@ -175,6 +175,18 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       icon: "🤖",
       cls: "ai-btn-oc",
       blockActions: [
+        // OpenZen PDF → Markdown, chunked per section. Unlike NotebookLM the
+        // PDF is split and each section is generated on its own, so "Extensa"
+        // can actually add detail and a failed section can be regenerated on
+        // its own. Defaults to 'detailed' because that is the whole point of
+        // choosing OpenZen over NotebookLM.
+        { id: "markdown", label: "Markdown", icon: "✍️", cat: "generate", order: 99,
+          // PDF only, on purpose: the backend reads a PDF and splits it into
+          // sections. Mapping 'md' here would render the button on markdown
+          // blocks, where the request would come back 400 — a dead button is
+          // worse than no button. Markdown-as-source is a separate feature.
+          pdf: "openzen-pdf-markdown",
+          task: { md: "openzen_markdown", pdf: "openzen_markdown" } },
         { id: "audio", label: "Audio", icon: "🎵", cat: "generate", order: 60,
           md: "audio", pdf: "audio",
           task: { md: "opencode_audio", pdf: "opencode_audio" } },
@@ -297,6 +309,22 @@ window.App.AI = Object.assign(window.App.AI, (function () {
           submitLabel: "✨ Generar con NotebookLM",
           errorStatus: (msg) => _showStatus(bid, msg, true),
           onSubmit: (params) => gen.generateNbMd(bid, tid, params),
+        });
+      } else {
+        _showStatus(bid, "⚠️ Modal de configuración no disponible", true);
+      }
+    } else if (action === "openzen-pdf-markdown" || action === "openzen-md-content") {
+      // OpenZen (OpenCode): the PDF is chunked per section, so "Extensa" can
+      // really add detail and a failed section can be regenerated alone.
+      const modal = window.App.AiConfigModal;
+      if (bid && gen && modal) {
+        await modal.open({
+          title: action === "openzen-pdf-markdown"
+            ? "📄 OpenZen → Markdown"
+            : "✍️ OpenZen → Mejorar Markdown",
+          submitLabel: "✨ Generar con OpenZen",
+          errorStatus: (msg) => _showStatus(bid, msg, true),
+          onSubmit: (params) => gen.generateOpenzenMd(bid, tid, params),
         });
       } else {
         _showStatus(bid, "⚠️ Modal de configuración no disponible", true);

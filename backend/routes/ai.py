@@ -46,6 +46,9 @@ from ai.notebooklm.tasks_flashcards import create_notebooklm_flashcards_task
 from ai.notebooklm.md_templates_catalog import list_md_templates
 from ai.generation.knowledge_pipeline import create_knowledge_pipeline_task
 from ai.generation.grammar import create_grammar_task
+from ai.generation.openzen_pdf import (
+    create_openzen_md_task, retry_openzen_chunk,
+)
 
 bp = Blueprint("ai", __name__)
 
@@ -325,6 +328,62 @@ def notebooklm_pdf_to_html(current_user_id: int):
 # ═══════════════════════════════════════════════════════════════════
 # Flashcards
 # ═══════════════════════════════════════════════════════════════════
+
+
+@bp.route("/ai/openzen/pdf-to-markdown", methods=["POST"])
+@token_required
+def openzen_pdf_to_markdown(current_user_id: int):
+    """POST /api/ai/openzen/pdf-to-markdown — PDF → Markdown via OpenZen.
+
+    Same contract as ``/ai/notebooklm/pdf-to-markdown``, but the PDF is split
+    per section and each section is generated (and retried) on its own. A
+    section that keeps failing is reported instead of killing the document, and
+    can be re-run alone with the retry endpoint below.
+
+    Request body:
+        block_id   (str): PDF block to process.
+        topic_id   (str, optional): Topic to associate the result with.
+        template_id(str, optional): MD_TEMPLATES key.
+        language   (str, optional): 'auto' | 'es' | 'en'.
+        length     (str, optional): 'concise' | 'standard' | 'detailed'.
+
+    Returns:
+        {"task_id": str} — 201 on success.
+    """
+    body = request.json or {}
+    try:
+        result = create_openzen_md_task(
+            block_id=body.get("block_id"),
+            topic_id=body.get("topic_id"),
+            user_id=current_user_id,
+            template_id=body.get("template_id"),
+            language=body.get("language", "auto"),
+            length=body.get("length", "standard"),
+        )
+        return jsonify(result), 201
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/openzen/tasks/<task_id>/chunk/<int:chunk_num>/retry",
+          methods=["POST"])
+@token_required
+def openzen_retry_chunk(task_id: str, chunk_num: int, current_user_id: int):
+    """POST /api/ai/openzen/tasks/<id>/chunk/<n>/retry — regenerate ONE section.
+
+    This is the "reiniciar el chunk" button in the warning that appears when a
+    section exhausted its retries. Only that section is recomputed and spliced
+    back between its markers; the rest of the document is left untouched.
+    """
+    try:
+        result = retry_openzen_chunk(task_id, chunk_num, current_user_id)
+        return jsonify(result), 200
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
 
 
 @bp.route("/ai/generate-flashcards", methods=["POST"])
