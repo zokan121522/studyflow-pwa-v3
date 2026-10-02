@@ -359,6 +359,63 @@ document.addEventListener('DOMContentLoaded', async () => {
       hamburger.textContent = appEl.classList.contains('sidebar-open') ? '✕' : '☰';
     });
   }
+
+  // Hide/show the view's nav column (#agenda-left / #studyflow-left).
+  //
+  // This drives the SAME sf-focus-mode class Ctrl+B already used, on .main.
+  // The layout is flex, not grid, and the column is re-created per view with a
+  // different id — so the rule keys off .col-left's position in .main, and the
+  // only correct way to drive it is the existing class. An earlier attempt
+  // collapsed grid-template-columns on .app instead: the grid rule does not
+  // apply to this flex column, so the reflow tore down the whole page and it
+  // looked like a navigation to the main view.
+  const navToggle = document.getElementById('nav-toggle-btn');
+  if (navToggle) {
+    // Start with the nav visible, always — never inherit a collapsed column.
+    const main = document.querySelector('.main');
+    if (main) main.classList.remove('sf-focus-mode');
+
+    const sync = () => {
+      const hidden = !!main && main.classList.contains('sf-focus-mode');
+      const icon = hidden ? '⇥' : '⇤';
+      const label = hidden ? 'Mostrar navegación' : 'Ocultar navegación';
+      const pressed = String(hidden);
+      // Write only on a real change. The observer below watches the whole
+      // subtree, so a sync() that rewrites identical values would retrigger it
+      // forever and the app would never finish booting.
+      if (navToggle.textContent !== icon) navToggle.textContent = icon;
+      if (navToggle.getAttribute('aria-pressed') !== pressed) {
+        navToggle.setAttribute('aria-pressed', pressed);
+      }
+      if (navToggle.getAttribute('aria-label') !== label) {
+        navToggle.setAttribute('aria-label', label);
+      }
+    };
+    navToggle.addEventListener('click', (e) => {
+      // The button sits inside .header-logo, whose handler navigates to the
+      // dashboard. Without this the click bubbled up, the whole main area got
+      // hidden and the toggle looked like a navigation. Stop it right here.
+      e.stopPropagation();
+      e.preventDefault();
+      if (!main) return;
+      main.classList.toggle('sf-focus-mode');
+      sync();
+    });
+    // Two things can change the button's truth: the view is rebuilt (the
+    // column is re-created with a new id), or someone toggles focus mode some
+    // other way — ⌘/Ctrl+B. The first is a childList change, the second an
+    // attribute change, so both have to be observed or the button keeps
+    // claiming a state that is no longer true. sync() only writes on a real
+    // change, so watching the class attribute can't feed itself.
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    sync();
+  }
   
   if (appEl) {
     appEl.addEventListener('click', (e) => {

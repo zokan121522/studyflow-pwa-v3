@@ -97,6 +97,14 @@
             <span class="server-status-label">API</span>
           </span>
         </div>
+        <!-- Hide/show the main nav (.col-left). Desktop only: on mobile the ☰
+             already does this as an overlay. Deliberately a SIBLING of
+             .header-logo, not a child: a nested button inherits the logo's
+             click, which navigates to the dashboard and hides the whole main
+             area — so the toggle looked like it was taking you home. -->
+        <button class="nav-toggle" id="nav-toggle-btn"
+                aria-label="Ocultar navegación" aria-pressed="false"
+                title="Ocultar navegación">⇤</button>
       </div>
       <div class="header-week">
         <span class="arr" id="week-prev" aria-label="Semana anterior">◀</span>

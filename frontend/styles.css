@@ -421,7 +421,7 @@ body {
 
 /* Keyboard hint — v2 parity (fixed, hover-free) */
 .col-left::before {
-  content: "Ctrl+B / doble tap \A ocultar nav";
+  content: "Ctrl+B ocultar nav";
   position: fixed;
   bottom: 8px;
   left: 14px;
