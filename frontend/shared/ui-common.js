@@ -90,14 +90,31 @@ function formatTimer(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function _setTimerFields(h, m, s) {
-  const he = document.getElementById('so-te-h');
-  const me = document.getElementById('so-te-m');
-  const se = document.getElementById('so-te-s');
-  if (he) he.value = h;
-  if (me) me.value = m;
-  if (se) se.value = s;
-}
+  function _setTimerFields(h, m, s) {
+    // Flexible signature:
+    // - _setTimerFields('so-te', totalSeconds)  (split)
+    // - _setTimerFields(h, m, s)               (three values)
+    if (typeof h === 'string' && m !== undefined && s === undefined) {
+      const prefix = h;
+      const total = Math.max(0, Math.floor(Number(m) || 0));
+      const hh = Math.floor(total / 3600);
+      const mm = Math.floor((total % 3600) / 60);
+      const ss = total % 60;
+      const he = document.getElementById(prefix + '-h');
+      const me = document.getElementById(prefix + '-m');
+      const se = document.getElementById(prefix + '-s');
+      if (he) he.value = String(hh).padStart(2, '0');
+      if (me) me.value = String(mm).padStart(2, '0');
+      if (se) se.value = String(ss).padStart(2, '0');
+      return;
+    }
+    const he = document.getElementById('so-te-h');
+    const me = document.getElementById('so-te-m');
+    const se = document.getElementById('so-te-s');
+    if (he) he.value = h ?? '';
+    if (me) me.value = m ?? '';
+    if (se) se.value = s ?? '';
+  }
 
 function _getTimerSeconds() {
   const h = parseInt(document.getElementById('so-te-h')?.value) || 0;
