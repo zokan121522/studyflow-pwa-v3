@@ -210,12 +210,23 @@ def test_split_runs_before_the_single_block_insert():
 
 
 def test_multi_block_insert_keeps_section_order():
-    """Every insert targets the same slot, so an offset is required."""
+    """Every insert targets the same slot, so an offset is required.
+
+    The expression this asserts on changed when the AI path stopped treating an
+    array position as an order_index: the target is now derived from the
+    source's real order_index. The requirement is unchanged — the offset must
+    reach the index that gets written.
+    """
     src = _src(AI_JS)
     assert "indexOffset = 0" in src
-    assert "index: idx + 1 + (indexOffset || 0)" in src, (
-        "without the offset each new section is inserted at the same index and "
+    assert "(indexOffset || 0)" in src, (
+        "without the offset each new section is inserted at the same slot and "
         "pushes the previous one down — the blocks come out reversed"
+    )
+    # ...and the offset must actually be added to the value written, not just
+    # present in the signature.
+    assert re.search(r"order_index\) \+ 1 \+ \(indexOffset \|\| 0\)", src), (
+        "indexOffset must be added to the order_index the move endpoint receives"
     )
     assert "}, i);" in src, "the per-section offset must be passed when inserting"
 

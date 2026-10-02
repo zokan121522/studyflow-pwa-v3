@@ -41,6 +41,29 @@ window.App.CoursesSidebar = (function () {
     return TITLE_EMOJI_PREFIX.test((title || "").trim());
   }
 
+  // A generated block's type is "content" whatever produced it, so the type
+  // alone cannot tell an infographic from a hand-written note — the markup
+  // can, and it is what the generator actually wrote:
+  //   infographic → <img src="/api/ai/notebooklm/infographic/...">
+  //   TTS         → <audio src="/api/audio/serve/...">
+  // Keyed off the content rather than the title because the title is the
+  // user's to write: an infographic titled plainly "Infografía" used to fall
+  // through to the generic 📄, indistinguishable from a text block, while the
+  // same block with a 📊 in its title looked right. Reading the markup also
+  // fixes every block already stored, with no migration.
+  const CONTENT_MARKER_ICONS = [
+    [/\/api\/ai\/notebooklm\/infographic\//i, "📊"],
+    [/<audio\b/i, "🎵"],
+  ];
+
+  function contentMarkerIcon(block) {
+    const content = block.content || "";
+    for (const [pattern, icon] of CONTENT_MARKER_ICONS) {
+      if (pattern.test(content)) return icon;
+    }
+    return "";
+  }
+
   function getBlockIcon(block) {
     if (hasTitleEmojiPrefix(block.title)) return "";
     // Markdown blocks get no automatic type icon. The 📝 was the one icon the
@@ -49,15 +72,23 @@ window.App.CoursesSidebar = (function () {
     // to this one — the two swapped places instead of disappearing. A
     // hand-written title is the whole point of a block, so it is left alone.
     if (block.type === "markdown") return "";
-    if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
-    // content-type title prefixes from v2 AI blocks
-    if (block.type === "content" && block.title) {
-      if (block.title.startsWith("🎵 ")) return "🎵";
-      if (block.title.startsWith("📊 ")) return "📊";
-      if (block.title.startsWith("🤖 ")) return "🤖";
-      if (block.title.startsWith("✨ ")) return "✨";
-      if (block.title.startsWith("🌙 ")) return "🌙";
+    // Checked before the type map: TYPE_ICONS.content is "📄", so a lookup by
+    // type returned first and the title-prefix branch below was unreachable —
+    // dead code that read as though 📊 worked, and only worked for blocks whose
+    // title happened to start with it.
+    if (block.type === "content") {
+      const marker = contentMarkerIcon(block);
+      if (marker) return marker;
+      // content-type title prefixes from v2 AI blocks
+      if (block.title) {
+        if (block.title.startsWith("🎵 ")) return "🎵";
+        if (block.title.startsWith("📊 ")) return "📊";
+        if (block.title.startsWith("🤖 ")) return "🤖";
+        if (block.title.startsWith("✨ ")) return "✨";
+        if (block.title.startsWith("🌙 ")) return "🌙";
+      }
     }
+    if (TYPE_ICONS[block.type]) return TYPE_ICONS[block.type];
     return "📄";
   }
 

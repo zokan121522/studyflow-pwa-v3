@@ -752,15 +752,29 @@ window.App.AI = Object.assign(window.App.AI, (function () {
           blocks = await window.App.CoursesAPI.listTopicBlocks(
             courseId, blockData.topic_id);
         }
-        const idx = (blocks || []).findIndex((b) => b.id === sourceBlockId);
-        if (idx !== -1 && window.App.CoursesAPI.moveBlock) {
-          // indexOffset keeps a multi-block insert in order: each call targets
-          // the same slot (idx + 1), so without it every new block pushes the
-          // previous one down and the sections come out reversed.
+        blocks = blocks || [];
+        // Move the endpoint takes `index` as an ABSOLUTE order_index and does
+        // not shift anything around it — so a block's position in this array
+        // (0..N-1) is a different thing entirely from its order_index. Passing
+        // the array position used to drop the new block at an unrelated spot:
+        // real topics carry sparse, historical order_index values (1, 6, 9,
+        // 14, 22…) so the two numbers only coincide by accident.
+        const source = blocks.find((b) => Number(b.id) === Number(sourceBlockId));
+        if (source && window.App.CoursesAPI.moveBlock) {
+          // Start directly below the source, then step over any slot that is
+          // already taken: writing source.order_index + 1 blindly lands on top
+          // of a neighbour and the two then tie (resolved only by id). This
+          // mirrors what courses-blocks.js does when inserting a PDF.
+          let target = Number(source.order_index) + 1 + (indexOffset || 0);
+          const taken = (t) => blocks.some(
+            (b) => Number(b.order_index) === t && Number(b.id) !== Number(newBlock.id));
+          while (taken(target)) target += 1;
           await window.App.CoursesAPI.moveBlock(newBlock.id, {
             target_topic_id: blockData.topic_id,
-            index: idx + 1 + (indexOffset || 0),
+            index: target,
           });
+        } else if (!source) {
+          console.warn("[AI] source block not found in topic; block stays at topic end");
         }
       } catch (err) {
         console.warn("[AI] move after source failed (block stays at topic end):", err.message);
