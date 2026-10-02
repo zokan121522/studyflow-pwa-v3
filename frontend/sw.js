@@ -38,7 +38,8 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // incomplete — 📊 🎵 ❓ ✨ 🌙 all still rendered as "📄 📊", "❓ ❓". Now keyed
 // off Unicode Extended_Pictographic, so no future title prefix can outrun it.
 // +78: pill de 'sonando ahora' en el header (titulo + contador + play/stop)
-const ASSET_CACHE = 'studyflow-assets-v78';
+// +79: formatTimer trunca los segundos (EXTRACT(EPOCH) devolvia decimales)
+const ASSET_CACHE = 'studyflow-assets-v79';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

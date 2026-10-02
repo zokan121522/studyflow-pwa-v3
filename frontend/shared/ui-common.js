@@ -79,9 +79,14 @@ function formatDateLabel(dateStr) {
 // ─── Timer Helpers ──────────────────────────────────────────────────
 function formatTimer(seconds) {
   if (!seconds || seconds < 0) return '00:00:00';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
+  // Postgres EXTRACT(EPOCH ...) returns fractional seconds, so this is often
+  // handed 9.354299999999995 — and `seconds % 60` printed that verbatim as
+  // "00:02:9.354299999999995". Floor once, here, so no caller can leak a
+  // fraction into the UI no matter which source the number came from.
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
