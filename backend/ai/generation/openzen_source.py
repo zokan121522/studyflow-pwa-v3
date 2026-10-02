@@ -1,20 +1,23 @@
-"""OpenZen (OpenCode) PDF → Markdown, chunked per section.
+"""OpenZen (OpenCode) source → study notes, chunked per section.
 
 Why this exists
 ---------------
-NotebookLM's ``nb_pdf_to_markdown`` hands the whole PDF to the model in ONE
-atomic call (``ai/notebooklm/client.py``). There is no seam to add detail at,
-and no seam to retry: if the call fails the whole document is lost, and if it
-succeeds with a stingy length the ceiling is the model's choice, not ours.
-That is why "Extensa" could never actually deliver in NotebookLM.
+NotebookLM's ``nb_pdf_to_markdown`` hands the whole document to the model in
+ONE atomic call (``ai/notebooklm/client.py``). There is no seam to add detail
+at, and no seam to retry: if the call fails the whole document is lost, and
+if it succeeds with a stingy length the ceiling is the model's choice, not
+ours. That is why "Extensa" could never actually deliver in NotebookLM.
 
-Here the PDF is the source of truth and it is split into sections. Each section
-is generated on its own, so:
+Here the source — a PDF *or* a Markdown block — is the source of truth and it
+is split into sections. Each section is generated on its own, so:
 
 * a section that fails can be retried WITHOUT losing the others;
 * a section that keeps failing can be skipped with a visible warning, and
   regenerated later on its own;
 * verbosity is a per-section instruction, not a hope.
+
+Markdown sources already carry their own structure, so splitting them means
+reading the headings the author wrote rather than guessing.
 
 State lives in ``ai_tasks.coverage_data`` (a JSON column that already exists)
 and the assembled document carries ``<!--chunk:N-->`` markers, so a single
@@ -48,6 +51,13 @@ MAX_SECTION_CHARS = 6000
 MIN_SECTION_CHARS = 400
 
 _HEADING = re.compile(r"^\s*(#{1,6}\s+.+|\d+(?:\.\d+)*[.)]\s+\S.+|[A-ZÁÉÍÓÚÑ][^.!?\n]{3,70})\s*$")
+
+# Block types, following ai/notebooklm/tasks_md.py: a PDF points at a file in
+# `url`, a Markdown block carries its text in `content`.
+PDF_TYPES = ("pdf", "pdf-ref")
+MD_TYPES = ("markdown", "content")
+
+_MD_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
 # ─── Section extraction ─────────────────────────────────────────────
@@ -133,6 +143,49 @@ def _sections_from_headings(text: str) -> list[dict]:
     return sections
 
 
+def _markdown_sections(md: str) -> list[dict]:
+    """Split Markdown on the headings the author already wrote.
+
+    A Markdown block states its own structure, so unlike a PDF there is no
+    need to guess where a section begins. Text before the first heading is
+    kept as a preamble section rather than dropped — it is source text too.
+    """
+    lines = md.splitlines()
+    marks: list[tuple[int, str]] = []
+    for i, line in enumerate(lines):
+        m = _MD_HEADING.match(line)
+        if m:
+            marks.append((i, m.group(2).strip()))
+
+    if not marks:
+        return [{"title": f"Parte {i + 1}", "text": t}
+                for i, t in enumerate(_split_windows(md)) if t.strip()]
+
+    sections: list[dict] = []
+    if marks[0][0] > 0:
+        preamble = "\n".join(lines[:marks[0][0]]).strip()
+        if preamble:
+            sections.append({"title": "Introducción", "text": preamble})
+    for i, (start, title) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else len(lines)
+        body = "\n".join(lines[start + 1:end]).strip()
+        if body:
+            sections.append({"title": title, "text": body})
+    if not sections:
+        sections = [{"title": f"Parte {i + 1}", "text": t}
+                    for i, t in enumerate(_split_windows(md)) if t.strip()]
+
+    # Same rule as the PDF path: one long section must not become one huge
+    # call. Without this a 40k-character Markdown block goes to the model in a
+    # single request and the tail degrades silently.
+    final: list[dict] = []
+    for sec in sections:
+        for part_i, chunk in enumerate(_split_windows(sec["text"])):
+            title = sec["title"] if part_i == 0 else f"{sec['title']} (cont. {part_i + 1})"
+            final.append({"title": title, "text": chunk})
+    return final
+
+
 def _extract_sections(path: str) -> list[dict]:
     """Split the PDF into sections: TOC first, then headings, then windows.
 
@@ -149,7 +202,7 @@ def _extract_sections(path: str) -> list[dict]:
         finally:
             doc.close()
     except Exception:
-        logger.warning("[openzen-pdf] no se pudo leer el TDC", exc_info=True)
+        logger.warning("[openzen] no se pudo leer el TDC", exc_info=True)
         toc = []
 
     sections = _sections_from_toc(pages, toc) if toc else []
@@ -168,6 +221,23 @@ def _extract_sections(path: str) -> list[dict]:
             title = sec["title"] if part_i == 0 else f"{sec['title']} (cont. {part_i + 1})"
             final.append({"title": title, "text": chunk})
     return final
+
+
+def _sections_for(source_type: str, ref: str) -> list[dict]:
+    """Resolve a source reference into sections, whatever its kind.
+
+    ``ref`` is a file path for PDFs and the raw text for Markdown.
+    """
+    if source_type == "markdown":
+        sections = _markdown_sections(ref or "")
+    else:
+        resolved = _resolve_pdf_path(ref)
+        if not resolved:
+            raise RuntimeError(f"PDF no encontrado: {ref}")
+        sections = _extract_sections(resolved)
+    if not sections:
+        raise RuntimeError("no se pudo extraer texto del material de origen")
+    return sections
 
 
 # ─── Chunk state ────────────────────────────────────────────────────
@@ -265,7 +335,7 @@ def _run_with_retry(provider, section, num, total, language, length_hint,
                                      length_hint, role)
         except Exception as e:  # noqa: BLE001 — any provider failure is retryable
             last = e
-            logger.warning("[openzen-pdf] sección %d intento %d/%d falló: %s",
+            logger.warning("[openzen] sección %d intento %d/%d falló: %s",
                            num, attempt, MAX_ATTEMPTS, e)
             if on_attempt:
                 on_attempt(attempt, str(e))
@@ -311,23 +381,18 @@ def _insert_chunk(content: str, n: int, body: str) -> str:
     return f"{content[:at].rstrip()}\n\n{marker}\n{body}\n\n{content[at:]}"
 
 
-def _run_openzen_md(task_id: str, pdf_path: str, *, template_id, language,
-                    length, user_id: str) -> None:
-    """Background thread: chunk the PDF per section, generate, assemble."""
+def _run_openzen_md(task_id: str, source_type: str, ref: str, *, template_id,
+                    language, length, user_id: str) -> None:
+    """Background thread: chunk the source per section, generate, assemble."""
     from ai.notebooklm.md_templates import _length_instruction, get_md_template_role
 
     try:
         execute("UPDATE ai_tasks SET status='processing', updated_at=NOW() WHERE id=%s",
                 (task_id,))
-        _set_message(task_id, f"⏳ Abriendo el PDF…")
+        _set_message(task_id, "⏳ Abriendo el material de origen…"
+                     if source_type == "pdf" else "⏳ Leyendo el Markdown…")
 
-        resolved = _resolve_pdf_path(pdf_path)
-        if not resolved:
-            raise RuntimeError(f"PDF no encontrado: {pdf_path}")
-
-        sections = _extract_sections(resolved)
-        if not sections:
-            raise RuntimeError("no se pudo extraer texto del PDF")
+        sections = _sections_for(source_type, ref)
         total = len(sections)
         _set_message(task_id, f"📄 {total} secciones detectadas")
 
@@ -348,7 +413,7 @@ def _run_openzen_md(task_id: str, pdf_path: str, *, template_id, language,
                 )
                 pieces[n] = body
             except Exception as e:  # noqa: BLE001 — skip, keep the rest
-                logger.error("[openzen-pdf] sección %d agotó los reintentos: %s", n, e)
+                logger.error("[openzen] sección %d agotó los reintentos: %s", n, e)
                 failed.append({"chunk": n, "title": section["title"], "error": str(e)})
 
             _save_state(task_id, {
@@ -373,10 +438,10 @@ def _run_openzen_md(task_id: str, pdf_path: str, *, template_id, language,
         _set_message(task_id, msg)
 
         stats = {
-            "pipeline": f"openzen-pdf + {total} secciones",
+            "pipeline": f"openzen-{source_type} + {total} secciones",
             "model": PROVIDER, "depth": length, "language": language,
             "template_id": template_id,
-            "total_sections": total, "generated_sections": len(pieces),
+            "source_type": source_type, "total_sections": total, "generated_sections": len(pieces),
             "failed_chunks": failed,
             "input_chars": sum(len(s["text"]) for s in sections),
             "output_chars": len(content),
@@ -396,37 +461,56 @@ def _run_openzen_md(task_id: str, pdf_path: str, *, template_id, language,
 
 # ─── Public API ─────────────────────────────────────────────────────
 def _validate_block(block_id, topic_id, user_id):
+    """Resolve a block to (id, topic_id, source_type, source_ref).
+
+    ``source_ref`` is a file path for a PDF and the block's own text for a
+    Markdown block, so the caller does not have to care which it got.
+    """
     block_id_int = _coerce_id(block_id, "block_id")
     topic_id_int = _coerce_id(topic_id, "topic_id")
     block = query_one("SELECT * FROM blocks WHERE id = %s AND user_id = %s",
                       (block_id_int, user_id))
     if not block:
         raise ValueError("Block not found")
-    if block["type"] not in ("pdf", "pdf-ref"):
-        raise ValueError(f"Block must be 'pdf' or 'pdf-ref', got '{block['type']}'")
-    pdf_path = (block.get("pdf_path") or block.get("url") or "").strip()
-    if not pdf_path:
-        raise ValueError("PDF block has no file path")
-    return block_id_int, topic_id_int, pdf_path
+
+    btype = block["type"]
+    if btype in PDF_TYPES:
+        source_type = "pdf"
+        ref = (block.get("url") or "").strip()
+        if not ref:
+            raise ValueError("El bloque PDF no tiene ruta de fichero")
+    elif btype in MD_TYPES:
+        source_type = "markdown"
+        ref = (block.get("content") or "").strip()
+        if not ref:
+            raise ValueError("El bloque Markdown está vacío")
+    else:
+        raise ValueError(
+            f"El bloque debe ser {'/'.join(PDF_TYPES + MD_TYPES)}, "
+            f"es '{btype}'"
+        )
+    return block_id_int, topic_id_int, source_type, ref
 
 
 def create_openzen_md_task(block_id, topic_id, user_id, *, template_id=None,
                            language="auto", length="standard") -> dict:
-    """Create an OpenZen PDF→Markdown task, chunked per section."""
-    block_id_int, topic_id_int, pdf_path = _validate_block(block_id, topic_id, user_id)
+    """Create an OpenZen source→Markdown task, chunked per section."""
+    block_id_int, topic_id_int, source_type, ref = _validate_block(
+        block_id, topic_id, user_id)
 
     row = execute_returning(
         """INSERT INTO ai_tasks
            (id, user_id, topic_id, task_type, format, source_type, source_id,
-            template_id, language, length, status)
-           VALUES (%s, %s, %s, 'openzen', 'markdown', 'pdf', %s, %s, %s, %s, 'pending')
+             template_id, language, length, status)
+           VALUES (%s, %s, %s, 'openzen', 'markdown', %s, %s, %s, %s, %s, 'pending')
            RETURNING id""",
-        (_new_task_id(), user_id, topic_id_int, block_id, template_id, language, length),
+        (_new_task_id(), user_id, topic_id_int, source_type, block_id,
+         template_id, language, length),
     )
     task_id = row["id"]
     threading.Thread(
         target=_run_openzen_md,
-        args=(task_id, pdf_path),
+        args=(task_id, source_type, ref),
         kwargs={"template_id": template_id, "language": language,
                 "length": length, "user_id": user_id},
         daemon=True,
@@ -454,12 +538,15 @@ def retry_openzen_chunk(task_id: str, chunk_num: int, user_id: str) -> dict:
                       (source_id, user_id))
     if not block:
         raise ValueError("Block not found")
-    pdf_path = (block.get("pdf_path") or block.get("url") or "").strip()
-    resolved = _resolve_pdf_path(pdf_path)
-    if not resolved:
-        raise ValueError(f"PDF no encontrado: {pdf_path}")
+    btype = block["type"]
+    if btype in MD_TYPES:
+        source_type, ref = "markdown", (block.get("content") or "").strip()
+    else:
+        source_type, ref = "pdf", (block.get("url") or "").strip()
+    if not ref:
+        raise ValueError("El bloque ya no tiene material de origen")
 
-    sections = _extract_sections(resolved)
+    sections = _sections_for(source_type, ref)
     n = int(chunk_num)
     if n < 1 or n > len(sections):
         raise ValueError(f"Sección {n} fuera de rango (1-{len(sections)})")

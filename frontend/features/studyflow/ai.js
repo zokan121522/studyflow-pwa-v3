@@ -181,11 +181,10 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         // its own. Defaults to 'detailed' because that is the whole point of
         // choosing OpenZen over NotebookLM.
         { id: "markdown", label: "Markdown", icon: "✍️", cat: "generate", order: 99,
-          // PDF only, on purpose: the backend reads a PDF and splits it into
-          // sections. Mapping 'md' here would render the button on markdown
-          // blocks, where the request would come back 400 — a dead button is
-          // worse than no button. Markdown-as-source is a separate feature.
-          pdf: "openzen-pdf-markdown",
+          // PDFs are split by structure (TDC, then headings, then windows);
+          // Markdown blocks already carry headings, so they are read as
+          // written. Both keep the PDF/text as the source of truth.
+          md: "openzen-md-content", pdf: "openzen-pdf-markdown",
           task: { md: "openzen_markdown", pdf: "openzen_markdown" } },
         { id: "audio", label: "Audio", icon: "🎵", cat: "generate", order: 60,
           md: "audio", pdf: "audio",

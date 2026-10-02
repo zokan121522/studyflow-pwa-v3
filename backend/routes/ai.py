@@ -46,7 +46,7 @@ from ai.notebooklm.tasks_flashcards import create_notebooklm_flashcards_task
 from ai.notebooklm.md_templates_catalog import list_md_templates
 from ai.generation.knowledge_pipeline import create_knowledge_pipeline_task
 from ai.generation.grammar import create_grammar_task
-from ai.generation.openzen_pdf import (
+from ai.generation.openzen_source import (
     create_openzen_md_task, retry_openzen_chunk,
 )
 
@@ -330,18 +330,23 @@ def notebooklm_pdf_to_html(current_user_id: int):
 # ═══════════════════════════════════════════════════════════════════
 
 
-@bp.route("/ai/openzen/pdf-to-markdown", methods=["POST"])
+@bp.route("/ai/openzen/source-to-markdown", methods=["POST"])
+@bp.route("/ai/openzen/pdf-to-markdown", methods=["POST"])  # alias: old clients
 @token_required
-def openzen_pdf_to_markdown(current_user_id: int):
-    """POST /api/ai/openzen/pdf-to-markdown — PDF → Markdown via OpenZen.
+def openzen_source_to_markdown(current_user_id: int):
+    """POST /ai/openzen/source-to-markdown — PDF or Markdown → notes via OpenZen.
 
-    Same contract as ``/ai/notebooklm/pdf-to-markdown``, but the PDF is split
+    Same contract as ``/ai/notebooklm/pdf-to-markdown``, but the source is split
     per section and each section is generated (and retried) on its own. A
     section that keeps failing is reported instead of killing the document, and
     can be re-run alone with the retry endpoint below.
 
+    Accepts a PDF block (split by its own table of contents / headings) or a
+    Markdown block (split by the headings the author wrote). Either way the
+    source document is the only material the model is given.
+
     Request body:
-        block_id   (str): PDF block to process.
+        block_id   (str): PDF or Markdown block to process.
         topic_id   (str, optional): Topic to associate the result with.
         template_id(str, optional): MD_TEMPLATES key.
         language   (str, optional): 'auto' | 'es' | 'en'.

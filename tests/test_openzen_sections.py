@@ -18,10 +18,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from ai.generation.openzen_pdf import (  # noqa: E402
+import ai.generation.openzen_source as openzen_source  # noqa: E402
+
+from ai.generation.openzen_source import (  # noqa: E402
     MAX_SECTION_CHARS,
     _pdf_pages_text,
     _insert_chunk,
+    _markdown_sections,
+    _sections_for,
     _section_prompt,
     _system_message,
     _assemble,
@@ -230,3 +234,135 @@ class TestChunkOrdering:
 
     def test_insert_into_empty_document(self):
         assert "cuerpo1" in _insert_chunk("", 1, "cuerpo1")
+
+
+class TestMarkdownSource:
+    """A Markdown block states its own structure — read it, do not guess it."""
+
+    MD = (
+        "Estas son notas previas sobre el tema.\n"
+        "Segunda linea del preambulo.\n\n"
+        "# Introduccion\n"
+        + ("texto de la introduccion " * 30) + "\n\n"
+        "## Subtema uno\n"
+        + ("detalle del subtema uno " * 30) + "\n\n"
+        "## Subtema dos\n"
+        + ("detalle del subtema dos " * 30) + "\n"
+    )
+
+    def test_splits_on_the_authors_headings(self):
+        secs = _markdown_sections(self.MD)
+        titles = [s["title"] for s in secs]
+        assert "Introduccion" in titles
+        assert "Subtema uno" in titles and "Subtema dos" in titles
+
+    def test_keeps_the_preamble_before_the_first_heading(self):
+        secs = _markdown_sections(self.MD)
+        assert secs[0]["title"] == "Introduccion preamble" or \
+               "notas previas" in secs[0]["text"]
+        assert any("notas previas" in s["text"] for s in secs), \
+            "el texto anterior al primer encabezado es material fuente"
+
+    def test_no_body_text_is_lost(self):
+        """Headings become the section titles, which travel in the prompt.
+
+        So the invariant is: every heading is preserved as a title, and every
+        remaining character of the source appears in some body.
+        """
+        secs = _markdown_sections(self.MD)
+        without_headings = "\n".join(
+            l for l in self.MD.splitlines() if not l.lstrip().startswith("#"))
+        assert norm("".join(s["text"] for s in secs)) == norm(without_headings)
+        for heading in ("Introduccion", "Subtema uno", "Subtema dos"):
+            assert any(heading in s["title"] for s in secs), \
+                f"el encabezado '{heading}' no se conservó como título"
+
+    def test_markdown_without_headings_falls_back_to_windows(self):
+        md = "\n\n".join(_para(200) for _ in range(20))
+        secs = _markdown_sections(md)
+        assert len(secs) > 1
+        assert norm("".join(s["text"] for s in secs)) == norm(md)
+
+    def test_empty_markdown_yields_nothing(self):
+        assert _markdown_sections("") == []
+        assert _markdown_sections("   \n  ") == []
+
+    def test_oversized_markdown_section_is_resplit(self):
+        md = "## Capitulo\n" + "\n\n".join(_para(200) for _ in range(30))
+        secs = _markdown_sections(md)
+        assert len(secs) > 1
+        assert all(len(s["text"]) <= MAX_SECTION_CHARS + 500 for s in secs)
+
+
+class TestSectionsFor:
+    """_sections_for() is the single door in: PDF path or Markdown text."""
+
+    def test_markdown_needs_no_file(self):
+        secs = _sections_for("markdown", "# A\n" + _para(60))
+        assert secs and secs[0]["title"] == "A"
+
+    def test_unknown_source_type_is_not_silently_pdf(self):
+        try:
+            _sections_for("docx", "/tmp/no-existe")
+        except RuntimeError as e:
+            assert "no encontrado" in str(e)
+        else:
+            raise AssertionError("un tipo desconocido no debe tratarse como PDF")
+
+    def test_missing_markdown_raises(self):
+        try:
+            _sections_for("markdown", "")
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("markdown vacío debe fallar, no devolver []")
+
+
+class TestValidateBlock:
+    """Which sources are accepted is decided here — so it gets tested here."""
+
+    def _patch(self, monkeypatch, row):
+        monkeypatch.setattr(openzen_source, "query_one", lambda *a, **k: row)
+
+    def test_pdf_block_yields_the_url(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "pdf", "url": "/tmp/a.pdf",
+                                  "content": None})
+        _, _, kind, ref = openzen_source._validate_block(7, 3, 1)
+        assert kind == "pdf" and ref == "/tmp/a.pdf"
+
+    def test_pdf_ref_block_yields_the_url(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "pdf-ref", "url": "/tmp/a.pdf"})
+        _, _, kind, ref = openzen_source._validate_block(7, 3, 1)
+        assert kind == "pdf" and ref == "/tmp/a.pdf"
+
+    def test_markdown_block_yields_its_content(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "markdown", "url": None,
+                                  "content": "# Hola\ntexto"})
+        _, _, kind, ref = openzen_source._validate_block(7, 3, 1)
+        assert kind == "markdown" and ref.startswith("# Hola")
+
+    def test_content_block_is_markdown(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "content", "content": "texto"})
+        _, _, kind, _ = openzen_source._validate_block(7, 3, 1)
+        assert kind == "markdown"
+
+    def test_empty_markdown_block_is_rejected(self, monkeypatch):
+        """Silently accepting it would produce a task that fails much later."""
+        self._patch(monkeypatch, {"id": 7, "type": "markdown", "content": "   "})
+        with pytest.raises(ValueError, match="vacío"):
+            openzen_source._validate_block(7, 3, 1)
+
+    def test_pdf_without_url_is_rejected(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "pdf", "url": "  ", "content": "x"})
+        with pytest.raises(ValueError):
+            openzen_source._validate_block(7, 3, 1)
+
+    def test_unsupported_block_type_is_rejected(self, monkeypatch):
+        self._patch(monkeypatch, {"id": 7, "type": "video", "content": "x"})
+        with pytest.raises(ValueError):
+            openzen_source._validate_block(7, 3, 1)
+
+    def test_missing_block_is_rejected(self, monkeypatch):
+        self._patch(monkeypatch, None)
+        with pytest.raises(ValueError, match="not found"):
+            openzen_source._validate_block(7, 3, 1)

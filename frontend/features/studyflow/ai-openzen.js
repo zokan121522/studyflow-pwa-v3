@@ -23,11 +23,37 @@ window.App.AI = window.App.AI || {};
     if (ai && ai._showStatus) ai._showStatus(id, msg, persistent);
   };
 
-  // ─── OpenZen PDF → Markdown (chunked per section) ────────────────
+  // The route was renamed from pdf-to-markdown to source-to-markdown when the
+  // backend started accepting Markdown blocks too. A browser can hold the new
+  // JS against a server that has not reloaded yet, so fall back to the old
+  // path instead of failing the click with a 405. Remove once every deployed
+  // server answers on the new path.
+  const SOURCE_ROUTES = ["/ai/openzen/source-to-markdown", "/ai/openzen/pdf-to-markdown"];
+
+  // window.API surfaces the status as prose ("METHOD NOT ALLOWED"), not as a
+  // number, so match both forms or the fallback silently never fires.
+  const ROUTE_MISSING = /\b(404|405)\b|not found|not allowed/i;
+
+  async function postSource(body) {
+    let lastErr;
+    for (const route of SOURCE_ROUTES) {
+      try {
+        return await window.API.post(route, body);
+      } catch (err) {
+        lastErr = err;
+        if (!ROUTE_MISSING.test(err.message || String(err))) throw err;
+      }
+    }
+    throw lastErr;
+  }
+
+  // ─── OpenZen source → Markdown (chunked per section) ─────────────
+  // Works on a PDF block or a Markdown block; the backend picks the right
+  // splitting strategy and treats the source as the only material.
   async function generateOpenzenMd(blockId, topicId, params = {}) {
-    Status(blockId, "⏳ Preparando el PDF para OpenZen…");
+    Status(blockId, "⏳ Preparando el material para OpenZen…");
     try {
-      const resp = await window.API.post("/ai/openzen/pdf-to-markdown", {
+      const resp = await postSource({
         block_id: blockId,
         topic_id: topicId || "",
         template_id: params.template_id || null,
