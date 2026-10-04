@@ -30,6 +30,7 @@ from routes.courses_aliases import bp as courses_aliases_bp
 from routes.blocks import bp as blocks_bp
 from routes.pdf import bp as pdf_bp
 from routes.pdf_md2pdf import bp as pdf_md2pdf_bp
+from routes.image import bp as image_bp
 from routes.quiz import bp as quiz_bp
 from routes.addons import bp as addons_bp
 from routes.todos import bp as todos_bp
@@ -76,7 +77,7 @@ def _register_blueprints(app: Flask) -> None:
         agenda_state_bp, agenda_categories_bp,
         quick_notes_bp, calendar_bp, calendar_import_bp,
         habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
-        pdf_bp, pdf_md2pdf_bp, quiz_bp, addons_bp,
+        pdf_bp, pdf_md2pdf_bp, image_bp, quiz_bp, addons_bp,
         todos_bp, audio_bp, tts_bp, settings_bp,
         notebooklm_settings_bp, notebooklm_login_bp,
         ai_bp, notebooklm_content_bp, backup_bp,

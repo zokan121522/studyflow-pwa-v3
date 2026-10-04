@@ -17,7 +17,7 @@ All endpoints JSON-only. Single-user local mode uses @token_required
 which falls back to LOCAL_USER_ID (1) when no JWT is present.
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 
 from database import execute, fetchone, fetchall
 from routes.auth import token_required
@@ -31,9 +31,12 @@ bp = Blueprint('blocks', __name__)
 # Whitelist of columns the front-end is allowed to write. Any other key in
 # the payload is silently ignored — this prevents accidental schema
 # leakage from v2's bulk-PATCH endpoint shape.
+#
+# image_id is what links an `image` block to its row in `images`; it arrives
+# from the upload call, which runs before the block is created.
 _WRITABLE_FIELDS = (
     'title', 'content', 'url', 'type', 'collapsed',
-    'done', 'color', 'order_index',
+    'done', 'color', 'order_index', 'image_id',
 )
 
 
@@ -129,8 +132,8 @@ def create_topic_block(
     execute(
         '''INSERT INTO blocks
              (user_id, course_id, topic_id, type, title, content, url,
-              order_index, color, collapsed, done)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+              order_index, color, collapsed, done, image_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
         (current_user_id, course_id, topic_id,
          payload.get('type', 'markdown'),
          payload.get('title', ''),
@@ -139,7 +142,8 @@ def create_topic_block(
          order_index,
          payload.get('color', ''),
          bool(payload.get('collapsed', False)),
-         bool(payload.get('done', False)))
+         bool(payload.get('done', False)),
+         payload.get('image_id'))
     )
 
     row = fetchone(
@@ -172,8 +176,8 @@ def create_course_block(current_user_id: int, course_id: int):
     execute(
         '''INSERT INTO blocks
              (user_id, course_id, topic_id, type, title, content, url,
-              order_index, color, collapsed, done)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+              order_index, color, collapsed, done, image_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
         (current_user_id, course_id, topic_id,
          payload.get('type', 'markdown'),
          payload.get('title', ''),
@@ -182,7 +186,8 @@ def create_course_block(current_user_id: int, course_id: int):
          order_index,
          payload.get('color', ''),
          bool(payload.get('collapsed', False)),
-         bool(payload.get('done', False)))
+         bool(payload.get('done', False)),
+         payload.get('image_id'))
     )
 
     row = fetchone(
@@ -255,7 +260,11 @@ def toggle_done(
 def delete_block(
     current_user_id: int, course_id: int, block_id: int
 ):
-    """Hard-delete a block."""
+    """Hard-delete a block, and its image if it carried one."""
+    block = _own_block(block_id, course_id, current_user_id)
+    if not block:
+        return jsonify({'error': 'Block not found'}), 404
+
     result = execute(
         'DELETE FROM blocks WHERE id = %s AND course_id = %s '
         'AND user_id = %s',
@@ -263,7 +272,32 @@ def delete_block(
     )
     if result == 0:
         return jsonify({'error': 'Block not found'}), 404
+
+    # An `image` block owns its image: nothing else points at it, and the FK
+    # is ON DELETE SET NULL, so leaving the row behind would strand both the
+    # metadata and the file on the volume with no way to reach them from the
+    # UI. Deleting the block has to take the image with it.
+    _reap_image(current_user_id, block['type'], block.get('image_id'))
+
     return jsonify({'message': 'Block deleted successfully'})
+
+
+def _reap_image(current_user_id: int, block_type, image_id) -> None:
+    """Delete the image behind a deleted block. Never fatal.
+
+    Best-effort by design: the block is already gone, so a failure here must
+    not turn a successful delete into a 500. The orphan is litter on the
+    volume, not a correctness problem.
+    """
+    if block_type != 'image' or not image_id:
+        return
+    try:
+        from routes.image import delete_image_file
+        delete_image_file(current_user_id, int(image_id))
+    except Exception:
+        current_app.logger.warning(
+            'Block deleted but image %s could not be reaped', image_id
+        )
 
 
 # ============================== Bulk reorder / Move ==============================

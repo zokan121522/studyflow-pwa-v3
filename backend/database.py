@@ -71,6 +71,14 @@ def init_db() -> None:
             create_calendar_import_tables(cur2)
         c2.commit()
 
+    # R4 — image blocks. Same arrangement as the calendar import above: the
+    # DDL belongs to the feature package, database.py only wires it up.
+    from images.schema import create_images_tables
+    with get_db() as c3:
+        with c3.cursor() as cur3:
+            create_images_tables(cur3)
+        c3.commit()
+
 
 def _seed_local_user() -> None:
     """Ensure the implicit local user (id=1) exists so single-user mode works.

@@ -481,6 +481,9 @@
        popover the moment a pdf-ref block is created. -->
   <script src="/features/studyflow/pdf-import-stream.js"></script>
   <script src="/features/studyflow/pdf-import.js"></script>
+  <!-- R4: image upload (App.ImageUpload). Loads before courses-blocks.js so
+       the 🖼 chip handler can reach pickAndUpload when a block is created. -->
+  <script src="/features/studyflow/image-upload.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
   <script src="/features/studyflow/courses.js"></script>
   <!-- S7b-B — floating study menu (⋯ FAB) + SCORM/Moodle credentials

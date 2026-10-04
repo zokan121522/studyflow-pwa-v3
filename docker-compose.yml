@@ -82,6 +82,7 @@ services:
       PDF_UPLOAD_FOLDER: /srv/backend/uploads/pdfs
       AUDIO_UPLOAD_FOLDER: /srv/backend/uploads/audio
       INFOGRAPHIC_UPLOAD_FOLDER: /srv/backend/uploads/infographics
+      IMAGE_UPLOAD_FOLDER: /srv/backend/uploads/images
       NOTEBOOKLM_DIR: /srv/backend/uploads/notebooklm
       # The `notebooklm` library resolves its profile dir from
       # NOTEBOOKLM_HOME, NOT NOTEBOOKLM_DIR. Without this the library looks
@@ -124,6 +125,7 @@ services:
       - pdf_uploads:/srv/backend/uploads/pdfs
       - audio_uploads:/srv/backend/uploads/audio
       - infographics:/srv/backend/uploads/infographics
+      - image_uploads:/srv/backend/uploads/images
       - notebooklm:/srv/backend/uploads/notebooklm
       - scraped_pdfs:/srv/backend/uploads/scraped_pdfs
     depends_on:
@@ -145,5 +147,6 @@ volumes:
   pdf_uploads:
   audio_uploads:
   infographics:
+  image_uploads:
   notebooklm:
   scraped_pdfs:

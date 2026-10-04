@@ -262,6 +262,7 @@ class Block:
     order_index: int = 0
     color: str = ''
     collapsed: bool = False
+    image_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -273,6 +274,7 @@ class Block:
             'content': self.content, 'url': self.url,
             'done': self.done, 'order_index': self.order_index,
             'color': self.color, 'collapsed': self.collapsed,
+            'image_id': self.image_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -290,6 +292,7 @@ class Block:
             order_index=row.get('order_index', 0) or 0,
             color=row.get('color') or '',
             collapsed=bool(row.get('collapsed', False)),
+            image_id=row.get('image_id'),
             created_at=row.get('created_at'),
             updated_at=row.get('updated_at'),
         )
@@ -333,6 +336,56 @@ class PDF:
             original_name=row['original_name'],
             file_size=row.get('file_size'),
             page_count=row.get('page_count'),
+            storage_path=row.get('storage_path'),
+            created_at=row.get('created_at'),
+        )
+
+
+@dataclass
+class Image:
+    """An uploaded image backing an `image` block.
+
+    `filename` is the on-disk name (uuid + sniffed extension) and is the only
+    one that ever becomes a path. `original_name` is sanitised user input kept
+    for display — the block title is derived from it, and it must never be
+    trusted as a location.
+    """
+    id: int
+    user_id: int
+    course_id: Optional[int] = None
+    topic_id: Optional[int] = None
+    filename: str = ''
+    original_name: str = ''
+    mime: str = 'image/png'
+    file_size: Optional[int] = None
+    storage_path: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'course_id': self.course_id,
+            'topic_id': self.topic_id,
+            'filename': self.filename,
+            'original_name': self.original_name,
+            'mime': self.mime,
+            'file_size': self.file_size,
+            'storage_path': self.storage_path,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @classmethod
+    def from_row(cls, row: Dict[str, Any]) -> 'Image':
+        return cls(
+            id=row['id'],
+            user_id=row['user_id'],
+            course_id=row.get('course_id'),
+            topic_id=row.get('topic_id'),
+            filename=row['filename'],
+            original_name=row['original_name'],
+            mime=row.get('mime') or 'image/png',
+            file_size=row.get('file_size'),
             storage_path=row.get('storage_path'),
             created_at=row.get('created_at'),
         )

@@ -55,9 +55,12 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // install — the bump is what actually delivers them to installed PWAs.
 // v86: propagates the topic-level "➕ Añadir" bar (courses.js) and the removal
 // of the per-block add group + hidden add types (ai.js, courses-blocks.js).
+// v87: propagates R4 image blocks — image-upload.js is brand new and must be
+// precached (the 🖼 chip resolves App.ImageUpload at click time), plus the
+// courses-blocks.js image render branch and studyflow-blocks.css.
 // Editing a precached .js without this bump ships code that no installed PWA
 // can load — see tests/test_sw_asset_version.py.
-const ASSET_CACHE = 'studyflow-assets-v86';
+const ASSET_CACHE = 'studyflow-assets-v87';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -91,6 +94,8 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-import.js',
   // S7b-A: SSE pseudo-terminal for the SCORM import
   '/features/studyflow/pdf-import-stream.js',
+  // R4: image block upload (picker + FormData + block creation)
+  '/features/studyflow/image-upload.js',
   // S7b-B: floating study menu + SCORM credentials settings
   '/features/studyflow/study-scheduler.js',
   '/features/studyflow/study-scheduler.css',

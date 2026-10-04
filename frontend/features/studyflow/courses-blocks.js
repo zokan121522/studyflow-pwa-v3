@@ -221,6 +221,19 @@ addBlock, updateBlock, deleteBlock,
       bodyHtml = url
         ? `<div class="sf-link-body">▶️ <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></div>`
         : `<div class="sf-empty">Sin URL</div>`;
+    } else if (type === "image") {
+      // R4 — the block carries no bytes: `image_id` points at the row in
+      // `images` and the pixels come from the uploads volume. A bare <img>
+      // works unauthenticated because token_required falls back to the local
+      // user when no Authorization header is sent.
+      // No image_id means the image row was deleted (ON DELETE SET NULL) or
+      // the upload never completed — report that instead of shipping a
+      // broken image icon into the topic.
+      const imageId = Number(b.image_id) || 0;
+      const alt = escHtml(b.title || "Imagen");
+      bodyHtml = imageId
+        ? `<div class="sf-image-body"><img src="/api/image/${imageId}/file" alt="${alt}" loading="lazy" decoding="async"></div>`
+        : `<div class="sf-empty">Imagen no disponible</div>`;
     } else if (type === "exercise") {
       // Issue #10 — quiz por bloque: the exercise stem renders as
       // markdown and the questions live in quiz_questions.block_id.
@@ -671,6 +684,27 @@ async function _embedPdfBlock(domCourse, domTopic, sourceBlockId, pdf, title) {
         }
         if (!cid) return;
         const type = chip.dataset.type;
+
+        // 🖼 Image is the one chip that cannot use the generic path below.
+        // That path creates the block FIRST from TYPE_META defaults, which for
+        // `image` means a block with no image_id — a permanent "Imagen no
+        // disponible". So the file has to be chosen and uploaded first, and
+        // only then does a block get created pointing at it. Cancelling the
+        // picker creates nothing at all.
+        if (type === "image") {
+          const picker = window.App.ImageUpload;
+          if (!picker || typeof picker.pickAndUpload !== "function") {
+            alert("❌ El módulo de imágenes no está cargado.");
+            return;
+          }
+          try {
+            await picker.pickAndUpload({ courseId: cid, topicId: tid });
+          } catch (err) {
+            alert("❌ Error al añadir la imagen: " + (err.message || err));
+          }
+          return;
+        }
+
         const meta = TYPE_META[type] || TYPE_META.markdown;
         const def = meta.defaults || { content: "", url: "", title: "" };
         try {
