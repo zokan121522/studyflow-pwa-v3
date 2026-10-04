@@ -31,20 +31,11 @@ window.App.AI = Object.assign(window.App.AI, (function () {
     notebooklm_total: ["notebooklm", "notebooklm_enhance_md", "notebooklm_md_to_html"],
   };
 
-  // ➕ Añadir — block-creation types rendered as the last toolbar group
-  // (v2 parity). Mirrors CoursesBlocks.TYPE_META labels/icons; the
-  // click handler is the same `.sf-td-add-chip` delegate from
-  // CoursesBlocks._attachBlockHandlers so creation defaults live there.
-  const ADD_TYPE_META = {
-    markdown:  { icon: "📝", label: "Markdown" },
-    content:   { icon: "📄", label: "Texto" },
-    separator: { icon: "➖", label: "Separador" },
-    "pdf-ref": { icon: "📕", label: "PDF" },
-    youtube:   { icon: "▶️", label: "YouTube" },
-    image:     { icon: "🖼", label: "Imagen" },
-    exercise:  { icon: "❓", label: "Ejercicio" },
-    interactive: { icon: "🌐", label: "Página web" },
-  };
+  // ➕ Añadir does NOT live here. Block creation is a TOPIC-level bar
+  // (CoursesBlocks._renderAddBar, rendered by courses.js right under the
+  // topic title) whose chip list has a single source of truth:
+  // CoursesBlocks.TYPE_META. This second copy drifted from the renderer and
+  // caused the "add bar only shows on empty topics" bug — don't re-add it.
 
   async function _fetchUsageData() {
     try {
@@ -239,19 +230,10 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       }
       html += `</div>`;
     }
-    // ➕ Añadir — block-creation group, rendered BELOW the addon groups
-    // (v2 parity: the 📎 Add section lived inside the per-block unified
-    // toolbar, after the generate groups. The global topic add-bar now
-    // renders only for empty topics — see courses.js _renderTopicDetail).
-    html += `<div class="toolbar-group" data-addon="add">` +
-      `<span class="toolbar-chip toolbar-chip-add" title="Añadir bloque">➕ Añadir</span>`;
-    for (const [type, m] of Object.entries(ADD_TYPE_META)) {
-      html += `<button type="button" class="sf-td-add-chip" data-type="${escHtml(type)}"` +
-        `${bidAttr}${topicAttr} title="${escHtml(m.label)}">` +
-        `<span class="sf-td-add-chip-icon">${m.icon}</span>${escHtml(m.label)}</button>`;
-    }
-    html += `</div>`;
-    // MD → PDF sits with the ➕ Añadir group: it acts on THIS block (turn its
+    // ➕ Añadir was removed from the per-block toolbar on purpose: blocks are
+    // created from the TOPIC-level add bar (see courses.js _renderTopicDetail),
+    // so there is one place to add a block and one chip list (TYPE_META).
+    // MD → PDF sits after the addon groups: it acts on THIS block (turn its
     // markdown into a stored PDF) rather than creating anything, so it reads
     // as a per-block action and not as another block type to add.
     if (scope === "md") {

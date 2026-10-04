@@ -722,10 +722,11 @@ window.App.Courses = (function () {
         : '<div class="empty-state"><span class="big">📝</span><br>'
           + 'Este tema no tiene bloques aún.<br>'
           + 'Crea uno con “+ Añadir bloque”.</div>');
-    // v2 parity: the global ➕ Añadir bar only renders on EMPTY topics.
-    // On non-empty topics the create chips live inside each block's
-    // unified toolbar (ai.js ➕ Añadir group, below NotebookLM/OpenZen).
-    const addBar = blocks.length ? "" : Blocks._renderAddBar(courseId, topicId);
+    // ➕ Añadir is a TOPIC-level bar: it renders on EVERY topic, empty or not,
+    // right under the topic title. The old code only rendered it for empty
+    // topics and pushed the create chips into each block's toolbar (ai.js),
+    // which made the whole feature invisible on any normal topic.
+    const addBar = Blocks._renderAddBar(courseId, topicId);
     // The fold-all control reads the whole topic, not the filtered view, so
     // "desplegar todo" from a single focused block would otherwise be a lie.
     const allCollapsed = allBlocks.length > 0 && allBlocks.every((b) => !!b.collapsed);
@@ -736,6 +737,7 @@ window.App.Courses = (function () {
           ← ${escHtml(course.title || "Curso")}
         </div>
         <h2 class="sf-td-title">${escHtml(topic.title || "Tema")}</h2>
+        ${addBar}
         ${focusId
           ? `<button type="button" class="sf-td-show-all ht-btn"
                data-course-id="${courseId}" data-topic-id="${topicId}">
@@ -751,7 +753,6 @@ window.App.Courses = (function () {
         ${topic.description
           ? `<div class="sf-td-desc md-view">${_renderMd(topic.description)}</div>`
           : ""}
-        ${addBar}
         <div class="sf-td-blocks">${blocksHtml}</div>
       </div>
     `;

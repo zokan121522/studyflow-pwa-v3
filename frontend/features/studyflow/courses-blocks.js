@@ -281,14 +281,21 @@ addBlock, updateBlock, deleteBlock,
   }
 
   // ── _renderAddBar(courseId, topicId) → HTML ──────────────────
-  // v2-style "+ Añadir bloque" bar. The toggle reveals a horizontal
-  // row of type-specific chips (markdown / content / pdf / youtube /
-  // image / exercise / interactive / separator). Each chip posts a
-  // new block via App.CoursesAPI.addBlock using the type's defaults
-  // (see TYPE_META.defaults) so the new block renders immediately.
-  // Block types hidden from the "Añadir bloque" menu. The type stays in
-  // TYPE_META so existing blocks (28 separators in the DB) keep rendering.
-  const HIDDEN_ADD_TYPES = new Set(["separator"]);
+  // Topic-level "+ Añadir bloque" bar, rendered by courses.js right under the
+  // topic title (so it shows on EVERY topic, empty or not). The toggle reveals
+  // a horizontal row of type-specific chips. Each chip posts a new block via
+  // App.CoursesAPI.addBlock using the type's defaults (see TYPE_META.defaults)
+  // so the new block renders immediately.
+  //
+  // Block types hidden from the menu. The type STAYS in TYPE_META and keeps its
+  // renderer: existing blocks must keep rendering, we only stop offering them.
+  //   content   — 128 blocks, and it is the type the AI results use
+  //               (📊 infographic / 🎵 audio), so it is NOT dead.
+  //   separator — purely decorative divider; nothing generates it.
+  //   youtube   — 0 blocks in the DB and nothing links to it.
+  // The AI feature "YouTube → Markdown" (NotebookLM) is a toolbar ACTION, not
+  // this block type, so hiding "youtube" here does not affect it.
+  const HIDDEN_ADD_TYPES = new Set(["content", "separator", "youtube"]);
 
   function _renderAddBar(courseId, topicId) {
     const topicAttr = topicId ? ` data-topic-id="${topicId}"` : "";

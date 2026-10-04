@@ -49,7 +49,15 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // activating silently mid-session. v81/v82 never left this machine — they
 // were local iterations while diagnosing why the OpenZen fix had reached the
 // server but not the browser.
-const ASSET_CACHE = 'studyflow-assets-v84';
+// v85: propagates the noVNC login modal (notebooklm-settings.js +
+// study-scheduler.css) edited since v84. The NotebookLM active-profile root
+// fix itself is backend-only, but these precached assets only refresh on
+// install — the bump is what actually delivers them to installed PWAs.
+// v86: propagates the topic-level "➕ Añadir" bar (courses.js) and the removal
+// of the per-block add group + hidden add types (ai.js, courses-blocks.js).
+// Editing a precached .js without this bump ships code that no installed PWA
+// can load — see tests/test_sw_asset_version.py.
+const ASSET_CACHE = 'studyflow-assets-v86';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
