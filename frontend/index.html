@@ -461,6 +461,9 @@
   <script src="/features/quiz/quiz-center.js"></script>
   <!-- Issue #10: quiz por bloque (exercise) — embeds the block's test
        after the panel paints (patrón PdfViewer). -->
+  <!-- R5: the JSON question editor (App.QuizJsonEditor). Loads before
+       quiz-embed.js, which hands it the "Gestionar preguntas" disclosure. -->
+  <script src="/features/studyflow/quiz-json-editor.js"></script>
   <script src="/features/studyflow/quiz-embed.js"></script>
   <!-- Issue #12: courses-dnd.js must load BEFORE courses-sidebar.js, which
        calls CoursesDND.attach() when it wires the sidebar events. -->

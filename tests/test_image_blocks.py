@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+import re
 from flask import Flask
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -404,7 +405,14 @@ def test_image_upload_is_precached():
     """A chip that 404s offline is worse than no chip."""
     sw = SW_JS.read_text(encoding="utf-8")
     assert "'/features/studyflow/image-upload.js'" in sw
-    assert "studyflow-assets-v87" in sw
+    # The literal version moves with every later feature, so compare the
+    # number instead: what matters is that R4's bump was not undone.
+    version = re.search(r"const ASSET_CACHE = 'studyflow-assets-v(\d+)'", sw)
+    assert version, "ASSET_CACHE not found in sw.js"
+    assert int(version.group(1)) >= 87, (
+        "R4 bumped the asset cache to v87 for image-upload.js; a lower number "
+        "means the bump was reverted and installed PWAs keep the old module"
+    )
 
 
 def test_the_volume_is_declared_and_mounted():

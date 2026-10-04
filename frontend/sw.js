@@ -60,7 +60,12 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // courses-blocks.js image render branch and studyflow-blocks.css.
 // Editing a precached .js without this bump ships code that no installed PWA
 // can load — see tests/test_sw_asset_version.py.
-const ASSET_CACHE = 'studyflow-assets-v87';
+// v88: R5 — the JSON question editor (quiz-json-editor.js is new and must be
+// precached, since quiz-embed.js resolves App.QuizJsonEditor at open time),
+// plus the rewritten quiz-embed.js manager and the editor's CSS.
+// Editing a precached .js without this bump ships code that no installed PWA
+// can load — see tests/test_sw_asset_version.py.
+const ASSET_CACHE = 'studyflow-assets-v88';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -96,6 +101,8 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-import-stream.js',
   // R4: image block upload (picker + FormData + block creation)
   '/features/studyflow/image-upload.js',
+  // R5: exercise questions as JSON (editor + preview; mounted by quiz-embed.js)
+  '/features/studyflow/quiz-json-editor.js',
   // S7b-B: floating study menu + SCORM credentials settings
   '/features/studyflow/study-scheduler.js',
   '/features/studyflow/study-scheduler.css',

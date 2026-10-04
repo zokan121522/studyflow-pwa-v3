@@ -55,6 +55,21 @@
       return _post("/quiz/answers", { answers });
     },
 
+    // The JSON editor's save. `replace: true` makes the server delete the
+    // block's questions and insert the batch, which is what a full rewrite
+    // needs — otherwise every save would append a second copy. Resolves to
+    // {inserted, invalid}: `invalid` is per-question and the batch still
+    // succeeds, so the editor reports them instead of failing outright.
+    bulkReplace(blockId, courseId, topicId, questions) {
+      return _post("/quiz/questions/bulk", {
+        block_id: blockId,
+        course_id: courseId,
+        topic_id: topicId,
+        replace: true,
+        questions: questions || [],
+      });
+    },
+
     // ── failed pool ────────────────────────────────────────────
     pool(scope, filters) {
       const f = filters || {};
