@@ -7,6 +7,9 @@ El montaje coloca cada audio en su offset y lo mezcla con el vídeo.
 """
 import asyncio, json, os, re, shutil, subprocess, sys, time, unicodedata
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fixtures
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 STORY = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "storyboards", "agenda.json")
 _SLUG = os.path.splitext(os.path.basename(STORY))[0]
@@ -105,6 +108,40 @@ def build_timeline(story, frames):
     return total
 
 
+# ------------------------------------------------------------------- redacted
+# El árbol lateral de cursos y los títulos de tema/bloque son UI permanente:
+# salen en cualquier toma hecha dentro de la app, aunque el guion no llegue a
+# tocarlos. Por eso esta lista vive AQUÍ y no en cada storyboard — si depende
+# de que quien grabe se acuerde, el próximo vídeo se lleva por delante la
+# referencia de una asignatura entera.
+#
+# Un selector que no casa con nada no hace nada, así que se puede ser
+# exhaustivo sin arriesgarse a romper la grabación. Lo específico de una vista
+# (el canvas del PDF, los enunciados del quiz, el editor) sigue declarándose
+# en su storyboard con `redact`.
+GLOBAL_REDACT = [
+    # Studyflow — nombres de curso, de tema y de bloque
+    ".course-item",
+    ".ci-title",
+    ".course-group-title",
+    ".topic-item",
+    ".sf-cl-card-title",
+    ".bi-title",
+    ".sf-td-md-plain",
+    ".sf-td-title",
+    # Agenda — sesión, hábitos, notas y URL del calendario
+    ".sc-title",
+    ".d-name",
+    ".ht-label",
+    ".hn-title",
+    ".hn-row-label",
+    ".hab-text",
+    "#quick-note",
+    ".cal-url",
+    ".tl-block-title",
+    ".tlw-block-title",
+]
+
 # ------------------------------------------------------------------- injected
 INJECT_CSS = f"""
 #sfCursor{{position:fixed;left:0;top:0;width:30px;height:30px;z-index:2147483647;
@@ -200,6 +237,30 @@ def record(story, frames, total):
                             service_workers="block",
                             device_scale_factor=2)
         pg = ctx.new_page()
+        # Sustituye los datos personales por los de mentira ANTES de que
+        # salga cualquier request a la red. Va antes del goto a propósito:
+        # si espera, la primera respuesta ya habría enviado los datos reales
+        # y el primer render los habría pintado. No se tocan:
+        # /api/health y los estáticos, que un None deja pasar tal cual.
+        def _interceptar(route):
+            # Las anotaciones del PDF son un endpoint aparte que cuelga del
+            # mismo id; sin esto, /api/pdf/201/annotations se va a la red real.
+            if re.search(r"/api/pdf/\d+/annotations", route.request.url):
+                route.fulfill(status=200, content_type="application/json",
+                              body="[]")
+                return
+            if re.search(r"/api/pdf/\d+", route.request.url):
+                route.fulfill(status=200, content_type="application/pdf",
+                              body=fixtures.PDF_DEMO.read_bytes())
+                return
+            falso = fixtures.respuesta(route.request.url)
+            if falso is None:
+                route.continue_()
+            else:
+                route.fulfill(status=200, content_type="application/json",
+                              body=json.dumps(falso, ensure_ascii=False))
+
+        pg.route("**/api/**", _interceptar)
         pg.goto(story["base_url"], wait_until="domcontentloaded")
         # The dashboard grid is the app's ready signal, but a storyboard that
         # documents the landing page never renders it: waiting the full 15s
@@ -214,10 +275,16 @@ def record(story, frames, total):
             pass
         pg.wait_for_timeout(400)
         pg.add_style_tag(content=INJECT_CSS)
-        redact = story.get("redact") or []
+        redact = dict.fromkeys(GLOBAL_REDACT + (story.get("redact") or []))
         if redact:
+            # Radius per storyboard. 7px is enough for the short strings the
+            # first two videos redact (an email in an input box). It is not
+            # enough for a page of A4 rendered at 720p, where the glyphs are
+            # large enough to still be guessed through the blur — so the
+            # ones that cover real coursework ask for more.
+            px = story.get("redact_blur_px", 7)
             blur = "".join(
-                f"{s}{{filter:blur(7px)!important;-webkit-filter:blur(7px)!important;}}"
+                f"{s}{{filter:blur({px}px)!important;-webkit-filter:blur({px}px)!important;}}"
                 for s in redact
             )
             pg.add_style_tag(content=blur)
