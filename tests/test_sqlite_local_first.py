@@ -715,3 +715,202 @@ def backup_user_tables(conn):
     import backup_user
 
     return backup_user._user_tables(conn)
+
+
+# ─── cast translation ─────────────────────────────────────────────────
+# Found by running the v2 importer against SQLite: %s::timestamptz came
+# out as CAST(? AS TEXT)tz and SQLite rejected it. Regex alternation is
+# first-match, so "timestamp" was eating the first nine characters of
+# "timestamptz". Both spellings appear in the app.
+
+
+def test_cast_type_alternation_does_not_truncate():
+    from sqlite_compat import translate_sql
+
+    # The regression: a partial match leaves the tail dangling.
+    # Parens are mandatory -- VALUES CAST(x AS 1) is a syntax error.
+    assert translate_sql("x::timestamptz") == "(CAST(x AS TEXT))"
+    assert "tz" not in translate_sql("x::timestamptz").replace("CAST", "")
+    assert translate_sql("x::timestamp") == "(CAST(x AS TEXT))"
+    assert translate_sql("x::int") == "(CAST(x AS INTEGER))"
+    assert translate_sql("x::text") == "(CAST(x AS TEXT))"
+
+
+def test_cast_keeps_the_bound_placeholder_intact():
+    from sqlite_compat import translate_sql
+
+    # If the expression group does not swallow %s, this becomes
+    # CAST(s AS INTEGER) and the parameter is orphaned.
+    assert translate_sql("VALUES (%s::int)") == "VALUES ((CAST(? AS INTEGER)))"
+    # The cast has to run before %(u)s collapses to ?, or the cast can no
+    # longer tell the marker apart from anything else.
+    assert translate_sql("VALUES (%(u)s::int)") == "VALUES ((CAST(? AS INTEGER)))"
+
+
+def test_chained_casts_nest():
+    from sqlite_compat import translate_sql
+
+    out = translate_sql("x::timestamptz::text")
+    assert out == "(CAST((CAST(x AS TEXT)) AS TEXT))", out
+    assert translate_sql("a::text::int") == "(CAST((CAST(a AS TEXT)) AS INTEGER))"
+
+
+def test_timestamptz_cast_runs_on_sqlite(db):
+    """The exact statement the v2 importer issues for created_at.
+
+    COALESCE(%s::timestamptz, NOW()) is in v2_migrate._import_courses, so
+    this runs on every import of a v2 backup.
+    """
+    import datetime
+
+    stamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    row = db.fetchone(
+        "INSERT INTO courses (user_id, title, created_at) "
+        "VALUES (1, 'x', COALESCE(%s::timestamptz, NOW())) RETURNING id",
+        (stamp,),
+    )
+    assert row["id"]
+    stored = db.fetchone("SELECT created_at FROM courses WHERE id = ?",
+                         (row["id"],))["created_at"]
+    assert stored == stamp
+
+
+# ─── ON CONFLICT in INSERT ... SELECT ────────────────────────────────
+
+
+def test_bare_on_conflict_becomes_insert_or_ignore(db):
+    """SQLite cannot parse a bare ON CONFLICT DO NOTHING here.
+
+    With no conflict target the parser has nothing to attach the DO to and
+    reports "near DO: syntax error". INSERT OR IGNORE has the same
+    semantics: skip the offending rows, insert the rest.
+    """
+    from sqlite_compat import translate_sql
+
+    sql = "INSERT INTO courses (id, title) SELECT id, title FROM _stage ON CONFLICT DO NOTHING"
+    assert translate_sql(sql).startswith("INSERT OR IGNORE INTO")
+    assert "ON CONFLICT" not in translate_sql(sql)
+
+
+def test_targeted_on_conflict_is_left_alone():
+    from sqlite_compat import translate_sql
+
+    for sql in (
+        "INSERT INTO t (a) VALUES (1) ON CONFLICT DO NOTHING",
+        "INSERT INTO t (a) SELECT a FROM s ON CONFLICT (id) DO NOTHING",
+        "INSERT INTO t (a) SELECT a FROM s ON CONFLICT (id) DO UPDATE SET a = 1",
+    ):
+        assert translate_sql(sql) == sql, sql
+
+
+def test_insert_or_ignore_round_trip_is_idempotent(db):
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (id, user_id, title) VALUES (1, 1, 'A')")
+        cur.execute("CREATE TEMP TABLE _stage (id integer, user_id integer, title text)")
+        cur.execute("INSERT INTO _stage VALUES (1, 1, 'A'), (2, 1, 'B')")
+        cur.execute(
+            "INSERT INTO courses (id, user_id, title) "
+            "SELECT id, user_id, title FROM _stage ON CONFLICT DO NOTHING"
+        )
+    conn.commit()
+    assert db.fetchall("SELECT id FROM courses ORDER BY id") == [
+        {"id": 1}, {"id": 2}
+    ]
+
+
+# ─── catalog views ───────────────────────────────────────────────────
+# information_schema has to speak Postgres ("public", "BASE TABLE"). With
+# SQLite's own values every equality predicate silently matches nothing and
+# the export comes back with one row instead of failing.
+
+
+def test_catalog_reports_postgres_spellings(db):
+    import backup_db
+
+    conn = db.get_connection()
+    assert backup_db.query_on_conn(
+        conn, "SELECT table_schema FROM information_schema.tables LIMIT 1"
+    ) == [("public",)]
+    assert backup_db.query_on_conn(
+        conn,
+        "SELECT table_type FROM information_schema.tables WHERE table_name = 'courses'",
+    ) == [("BASE TABLE",)]
+    rows = backup_db.query_on_conn(
+        conn,
+        "SELECT column_name, ordinal_position FROM information_schema.columns "
+        "WHERE table_name = 'courses' ORDER BY ordinal_position",
+    )
+    assert rows[0][1] == 1, rows[:2]
+
+
+def test_any_expansion_keeps_a_dict_of_params_whole():
+    """Regression: a dict was turned into its keys.
+
+    _expand_any coerced params to a tuple before translate_params could map
+    them by name, so every named-placeholder query in the app got strings
+    where it expected values -- not just the backup path.
+    """
+    import sqlite_compat
+
+    sql, bound = sqlite_compat._expand_any(
+        "SELECT %(now)s::text AS v", {"now": "x", "unused": 1}
+    )
+    assert sql == "SELECT %(now)s::text AS v"
+    assert bound == {"now": "x", "unused": 1}
+
+
+def test_coalesce_cast_now_runs_on_sqlite(db):
+    """The literal statement in v2_migrate._import_courses.
+
+    Every v2 backup import runs this. It failed with "near tz: syntax
+    error" because the cast alternation matched "timestamp" inside
+    "timestamptz" and left the tail behind.
+    """
+    row = db.fetchone(
+        "INSERT INTO courses (user_id, title, created_at) VALUES "
+        "(1, 'x', COALESCE(%s::timestamptz, NOW())) RETURNING id",
+        (datetime.datetime.now(datetime.timezone.utc).isoformat(),),
+    )
+    assert row["id"]
+
+
+def test_import_v2_into_a_real_sqlite_db(db, tmp_path):
+    """End-to-end: a v2 dump, parsed and imported, lands in SQLite.
+
+    This is the path reimport_v2_now.py takes. It needs no server, which
+    is the whole point of the local-first migration.
+    """
+    import zipfile
+
+    import database
+    import engine
+    import v2_import
+    import v2_parser
+
+    # The exact shape v2_parser._SECTION_RE looks for: a quoted table
+    # name, lowercase "FROM stdin;", and a \. terminator.
+    dump = (
+        'COPY "courses" (id, title, user_id) FROM stdin;\n'
+        "1\tDAW2\t1\n"
+        "2\tJavaFX\t1\n"
+        "\\.\n"
+    )
+    zip_path = tmp_path / "v2.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("user_data.sql", dump)
+
+    conn = db.get_connection()
+    with zipfile.ZipFile(zip_path) as zf:
+        tables = v2_parser.parse_copy_sections(
+            zf.read("user_data.sql").decode("utf-8", "replace"))
+        assert [t["title"] for t in tables["courses"]] == ["DAW2", "JavaFX"]
+
+        report = v2_import.migrate_v2(conn, 1, zf, tables)
+    conn.commit()
+
+    assert report["counts"]["courses"] == 2, report["counts"]
+    assert db.fetchall("SELECT title FROM courses ORDER BY id") == [
+        {"title": "DAW2"}, {"title": "JavaFX"}
+    ]
+    assert engine.active_engine() == "sqlite"

@@ -210,14 +210,17 @@ def translate_sql(sql: str) -> str:
     for postgres_name, sqlite_name in _CATALOGUE_VIEW_MAP:
         if postgres_name in sql:
             sql = sql.replace(postgres_name, sqlite_name)
+    # Casts run before the placeholder rewrite, while %(name)s is still
+    # intact. Once it has become a bare ?, the expression group can no
+    # longer tell it apart from any other marker.
+    if "::" in sql:
+        sql = _rewrite_postgres_casts(sql)
     if "%(" in sql:
         sql = _PYNAME_RE.sub("?", sql)
     if "EXTRACT" in sql.upper():
         sql = _rewrite_extract_epoch(sql)
     if _BARE_ON_CONFLICT_RE.search(sql):
         sql = _fix_bare_on_conflict(sql)
-    if "::" in sql:
-        sql = _rewrite_postgres_casts(sql)
     if "%s" not in sql:
         return sql
     return _PYFORMAT_RE.sub("?", sql)
@@ -351,7 +354,10 @@ def _register_functions(conn: sqlite3.Connection) -> None:
                m.name AS table_name,
                p.name AS column_name,
                p.type AS data_type,
-               p.cid AS ordinal_position
+               -- pragma_table_info.cid is 0-based; Postgres ordinal_position
+               -- is 1-based. Anything ordering columns off this view (the
+               -- backup COPY column list) would otherwise reverse the table.
+               p.cid + 1 AS ordinal_position
         FROM sqlite_master AS m
         JOIN pragma_table_info(m.name) AS p
         WHERE m.type = 'table'
@@ -566,15 +572,38 @@ def _fix_bare_on_conflict(sql: str) -> str:
 
 
 #: Postgres ``expr::type`` casts. SQLite spells these CAST(expr AS type), and
-#: the restore path uses them to coerce the re-owned user_id back to an
-#: integer. The expression group must be able to swallow a %s placeholder --
-#: it usually is one, and matching only ``s`` would rewrite ``%s::int`` into
-#: ``CAST(s AS INTEGER)`` and orphan the parameter.
+#: the restore path and the v2 importer both use them to coerce timestamps
+#: and ids.
+#:
+#: An "atom" is one castable expression: a balanced parenthesised group, a
+#: quoted identifier, a dotted name, or a bare marker. It deliberately
+#: excludes a stray ``)`` from a run of word characters -- an earlier,
+#: looser version happily matched the ``T))`` tail of a CAST it had itself
+#: just produced, so chained casts came out as ``CAST(x AS (CAST(T)))``.
+#:
+#: The whole chain ``a::t::u`` is matched at once and rebuilt from the
+#: right, because ``::`` is right-associative: ``a::t::u`` is ``a::t``
+#: cast to ``u``, not two independent casts.
+#:
+#: The type alternation is ordered longest-first and closed with a word
+#: boundary on purpose. Regex alternation is first-match, so listing
+#: ``timestamp`` before ``timestamptz`` consumed the first nine characters
+#: of ``timestamptz`` and left a dangling ``tz`` behind, which SQLite then
+#: rejected with "near tz: syntax error". Both spellings occur in the app.
+_CAST_TYPE_ALT = (
+    r"character\s+varying|double\s+precision|timestamptz|timestamp|bigint|"
+    r"integer|smallint|boolean|bool|numeric|varchar|text|date|real|jsonb|"
+    r"json|uuid|int"
+)
+_CAST_ATOM = r'CAST\((?:[^()]|\([^()]*\))*\)|"(?:[^"]|"")*"|\([^()]*\)|%\(\w+\)s|%s|[A-Za-z_][\w.$]*'
 _POSTGRES_CAST_RE = re.compile(
-    r"(?P<expr>%\(\w+\)s|%s|[\w.\"'()]+|\([^()]*\))\s*::\s*"
-    r"(?P<type>bigint|integer|int|smallint|bool|boolean|text|varchar|"
-    r"character varying|timestamp|timestamptz|date|numeric|real|double(?:\s+precision)?|jsonb?|uuid)",
+    rf"(?P<atom>{_CAST_ATOM})"
+    rf"(?P<suffix>(?:\s*::\s*(?:{_CAST_TYPE_ALT})(?![A-Za-z0-9_]))+)",
     re.IGNORECASE,
+)
+#: Pulls the individual ``::type`` names back out of a matched chain.
+_CAST_TYPE_FIND_RE = re.compile(
+    rf"::\s*((?:{_CAST_TYPE_ALT}))(?![A-Za-z0-9_])", re.IGNORECASE
 )
 _SQLITE_CAST_TYPES = {
     "int": "INTEGER", "integer": "INTEGER", "bigint": "INTEGER",
@@ -586,19 +615,32 @@ _SQLITE_CAST_TYPES = {
 }
 
 
+def _sqlite_cast_type(name: str) -> str:
+    return _SQLITE_CAST_TYPES.get(re.sub(r"\s+", " ", name.lower()), "TEXT")
+
+
 def _rewrite_postgres_casts(sql: str) -> str:
-    """Rewrite ``x::type`` into ``CAST(x AS TYPE)``, repeatedly for chains."""
-    out = sql
-    for _ in range(4):  # :: is right-associative; a few nested casts is plenty
-        new = _POSTGRES_CAST_RE.sub(
-            lambda m: f'CAST({m.group("expr")} AS '
-                      f'{_SQLITE_CAST_TYPES.get(re.sub(r"\\s+", " ", m.group("type").lower()), "TEXT")})',
-            out,
-        )
-        if new == out:
-            return out
-        out = new
-    return out
+    """Rewrite ``x::type`` chains into nested ``(CAST(x AS TYPE))``.
+
+    The outer parentheses are not decoration. A bare CAST is not accepted
+    everywhere an expression is: ``VALUES (%s::int)`` becomes
+    ``VALUES CAST(? AS INTEGER)`` and SQLite rejects that with "near CAST".
+    Redundant parens are legal in every expression position, so always
+    wrapping is the one form that survives SELECT lists, COALESCE
+    arguments, ORDER BY and VALUES rows alike.
+    """
+
+    def repl(m: re.Match) -> str:
+        # The whole ``::a::b`` run arrives in one group, so the rewrite
+        # never has to run a second pass over text it has already
+        # rewritten -- doing that is what used to let it match the "T))"
+        # tail of the CAST it had just produced.
+        expr = m.group("atom")
+        for name in _CAST_TYPE_FIND_RE.findall(m.group("suffix")):
+            expr = f"(CAST({expr} AS {_sqlite_cast_type(name)}))"
+        return expr
+
+    return _POSTGRES_CAST_RE.sub(repl, sql)
 
 
 def plain_row_factory(cursor: sqlite3.Cursor, row) -> tuple:
