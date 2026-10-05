@@ -131,6 +131,12 @@ window.App.AgendaSession = (function () {
         if (_onSaved) _onSaved();
       } else {
         // ─── CREATE mode: add session to week data ─────────────
+        // The timer fields are included here too. They used to be missing,
+        // so setting effective time while *adding* a session discarded it
+        // silently -- the form showed 01:15:00 and the saved row had NULL.
+        // Only editing an existing session persisted them.
+        const timerElapsed = _getTimerSeconds("so-te");
+        const timerPaused = _getTimerSeconds("so-tp");
         const session = {
           id: crypto.randomUUID?.() || Date.now().toString() + Math.random().toString(36).slice(2, 6),
           title: titulo,
@@ -139,6 +145,8 @@ window.App.AgendaSession = (function () {
           start_time: start || null,
           end_time: end || null,
           notes: notes || null,
+          timer_elapsed: timerElapsed,
+          timer_paused_duration: timerPaused,
         };
 
         const weekData = await API.get(`/agenda/week/${_sessionWeekId}`);

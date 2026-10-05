@@ -95,7 +95,10 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v94: landing sin placeholders 03/13 + 4 videos regrabados con difuminado
 // v95: tutoriales regrabados con datos ficticios
 // v96: durata dels tutoriales sincronitzada
-const ASSET_CACHE = 'studyflow-assets-v96';
+// v97: session timers. _getTimerSeconds() took no prefix, so pause time was
+// saved as elapsed time and effective time read 0m; and the create path never
+// sent the timer fields at all.
+const ASSET_CACHE = 'studyflow-assets-v97';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
