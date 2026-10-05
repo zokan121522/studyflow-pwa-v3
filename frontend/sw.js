@@ -92,7 +92,10 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 //        "reiniciar sección" 500'd.
 //      - _coerce_ids(None) raised TypeError (500) instead of ValueError (400).
 //      - /quiz/answer now validates like /quiz/answers does.
-const ASSET_CACHE = 'studyflow-assets-v93';
+// v94: landing sin placeholders 03/13 + 4 videos regrabados con difuminado
+// v95: tutoriales regrabados con datos ficticios
+// v96: durata dels tutoriales sincronitzada
+const ASSET_CACHE = 'studyflow-assets-v96';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

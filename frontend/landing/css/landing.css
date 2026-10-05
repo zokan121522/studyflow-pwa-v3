@@ -63,7 +63,7 @@ section[id] { scroll-margin-top: 96px; }
 .accordion-content { padding:0 1.5rem; max-height:0; overflow:hidden; transition:.3s ease; }
 .accordion-content.open { padding:1.5rem; max-height:800px; }
 .video-card { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--bg-secondary); }
-.video-thumb { aspect-ratio:16/9; background:linear-gradient(135deg,var(--bg-tertiary),var(--bg-secondary)); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); }
+
 .video-player { aspect-ratio:16/9; width:100%; display:block; background:#000; }
 .video-info { padding:1.25rem; }
 .video-title { font-weight:600; margin-bottom:.5rem; }
