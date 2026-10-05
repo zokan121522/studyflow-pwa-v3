@@ -273,6 +273,25 @@ def cookie_path(profile_email: str | None = None) -> str | None:
     return candidates[0] if candidates else None
 
 
+def set_active_profile(user_id: int, email: str) -> None:
+    """Set the active NotebookLM profile in BOTH stores from a single place.
+
+    The UI reads ``user_config.notebooklm_profile`` while content generation
+    reads ``active.txt``; writing them from one function is the only way to
+    keep them from diverging. The 2026-10-03 bug was exactly this: the login
+    flow wrote the DB but left ``active.txt`` pointing at a dead profile, so
+    generation failed with "CSRF token not found".
+    """
+    save_user_notebooklm_profile(user_id, email)
+    write_active_profile(email)
+
+
+def clear_active_profile(user_id: int) -> None:
+    """Clear the active profile from BOTH stores."""
+    save_user_notebooklm_profile(user_id, "")
+    write_active_profile(None)
+
+
 def save_user_notebooklm_profile(user_id: int, email: str) -> None:
     """Save the NotebookLM profile email to the user's per-user config."""
     existing = fetchall("SELECT 1 FROM user_config WHERE user_id = %s", (user_id,))

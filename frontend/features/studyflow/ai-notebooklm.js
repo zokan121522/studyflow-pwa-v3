@@ -308,25 +308,52 @@ window.App.AI.Generation = (function () {
     }
   }
 
-  // ─── English Grammar Exercises (NotebookLM) ────────────────────
-  // v3 port of the v2 ai-generation.js launcher. Provider is NOT sent:
-  // the v3 backend only registers 'notebooklm' for grammar tasks.
+  // ─── English Grammar Exercises (NotebookLM / OpenZen) ────────────
+  // v3 port of the v2 ai-generation.js launcher. The provider IS forwarded:
+  // the backend is provider-parametric and the OpenZen button needs it to
+  // reach its own engine instead of silently falling back to NotebookLM.
   async function generateGrammarExercises(blockId, topicId, sourceType = "markdown", perType = 10, provider = "") {
     Status(blockId, "⏳ Generando English Exercises…");
     try {
-      const resp = await window.API.post("/ai/generate-grammar-exercises", {
+      const body = {
         source_id: blockId,
         source_type: sourceType === "pdf" ? "content" : "markdown",
         topic_id: topicId || "",
         per_type: perType,
-      });
+      };
+      // Only send the field when the caller picked one, so an empty value
+      // still falls through to the backend default instead of 400ing on "".
+      if (provider) body.provider = provider;
+      const resp = await window.API.post("/ai/generate-grammar-exercises", body);
       const tasks = Tasks();
       if (tasks) {
-        tasks.showStreamModal("✏️ Generando English Exercises", "NotebookLM");
+        const label = provider === "opencode-acp" ? "OpenZen" : "NotebookLM";
+        tasks.showStreamModal("✏️ Generando English Exercises", label);
         tasks.startStreamPoll(resp.task_id, blockId, "grammar", topicId || "");
       }
     } catch (err) {
       Status(blockId, `❌ Error: ${err.message}`, true);
+    }
+  }
+
+  // ─── Vocabulary Suite (OpenZen / NotebookLM) ────────────────────
+  // Topic-only launch (no source block): the student types the words in
+  // the config overlay. Provider follows the same "only send when set"
+  // rule as grammar so an empty value falls back to the backend default.
+  async function generateVocabulary(topicId, wordsText, size = 10, provider = "") {
+    Status(topicId, "⏳ Generando Vocabulary Suite…");
+    try {
+      const body = { words_text: wordsText, topic_id: topicId || "", size };
+      if (provider) body.provider = provider;
+      const resp = await window.API.post("/ai/generate-vocabulary", body);
+      const tasks = Tasks();
+      if (tasks) {
+        const label = provider === "notebooklm" ? "NotebookLM" : "OpenZen";
+        tasks.showStreamModal("📚 Generando Vocabulary Suite", label);
+        tasks.startStreamPoll(resp.task_id, topicId, "vocabulary", topicId || "");
+      }
+    } catch (err) {
+      Status(topicId, `❌ Error: ${err.message}`, true);
     }
   }
 
@@ -345,6 +372,7 @@ window.App.AI.Generation = (function () {
     generateAudio,
     generateNbAudio,
     generateGrammarExercises,
+    generateVocabulary,
   };
 })();
 

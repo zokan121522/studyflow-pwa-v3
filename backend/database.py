@@ -21,11 +21,26 @@ def init_db() -> None:
     if not database_url:
         raise RuntimeError('DATABASE_URL environment variable not set')
 
-    # maxconn=20: gunicorn runs 2 workers x 4 threads (see Dockerfile), so the
-    # pool is per-process and each one can hold up to 20. Sized above the
-    # concurrency it serves so a burst of parallel requests has headroom
-    # instead of queueing on getconn(). The scheduler's daily import also
-    # borrows one while requests are in flight.
+    # maxconn=20: the pool is per-process, so each gunicorn worker can hold up
+    # to 20. Sized well above the concurrency one worker serves so a burst of
+    # parallel requests has headroom instead of queueing on getconn().
+    #
+    # On worker count: this used to say "2 workers x 4 threads". That stopped
+    # being true when the Dockerfile moved to
+    # `--worker-class gevent_ws_worker.GeventWebSocketWorker --workers 1` so the
+    # noVNC WebSocket could upgrade (the NotebookLM login depends on it). Under
+    # the gevent worker, requests are served as greenlets off one OS thread, so
+    # there is no fixed thread count to reason about and the pool must be sized
+    # as margin rather than as a computed bound.
+    #
+    # What this number is NOT: a fix. The exhaustion bug was a connection being
+    # closed instead of returned to the pool — that is fixed in
+    # calendar_import/scheduler.py. maxconn=20 is headroom on top of that fix.
+    # Raising it to paper over a leak would just delay the failure.
+    #
+    # The invariant is pinned by tests/test_pool_exhaustion.py
+    # (TestPoolHasHeadroom), which derives the demand from the real gunicorn
+    # config rather than from a hardcoded number that can drift.
     _connection_pool = pool.ThreadedConnectionPool(
         minconn=1,
         maxconn=20,

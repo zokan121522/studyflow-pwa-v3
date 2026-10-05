@@ -20,7 +20,11 @@ icalendar==7.3.0
 # El paquete se llama notebooklm-py pero se importa como "notebooklm" — y
 # choca con el subpaquete interno backend/ai/notebooklm. Cuidado al tocar
 # esto: no es el mismo.
-notebooklm-py==0.7.2
+# 0.8.4: Google migró NotebookLM a https://notebook.google.com (301 desde
+# notebooklm.google.com). La 0.7.2 seguía esperando el host viejo en
+# page.wait_for_url() del login, así que NUNCA detectaba el login ni escribía
+# storage_state.json (el perfil no aparecía). 0.8.4 ya usa notebook.google.com.
+notebooklm-py==0.8.4
 
 # Las tres siguientes las usa backend/scraping/ y scorm_import.py, que
 # server.py NO importa: no bloquean el arranque, pero sin ellas esas
@@ -48,3 +52,12 @@ yt-dlp>=2025.6.30
 # Dockerfile ya instala via apt. Se importaba sin declararse: al recrear
 # el contenedor la app no arrancaba (ModuleNotFoundError).
 weasyprint==62.3
+
+# ── Login interactivo de NotebookLM (noVNC) ──
+# gevent + gevent-websocket son el MOTOR del bridge WebSocket ↔ RFB de
+# routes/novnc_proxy.py de la mano del worker gunicorn
+# gevent_ws_worker.GeventWebSocketWorker (ver Dockerfile CMD). Sin ellas el
+# blueprint no importa y el login embebido no existe. NO van en requirements
+# sin más: cambiar el worker de gunicorn afecta a TODA la app, no solo a /novnc.
+gevent>=24.2.1
+gevent-websocket>=0.10.1

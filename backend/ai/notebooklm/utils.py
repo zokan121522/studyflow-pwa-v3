@@ -117,25 +117,60 @@ def _connected_profiles() -> list[str]:
     return [name for name in entries if _profile_has_cookies(name)]
 
 
+def _db_active_profile() -> str | None:
+    """The profile the user picked in Ajustes (``user_config``), or None.
+
+    ``user_config`` is the UI's source of truth (Phase 30); reading it here
+    keeps content generation aligned with what the UI shows as active. Falls
+    back to nothing on error so a DB hiccup never breaks generation.
+    """
+    try:
+        rows = query(
+            "SELECT notebooklm_profile FROM user_config "
+            "WHERE notebooklm_profile IS NOT NULL AND notebooklm_profile <> '' "
+            "ORDER BY updated_at DESC NULLS LAST"
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("[NotebookLM] Could not read user_config profile: %s", exc)
+        return None
+    if not rows:
+        return None
+    try:
+        raw = rows[0]["notebooklm_profile"]
+    except (TypeError, KeyError, IndexError):
+        return None
+    raw = (raw or "").strip()
+    return raw or None
+
+
 def get_active_profile() -> str | None:
     """Resolve which NotebookLM profile to authenticate as.
 
     Resolution order, each step replacing a fallback that used to be silent:
 
-      1. ``active.txt`` — written when the user picks a profile. Resolved
-         through ``_resolve_profile_dir`` because the file holds a full
-         address while the directory may be named after the local part.
-      2. The only connected profile, when there is exactly one. This is the
-         case that bit the user on 2026-10-01: active.txt had gone missing
-         while a valid 15 KB session sat in the profiles dir, so every
-         generation fell through to an empty ``default/`` directory and
-         failed with "Storage file not found".
-      3. ``None`` — genuinely ambiguous, or nothing is connected. The log
+      1. ``user_config`` (the DB) — what the user picked in Ajustes and what
+         the UI shows as active. Trusting it first means generation can never
+         diverge from the UI (the 2026-10-03 bug: the DB said one account
+         while ``active.txt`` pointed at another).
+      2. ``active.txt`` — the on-disk mirror, written alongside the DB.
+      3. The only connected profile, when there is exactly one.
+      4. ``None`` — genuinely ambiguous, or nothing is connected. The log
          says which, so the cause is diagnosable instead of a dead end.
 
     Never returns a profile whose storage_state.json is missing or empty:
     handing the SDK an empty session only moves the failure later.
     """
+    db_profile = _db_active_profile()
+    if db_profile:
+        directory = _resolve_profile_dir(db_profile)
+        if directory and _profile_has_cookies(directory):
+            logger.info("[NotebookLM] Active profile (user_config): %s", directory)
+            return directory
+        logger.warning(
+            "[NotebookLM] user_config active profile %s has no usable cookies "
+            "— falling back", db_profile,
+        )
+
     raw = ""
     try:
         raw = Path(ACTIVE_FILE).read_text().strip()
@@ -148,7 +183,7 @@ def get_active_profile() -> str | None:
     if raw:
         directory = _resolve_profile_dir(raw)
         if directory and _profile_has_cookies(directory):
-            logger.info("[NotebookLM] Active profile: %s", directory)
+            logger.info("[NotebookLM] Active profile (active.txt): %s", directory)
             return directory
         logger.warning(
             "[NotebookLM] active.txt points at %s but no connected profile "
@@ -199,7 +234,20 @@ def _coerce_id(value, field: str = "id") -> int | None:
 
 
 def _coerce_ids(ids, field: str = "block_ids") -> list[int]:
-    """Coerce a list of ids to ints (used for ``WHERE id = ANY(%s)``)."""
+    """Coerce a list of ids to ints (used for ``WHERE id = ANY(%s)``).
+
+    ``None`` used to reach the ``for`` loop and raise ``TypeError``, which the
+    routes above translate to a 500 with a stack trace instead of the 400 the
+    caller deserves for a missing field. It arrives whenever a JSON body omits
+    the key and the route passes ``body.get(...)`` straight through, so it is
+    guarded here rather than in each route.
+    """
+    if ids is None:
+        raise ValueError(f"Missing required field: {field} (must be a non-empty list)")
+    if isinstance(ids, (str, bytes)):
+        # A bare id is accepted by _resolve_blocks_content before calling us,
+        # but a comma-joined string is not a list of ids.
+        raise ValueError(f"Invalid {field}: '{ids}' (must be a list of ids)")
     out = []
     for i in ids:
         v = _coerce_id(i, field)
