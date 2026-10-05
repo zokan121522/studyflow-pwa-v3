@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import datetime
 import re
+import threading
 import sqlite3
 from typing import Any, Iterable, Optional, Sequence
 
@@ -538,13 +539,26 @@ def _register_functions(conn: sqlite3.Connection) -> None:
     # three columns those queries select: table_name, column_name,
     # data_type. The dotted name cannot be a SQLite identifier, so the
     # query text is rewritten to the view name on the way in.
+    #
+    # lower(p.type) is load-bearing, not tidiness. SQLite reports declared
+    # types in the case they were written ('TEXT', 'INTEGER'); Postgres
+    # reports them lowercased ('text', 'integer'). Callers compare against
+    # the Postgres spelling, and one of them -- _sessions_is_legacy, which
+    # decides whether to DROP TABLE sessions -- tests `!= "text"`. With the
+    # raw uppercase value that comparison is *always* true, so a healthy,
+    # already-correct table was judged legacy and dropped on every startup.
+    # On Postgres the same code is correct, which is exactly why it survived:
+    # the emulation was the only place the two dialects disagreed, and only
+    # on a fresh local install does it destroy anything. The table_type
+    # normalisation in information_schema.tables below is the same trap,
+    # already fixed there.
     conn.execute(
         """
         CREATE TEMP VIEW IF NOT EXISTS information_schema_columns AS
         SELECT 'public' AS table_schema,
                m.name AS table_name,
                p.name AS column_name,
-               p.type AS data_type,
+               lower(p.type) AS data_type,
                -- pragma_table_info.cid is 0-based; Postgres ordinal_position
                -- is 1-based. Anything ordering columns off this view (the
                -- backup COPY column list) would otherwise reverse the table.
@@ -1220,11 +1234,26 @@ def check_sqlite_version() -> str:
 #: attribute on the connection or the wrapper.
 _TXN_STATE: Dict[int, bool] = {}
 
-#: Connections whose *open* transaction has issued a data-changing
-#: statement. Kept apart from _TXN_STATE because "a transaction is open" and
-#: "there is uncommitted work" are different facts: the first happens on
-#: every read, the second is what makes closing it lossy.
+#: Whether the open transaction has seen a write that is not yet committed,
+#: keyed the same way. This is what lets close() distinguish "left an innocent
+#: read transaction open" from "discarded real work", which matters because the
+#: first is harmless and happens on every read-only request, so warning on it
+#: would train us to ignore the warning that does matter.
 _TXN_WROTE: Dict[int, bool] = {}
+
+#: No lock is held around transactions, and that is deliberate.
+#:
+#: There used to be one, guarding a single process-wide connection. Both the
+#: connection and the lock are gone: database.get_connection() now hands out
+#: one connection per thread, so a handle is only ever touched by its owner
+#: and there is nothing to serialise. SQLite's own file locking does the rest,
+#: and it is the right tool for it -- it arbitrates between *processes*, which
+#: is the real constraint when several local app instances point at one file.
+#:
+#: Keeping the lock alongside per-thread connections would have been worse
+#: than useless: it serialised every request in the process behind whichever
+#: thread happened to be writing, which is the throughput cliff the per-thread
+#: change existed to remove.
 
 
 class CompatConnection:
@@ -1285,13 +1314,17 @@ class CompatConnection:
 
     def commit(self) -> None:
         if _txn_active(self._conn):
-            self._conn.commit()
-            _mark_txn(self._conn, False)
+            try:
+                self._conn.commit()
+            finally:
+                _mark_txn(self._conn, False)
 
     def rollback(self) -> None:
         if _txn_active(self._conn):
-            self._conn.rollback()
-            _mark_txn(self._conn, False)
+            try:
+                self._conn.rollback()
+            finally:
+                _mark_txn(self._conn, False)
 
     def close(self) -> None:
         """End the transaction; close the handle only if we own it.
@@ -1313,16 +1346,13 @@ class CompatConnection:
         task, such as the v2 importer's -- still closes for real, so no
         handle leaks.
         """
+        # rollback() rather than a bare driver rollback, so the transaction
+        # lock is released on the same path. An open transaction would be
+        # discarded by close() anyway, but rolling back first releases the
+        # file lock deterministically.
+        self.rollback()
         if self._borrowed:
-            if _txn_active(self._conn):
-                self._conn.rollback()
-                _mark_txn(self._conn, False)
             return
-        # An open transaction would be discarded by close() anyway, but
-        # rolling back first releases the file lock deterministically.
-        if _txn_active(self._conn):
-            self._conn.rollback()
-            _mark_txn(self._conn, False)
         self._conn.close()
 
     def execute(self, sql: str, params: Optional[Iterable] = None):
@@ -1396,8 +1426,57 @@ def connect(path: str, *, read_only: bool = False) -> sqlite3.Connection:
         conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = _dict_factory
     conn.isolation_level = None  # explicit BEGIN/COMMIT, driven by callers
+    _apply_pragmas(conn, read_only=read_only)
     _register_functions(conn)
     return conn
+
+
+#: How long a statement waits for another connection's write lock before
+#: giving up, in milliseconds. Long enough to ride out a burst of tabs
+#: writing at once, short enough that a genuinely stuck writer surfaces as
+#: an error instead of hanging the request.
+_BUSY_TIMEOUT_MS = 15000
+
+
+def _apply_pragmas(conn: sqlite3.Connection, *, read_only: bool) -> None:
+    """Configure the connection the way a multi-tab local app needs.
+
+    Nothing here was set before, and SQLite's defaults are the wrong ones for
+    this app:
+
+    ``busy_timeout`` defaults to **0**, which does not mean "wait briefly" —
+    it means *never wait*. Any overlap between two connections returns
+    ``database is locked`` on the spot. Measured here: twelve threads
+    inserting at once lost the race immediately and the test failed on the
+    first collision, while the same twelve succeed once a busy handler is
+    installed. This is also why the threaded server reported
+    ``database is locked`` before connections became per-thread; per-thread
+    connections removed the deadlock but not the contention.
+
+    ``journal_mode=WAL`` matters for the same reason from the other side.
+    Under the default rollback journal a reader blocks a writer for the whole
+    read, so one long dashboard query would stall an unrelated write. WAL lets
+    readers and a writer coexist. It is a persistent property of the *file*,
+    so setting it per connection is harmless after the first.
+
+    ``foreign_keys`` is left alone: SQLite defaults it **off** per connection
+    and the schema relies on real FK constraints, but turning it on here would
+    start rejecting legacy rows that the Postgres instance tolerated, which is
+    a migration decision rather than a connection one.
+
+    ``synchronous=NORMAL`` is the usual companion to WAL and is safe here
+    because the database file lives in the user's own data directory, not on a
+    server holding anyone else's data at risk.
+    """
+    conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+    if not read_only:
+        # Read-only handles cannot change a file's journal mode, and asking
+        # is an error rather than a no-op.
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            pass  # e.g. a read-only or network filesystem
+        conn.execute("PRAGMA synchronous = NORMAL")
 
 
 def cursor(conn: sqlite3.Connection) -> CompatCursor:

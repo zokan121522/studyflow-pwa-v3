@@ -22,6 +22,7 @@ change to 32 of them.
 
 import logging
 import os
+import threading
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
 
@@ -52,10 +53,102 @@ import sqlite_compat
 # database is one local file.
 _connection_pool = None
 
-#: The sqlite3 connection, when the engine is SQLite. Kept separate from
-#: _connection_pool so the Postgres pool closeall() path is never handed
-#: a sqlite3 object.
-_sqlite_conn = None
+#: SQLite connections, keyed by thread.
+#:
+#: One connection per thread, not one per process. A single shared connection
+#: opened with check_same_thread=False deadlocks: measured against the running
+#: app, 36 of 40 concurrent requests timed out and the rest returned errors
+#: like "error return without exception set". Sharing a handle across threads
+#: is only safe when something serialises it, and a Flask dev server hands each
+#: request to its own thread, so there is no such thing here.
+#:
+#: Per-thread also turns out to be the *correct* transaction semantics rather
+#: than merely a safe one. With one connection shared by the process, a second
+#: thread's statements landed inside the first thread's open transaction and
+#: could roll back work that had nothing to do with it. One connection per
+#: thread means one transaction per thread, which is what every caller already
+#: assumes when it commits and closes its own handle.
+#:
+#: Keyed by thread ident because Flask's dev server creates a thread per
+#: request and gunicorn reuses a pool of them, so the count is bounded by the
+#: worker count rather than by traffic.
+_SQLITE_CONNS: "dict[int, Any]" = {}
+
+#: Held only while _SQLITE_CONNS is mutated: creating a connection is not
+#: thread-safe, and two threads must not both decide to create the schema.
+_SQLITE_REGISTRY_LOCK = threading.RLock()
+
+#: Whether this process has already built the schema in the SQLite file.
+#:
+#: This is per *process*, never per thread, and getting that wrong was the
+#: source of the last round of "database is locked" failures. get_db() used to
+#: call init_db() whenever the calling thread had no registered connection,
+#: which is every request thread a Flask dev server spawns. So five concurrent
+#: SELECT 1 requests re-ran the entire CREATE TABLE sequence five times, at
+#: once, on the same file. DDL contention also fails with SQLITE_BUSY in a
+#: form the busy handler does not wait out, so it surfaced as errors rather
+#: than as slowness: 5 of 6 threads lost outright.
+#:
+#: Building the schema is a boot-time concern. Once per process is the
+#: correct number, and it is also what init_db() has always meant everywhere
+#: else in this codebase.
+_SCHEMA_READY = False
+
+#: Set once the schema is fully built, and waited on by any thread that
+#: arrives while another one is still running the DDL. Without it such a
+#: thread would carry straight on and query tables that do not exist yet,
+#: which is the same class of bug as the per-thread init this replaced.
+_SCHEMA_DONE = threading.Event()
+
+#: Thread ident of whoever is currently running the DDL, so that thread can
+#: re-enter through get_db() (the schema builder uses the same helpers as
+#: every other caller) without waiting on itself.
+_SCHEMA_OWNER: "int | None" = None
+
+
+def _ensure_schema_ready() -> None:
+    """Build the schema once per process, from whichever thread gets there first."""
+    global _SCHEMA_OWNER
+    if _SCHEMA_DONE.is_set():
+        return
+    me = threading.get_ident()
+    if _SCHEMA_OWNER == me:
+        return  # our own DDL calling back in
+    with _SQLITE_REGISTRY_LOCK:
+        if _SCHEMA_DONE.is_set():
+            return
+        if _SCHEMA_OWNER is None:
+            _SCHEMA_OWNER = me
+            try:
+                _init_db_sqlite()
+            except BaseException:
+                # Stay retryable: a schema half-built by a failed migration
+                # must not be treated as a finished one.
+                _SCHEMA_OWNER = None
+                raise
+            _SCHEMA_OWNER = None
+            _SCHEMA_DONE.set()
+            return
+    # Another thread is building it. Waiting is the honest answer -- starting
+    # anyway would mean querying a schema that does not exist yet.
+    _SCHEMA_DONE.wait(timeout=60)
+
+
+def _sqlite_conn_for_thread():
+    """The calling thread's SQLite connection, creating it if needed."""
+    key = threading.get_ident()
+    conn = _SQLITE_CONNS.get(key)
+    if conn is None:
+        # Create outside the registry lock: opening a file is slow and holding
+        # a lock across it would serialise every request behind the first.
+        # A benign race just means two connections are made and one is closed.
+        fresh = sqlite_compat.connect(str(engine_mod.sqlite_path()))
+        with _SQLITE_REGISTRY_LOCK:
+            existing = _SQLITE_CONNS.setdefault(key, fresh)
+            if existing is not fresh:
+                sqlite_compat.close(fresh)
+        conn = _SQLITE_CONNS[key]
+    return conn
 
 
 def init_db() -> None:
@@ -65,11 +158,15 @@ def init_db() -> None:
     means SQLite (the local-first default), which is what lets the app
     start on a clean machine with no configuration at all.
     """
-    global _connection_pool, _sqlite_conn
+    global _connection_pool
+
+    global _SCHEMA_READY
 
     engine = engine_mod.select_engine()
     if engine == ENGINE_SQLITE:
         _init_db_sqlite()
+        _SCHEMA_READY = True
+        _SCHEMA_DONE.set()
         return
 
     _init_db_postgres()
@@ -88,8 +185,6 @@ def _init_db_sqlite() -> None:
     for the duration of the write transaction, which is the equivalent
     guarantee when there is one process.
     """
-    global _sqlite_conn
-
     if not _HAVE_PSYCOPG2 or sqlite_compat is None:  # pragma: no cover
         pass  # sqlite needs no third-party driver; presence of psycopg2 is irrelevant
 
@@ -98,18 +193,21 @@ def _init_db_sqlite() -> None:
     # committed, but a failed or abandoned one is not), and an open
     # transaction keeps a write lock on the file — so the second init_db()
     # would hit "database is locked" on the very database it just wrote.
-    if _sqlite_conn is not None:
-        sqlite_compat.close(_sqlite_conn)
-
-    path = engine_mod.sqlite_path()
-    _sqlite_conn = sqlite_compat.connect(str(path))
+    # Close, do not merely drop: a handle left open still holds its file
+    # locks, so the second init_db() would hit "database is locked" on the
+    # very database it just wrote. That was the reason the previous handle was
+    # closed here in the first place, and it still is.
+    previous = _SQLITE_CONNS.pop(threading.get_ident(), None)
+    if previous is not None:
+        sqlite_compat.close(previous)
+    conn = _sqlite_conn_for_thread()
 
     # Not a `with` block: the wrapper's __exit__ closes the connection, but
-    # this handle is module-global and stays open for the whole process
-    # lifetime. Schema creation is one transaction, ended explicitly.
-    conn = sqlite_compat.wrap_connection(_sqlite_conn)
-    _create_tables(conn.cursor())
-    conn.commit()
+    # this thread's handle stays open and is reused by the rest of its
+    # requests. Schema creation is one transaction, ended explicitly.
+    schema = sqlite_compat.wrap_connection(conn)
+    _create_tables(schema.cursor())
+    schema.commit()
 
     # Seed local user (id=1) and the addon catalog, same as Postgres. The
     # seed is idempotent so a restart is a no-op.
@@ -928,12 +1026,12 @@ def get_db():
     The ``with``/``cursor()``/``commit()`` sequence the callers already
     use works unchanged on both — ``CompatCursor`` translates the dialect.
     """
-    global _connection_pool, _sqlite_conn
+    global _connection_pool
     engine = engine_mod.active_engine()
 
     if engine == ENGINE_SQLITE or (engine is None and not os.environ.get('DATABASE_URL')):
-        if _sqlite_conn is None:
-            init_db()
+        if not _SCHEMA_READY:
+            _ensure_schema_ready()
         # The wrapper, not the raw handle. This is the whole point of the
         # function: the callers write ``with conn.cursor() as cur`` and
         # psycopg2's cursor is a context manager while sqlite3's is not, so
@@ -1015,13 +1113,19 @@ def close_pool() -> None:
     holds a write lock on the file, and a later init_db() would fail with
     "database is locked".
     """
-    global _connection_pool, _sqlite_conn
+    global _connection_pool, _SCHEMA_READY
     if _connection_pool:
         _connection_pool.closeall()
         _connection_pool = None
-    if _sqlite_conn is not None:
-        conn = _sqlite_conn
-        _sqlite_conn = None
+    with _SQLITE_REGISTRY_LOCK:
+        pending = list(_SQLITE_CONNS.values())
+        _SQLITE_CONNS.clear()
+        # The file behind those handles may be gone or replaced (tests point
+        # it at a fresh temp directory), so the next request must be allowed
+        # to build the schema again rather than assume it is there.
+        _SCHEMA_READY = False
+        _SCHEMA_DONE.clear()
+    for conn in pending:
         # Ask the compat layer, not the driver: the connection runs with
         # isolation_level=None, so sqlite3's own in_transaction is always
         # False and would silently skip the rollback. The compat layer
@@ -1040,15 +1144,15 @@ def get_connection():
     being rewritten. ``put_connection()`` is then a no-op rather than an
     error, which is what lets the importer's try/finally stay as it is.
     """
-    global _connection_pool, _sqlite_conn
+    global _connection_pool
     if engine_mod.active_engine() == ENGINE_SQLITE:
-        if _sqlite_conn is None:
+        if threading.get_ident() not in _SQLITE_CONNS:
             init_db()
         # borrow(), not wrap_connection(): the caller hands this back, and
         # three of them do it with conn.close() out of pool habit. A borrowed
         # handle's close() ends the transaction and leaves the shared
         # connection open.
-        return sqlite_compat.borrow(_sqlite_conn)
+        return sqlite_compat.borrow(_sqlite_conn_for_thread())
     if _connection_pool is None:
         init_db()
     return _connection_pool.getconn()

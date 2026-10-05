@@ -1116,3 +1116,149 @@ def test_a_read_leaves_no_warning(db, caplog):
         cur.execute("SELECT 1")
         cur.fetchone()
     assert not sqlite_compat.txn_has_writes(getattr(conn, "_conn", conn))
+
+
+# ─── one connection per thread, not one per process ───────────────
+# A single connection shared across threads deadlocks the app. Measured
+# against the running server: 36 of 40 concurrent requests timed out, and the
+# rest failed with errors like "error return without exception set". The
+# handle is opened with check_same_thread=False so it can cross threads at
+# all, but nothing then stopped two threads from using it at once.
+
+
+def test_each_thread_gets_its_own_connection(db):
+    import threading
+
+    import database
+
+    seen = []
+    errors = []
+
+    def grab():
+        try:
+            seen.append(id(database._sqlite_conn_for_thread()))
+        except Exception as exc:            # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=grab) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    assert not errors, errors
+    assert len(seen) == 8, "a thread failed to get a connection"
+    assert len(set(seen)) == 8, "threads shared one connection"
+
+
+def test_concurrent_writes_all_land(db):
+    """Every thread's work survives, and none of it rolls back another."""
+    import threading
+
+    import database
+
+    def insert(n):
+        try:
+            database.execute(
+                "INSERT INTO courses (user_id, title) VALUES (1, %s)", (f"C{n}",)
+            )
+        except Exception:                    # noqa: BLE001
+            pass
+
+    threads = [threading.Thread(target=insert, args=(i,)) for i in range(12)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=15)
+
+    rows = db.fetchall("SELECT title FROM courses ORDER BY title")
+    landed = {r["title"] for r in rows}
+    missing = [f"C{i}" for i in range(12) if f"C{i}" not in landed]
+    assert not missing, f"lost under concurrency: {missing}"
+
+
+def test_close_pool_shuts_every_thread_connection(db):
+    import database
+
+    database._sqlite_conn_for_thread()
+    assert database._SQLITE_CONNS, "expected a registered connection"
+    database.close_pool()
+    assert not database._SQLITE_CONNS, "a connection survived close_pool"
+
+
+# ─── data must survive a restart ──────────────────────────────────
+# A local install has no server-side migration step and no second copy of
+# anything. init_db() runs at every boot, so anything it drops is gone for
+# good, on the user's own machine, with no backup they were told to make.
+
+
+def test_legacy_detection_speaks_postgres(db):
+    """information_schema.type spellings must match the ones callers compare to.
+
+    Postgres lowercases declared types; SQLite returns them as written. The
+    emulation returned SQLite's casing, so both legacy guards below silently
+    stopped matching. One of them fails safe and the other does not.
+    """
+    import database
+
+    rows = db.fetchall(
+        "SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_name = 'sessions' AND column_name = 'id'"
+    )
+    assert rows, "sessions.id not visible through information_schema"
+    assert rows[0]["data_type"] == "text", rows[0]
+
+    # The healthy v2-shape table must not read as legacy.
+    with db.get_db() as conn:
+        assert not database._sessions_is_legacy(conn.cursor()), (
+            "a correct TEXT-id sessions table was judged legacy, so init_db() "
+            "drops the user's agenda on every boot"
+        )
+
+
+def test_sessions_survive_repeated_init(db):
+    """The user's agenda is still there after a second and third boot."""
+    import database
+
+    db.execute(
+        "INSERT INTO sessions (id, day_date, user_id, title) VALUES (%s, %s, %s, %s)",
+        ("S-keep-me", "2026-10-05", 1, "reunión"),
+    )
+    assert db.fetchone("SELECT count(*) c FROM sessions")["c"] == 1
+
+    for boot in range(2):
+        database.close_pool()          # as a process exit + relaunch would
+        database.init_db()
+        rows = db.fetchall("SELECT id, title FROM sessions")
+        assert rows == [{"id": "S-keep-me", "title": "reunión"}], (
+            f"boot {boot + 2} lost the agenda: {rows}"
+        )
+
+
+def test_legacy_integer_sessions_are_still_migrated(db, tmp_path):
+    """The guard must still fire for a genuine legacy table.
+
+    Lowercasing the view is only safe if detection kept working: the point of
+    _sessions_is_legacy is to notice an INTEGER-id table and replace it. If the
+    comparison were merely loosened it would stop catching anything, and this
+    is the test that says it did not.
+    """
+    import database
+
+    db.execute("DROP TABLE sessions")
+    db.execute(
+        "CREATE TABLE sessions (id SERIAL PRIMARY KEY, day_date TEXT, title TEXT)"
+    )
+    with db.get_db() as conn:
+        assert database._sessions_is_legacy(conn.cursor()), (
+            "an INTEGER-id sessions table must still be recognised as legacy"
+        )
+    database.close_pool()
+    database.init_db()
+    cols = db.fetchall(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'sessions'"
+    )
+    assert "category" in {c["column_name"] for c in cols}, (
+        "legacy table was not rebuilt in the v2 shape"
+    )
