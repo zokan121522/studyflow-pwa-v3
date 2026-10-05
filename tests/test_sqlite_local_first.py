@@ -914,3 +914,88 @@ def test_import_v2_into_a_real_sqlite_db(db, tmp_path):
         {"title": "DAW2"}, {"title": "JavaFX"}
     ]
     assert engine.active_engine() == "sqlite"
+
+
+# ─── get_db must hand out the wrapper, not the raw handle ────────────
+# psycopg2's cursor is a context manager; sqlite3's is not. Handing back
+# the raw connection made every ``with conn.cursor() as cur`` in the app
+# fail, on SQLite only, which is exactly where nobody tests by hand.
+
+
+def test_get_db_yields_a_usable_cursor(db):
+    from database import get_db
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 AS n")
+            assert cur.fetchone()["n"] == 1
+
+
+def test_health_reports_the_active_engine(db):
+    from flask import Flask
+
+    from routes.health import bp
+
+    app = Flask(__name__)
+    app.register_blueprint(bp)
+    body = app.test_client().get("/health").get_json()
+
+    assert body["status"] == "healthy", body
+    assert body["engine"]["engine"] == "sqlite"
+    assert body["engine"]["path"].endswith("studyflow.db")
+
+
+# ─── temporal columns are TEXT on SQLite ───────────────────────────
+# models.py called .isoformat() on created_at because psycopg2 returns a
+# datetime. SQLite stores every timestamp as text, so it raised
+# "'str' object has no attribute 'isoformat'" on the first course create.
+
+
+def test_iso_accepts_both_engines_values():
+    import datetime
+
+    from serial import iso
+
+    assert iso(None) is None
+    assert iso("2026-01-02T03:04:05") == "2026-01-02T03:04:05"
+    assert iso(datetime.date(2026, 1, 2)) == "2026-01-02"
+    stamp = datetime.datetime.now(datetime.timezone.utc)
+    assert iso(stamp) == stamp.isoformat()
+
+
+def test_course_created_at_serialises_on_sqlite(db):
+    import datetime
+
+    from models import Course
+
+    course = Course(
+        id=1,
+        user_id=1,
+        title="DAW2",
+        created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    payload = course.to_dict()
+    assert isinstance(payload["created_at"], str)
+    assert payload["created_at"]
+
+
+def test_course_routes_work_on_sqlite(db):
+    from flask import Flask
+
+    from routes.courses import bp
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'DAW2')")
+    conn.commit()
+
+    app = Flask(__name__)
+    app.register_blueprint(bp)
+    client = app.test_client()
+
+    assert client.get("/courses").status_code == 200
+    assert client.get("/courses/1").status_code == 200
+    created = client.post("/courses", json={"title": "Nueva"})
+    assert created.status_code == 201, created.get_data(as_text=True)[:200]
+    body = created.get_json()["course"]
+    assert isinstance(body["created_at"], str)

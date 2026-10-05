@@ -23,6 +23,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from database import fetchone
+from serial import iso
 from routes.auth import token_required
 from openzen_credentials import (
     delete_credentials,
@@ -51,8 +52,7 @@ def _status(user_id: int) -> dict:
     return {
         "username": row.get("username") or "",
         "has_password": bool(row.get("password_enc")),
-        "updated_at": row.get("updated_at").isoformat()
-        if row.get("updated_at") else None,
+        "updated_at": iso(row.get("updated_at")),
     }
 
 
@@ -114,8 +114,7 @@ def _openzen_status(user_id: int) -> dict:
         'server_url': (row or {}).get('server_url') or default_server_url(),
         'model': (row or {}).get('model') or default_model(),
         'is_default': not bool(row),
-        'updated_at': row.get('updated_at').isoformat()
-        if row and row.get('updated_at') else None,
+        'updated_at': iso(row.get('updated_at')) if row else None,
     }
 
 

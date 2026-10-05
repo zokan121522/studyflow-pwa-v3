@@ -931,7 +931,13 @@ def get_db():
     if engine == ENGINE_SQLITE or (engine is None and not os.environ.get('DATABASE_URL')):
         if _sqlite_conn is None:
             init_db()
-        yield _sqlite_conn
+        # The wrapper, not the raw handle. This is the whole point of the
+        # function: the callers write ``with conn.cursor() as cur`` and
+        # psycopg2's cursor is a context manager while sqlite3's is not, so
+        # handing back the raw connection makes every one of those fail
+        # with "does not support the context manager protocol" -- on SQLite
+        # only, which is exactly where nobody tests by hand.
+        yield get_connection()
         return
 
     if _connection_pool is None:

@@ -7,6 +7,8 @@ from enum import Enum
 from typing import Optional, List, Dict, Any
 import json
 
+from serial import iso
+
 
 # ─── Enums (Agenda) ───────────────────────────────────────────────
 class SessionCategory(str, Enum):
@@ -54,8 +56,8 @@ class User:
             'email': self.email,
             'name': self.name,
             'avatar_url': self.avatar_url,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -91,8 +93,8 @@ class Habit:
             'frequency': self.frequency,
             'target_count': self.target_count,
             'color': self.color,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -125,10 +127,10 @@ class HabitEntry:
             'id': self.id,
             'habit_id': self.habit_id,
             'user_id': self.user_id,
-            'date': self.date.isoformat() if self.date else None,
+            'date': iso(self.date),
             'count': self.count,
             'completed': self.completed,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod
@@ -171,8 +173,8 @@ class Course:
             'is_favorite': self.is_favorite,
             'icon': self.icon,
             'order_index': self.order_index,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -221,8 +223,8 @@ class Topic:
             'status': self.status,
             'estimated_minutes': self.estimated_minutes,
             'actual_minutes': self.actual_minutes,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -275,8 +277,8 @@ class Block:
             'done': self.done, 'order_index': self.order_index,
             'color': self.color, 'collapsed': self.collapsed,
             'image_id': self.image_id,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -322,7 +324,7 @@ class PDF:
             'file_size': self.file_size,
             'page_count': self.page_count,
             'storage_path': self.storage_path,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod
@@ -372,7 +374,7 @@ class Image:
             'mime': self.mime,
             'file_size': self.file_size,
             'storage_path': self.storage_path,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod
@@ -421,7 +423,7 @@ class QuizQuestion:
             'correct_answer': self.correct_answer,
             'explanation': self.explanation,
             'difficulty': self.difficulty,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod
@@ -468,7 +470,7 @@ class QuizResult:
             'selected_answer': self.selected_answer,
             'is_correct': self.is_correct,
             'time_taken_ms': self.time_taken_ms,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod
@@ -535,9 +537,9 @@ class QuizError:
             'block_id': self.block_id,
             'wrong_count': self.wrong_count,
             'last_wrong_answer': self.last_wrong_answer,
-            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
-            'last_failed_at': self.last_failed_at.isoformat() if self.last_failed_at else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'resolved_at': iso(self.resolved_at),
+            'last_failed_at': iso(self.last_failed_at),
+            'created_at': iso(self.created_at),
             'is_open': self.is_open,
             'question': self.question,
             'options': self.options,
@@ -595,9 +597,9 @@ class Todo:
             'description': self.description,
             'completed': self.completed,
             'priority': self.priority,
-            'due_date': self.due_date.isoformat() if self.due_date else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'due_date': iso(self.due_date),
+            'created_at': iso(self.created_at),
+            'updated_at': iso(self.updated_at),
         }
 
     @classmethod
@@ -637,7 +639,7 @@ class AudioFile:
             'duration_seconds': self.duration_seconds,
             'voice': self.voice,
             'language': self.language,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': iso(self.created_at),
         }
 
     @classmethod

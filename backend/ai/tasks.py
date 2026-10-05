@@ -12,6 +12,7 @@ import json
 import time
 
 from database import execute, query, query_one
+from serial import iso
 from ai.generation.helpers import _check_cancelled
 
 
@@ -147,8 +148,8 @@ def get_task(task_id: str, user_id: str) -> dict:
         "error_message": row["error_message"],
         "coverage_data": coverage_data,
         "source_id": row["source_id"],
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
+        "created_at": iso(row["created_at"]),
+        "completed_at": iso(row["completed_at"]),
     }
 
 
@@ -227,7 +228,7 @@ def get_sources(topic_id: str, user_id: str) -> list[dict]:
             "id": r["id"],
             "type": r["type"],
             "label": label,
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "created_at": iso(r["created_at"]),
         })
 
     return sources

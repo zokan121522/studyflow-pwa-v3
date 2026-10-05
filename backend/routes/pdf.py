@@ -14,6 +14,7 @@ import json
 import logging
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
+from serial import iso
 
 from database import execute, fetchone, fetchall
 from routes.auth import token_required
@@ -276,8 +277,8 @@ def _annotation_to_dict(row) -> dict:
         'pdf_id': row['pdf_id'],
         'page': row['page'],
         'data': data,
-        'created_at': row['created_at'].isoformat() if row['created_at'] else None,
-        'updated_at': row['updated_at'].isoformat() if row['updated_at'] else None,
+        'created_at': iso(row['created_at']),
+        'updated_at': iso(row['updated_at']),
     }
 
 
