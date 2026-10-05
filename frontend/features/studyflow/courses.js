@@ -940,6 +940,10 @@ window.App.Courses = (function () {
     _toggleBlockDone,
     _showMoveDialog,
     _enterEditMode,
+    // Re-exportado desde CoursesAPI: el menú lateral de curso y de tema lo
+    // invoca por onclick como window.App.Courses.addBlock. Sin esto,
+    // "Añadir markdown" / "Añadir PDF" eran botones muertos (fallo silencioso).
+    addBlock,
     _inlineRenameBlockTitle,
     _inlineRenameCourse,
     _inlineRenameTopic,

@@ -98,7 +98,11 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v97: session timers. _getTimerSeconds() took no prefix, so pause time was
 // saved as elapsed time and effective time read 0m; and the create path never
 // sent the timer fields at all.
-const ASSET_CACHE = 'studyflow-assets-v97';
+// v98: Courses.addBlock was imported but never re-exported, so "Añadir
+// markdown" / "Añadir PDF" / "Añadir separador" (5 sidebar buttons) threw
+// with no .catch(): menu closed, nothing happened. Now exported, and each
+// call surfaces failures instead of failing silently.
+const ASSET_CACHE = 'studyflow-assets-v98';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
