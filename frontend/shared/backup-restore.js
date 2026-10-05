@@ -12,6 +12,12 @@
  * what will be skipped, then /api/backup/v2/import migrates everything in
  * one transaction. Both formats use the same file picker.
  * Loaded after app.js (needs window.API_URL, window.Auth).
+ *
+ * ⚠️ Superseded as the ENTRY POINT (issue #23): the header buttons now go
+ * through app.js → backup-selector.js (selective backup + additive
+ * restore). init() below is intentionally a no-op and everything above it
+ * is dead code kept only until the old endpoints are retired — safe to
+ * delete together with its /shared/backup-restore.js precache entry.
  */
 (function () {
   "use strict";
@@ -446,17 +452,13 @@
   }
 
   // ─── wire buttons (after DOM ready) ─────────────────────────────────
+  // SUPERSEDED (issue #23 — v2 backup parity): #btn-backup / #btn-restore
+  // are now wired by app.js (initBackupRestore) to the selective backup
+  // modal (backup-selector.js → POST /api/backup/mine) and the additive
+  // restore (POST /api/backup/mine/restore). This module deliberately binds
+  // nothing so a click cannot fire two handlers.
   function init() {
-    const btnBackup = document.getElementById("btn-backup");
-    const btnRestore = document.getElementById("btn-restore");
-    if (btnBackup) {
-      btnBackup.title = "Backup — guardar datos locales (ZIP)";
-      btnBackup.addEventListener("click", doBackup);
-    }
-    if (btnRestore) {
-      btnRestore.title = "Restore — restaurar desde un ZIP local";
-      btnRestore.addEventListener("click", openFilePicker);
-    }
+    /* no-op: see note above */
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
