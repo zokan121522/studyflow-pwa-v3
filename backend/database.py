@@ -1,25 +1,136 @@
 # backend/database.py
-"""PostgreSQL connection manager for StudyFlow PWA v3."""
+"""Connection manager for StudyFlow PWA v3.
+
+Serves two engines behind one set of helper functions:
+
+- **SQLite** — the local-first default. One file on the user's disk, no
+  server, no credentials. Selected when there is no ``DATABASE_URL``.
+- **PostgreSQL** — the v3 server deployment, still what the integration
+  tests against a live database use.
+
+The choice is made once in ``init_db()`` and recorded in ``engine.py``.
+Nothing below this docstring changes behaviour for the ~539 call sites:
+they import ``execute``/``fetchall``/``fetchone``/``query`` and never see
+which engine answered.
+
+Dialect differences (Postgres ``%s`` placeholders, ``SERIAL``, ``DEFAULT
+NOW()``, ``ADD COLUMN IF NOT EXISTS``, ``to_regclass``) are translated in
+``sqlite_compat``. Keeping that out of the feature modules is what makes
+the SQLite port a change to this file plus one new module, rather than a
+change to 32 of them.
+"""
 
 import os
-import psycopg2
-from psycopg2 import pool
-from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
 
+import engine as engine_mod
+from engine import ENGINE_POSTGRES, ENGINE_SQLITE
 
-# Global connection pool
-_connection_pool: Optional[pool.ThreadedConnectionPool] = None
+# psycopg2 is only imported on the Postgres path. Under SQLite the
+# dependency is absent from the install, and an import-time reference
+# would make the whole app unstartable on a machine that never had it.
+try:  # pragma: no cover - exercised by whichever engine the test uses
+    import psycopg2
+    from psycopg2 import pool
+    from psycopg2.extras import RealDictCursor
+    _HAVE_PSYCOPG2 = True
+except ImportError:  # pragma: no cover
+    psycopg2 = None
+    pool = None
+    RealDictCursor = None
+    _HAVE_PSYCOPG2 = False
+
+import sqlite_compat
+
+
+# Global connection pool. A ThreadedConnectionPool on Postgres; a single
+# sqlite3 connection on SQLite, where the driver has no pool and the
+# database is one local file.
+_connection_pool = None
+
+#: The sqlite3 connection, when the engine is SQLite. Kept separate from
+#: _connection_pool so the Postgres pool closeall() path is never handed
+#: a sqlite3 object.
+_sqlite_conn = None
 
 
 def init_db() -> None:
-    """Initialize the connection pool and create tables if they don't exist."""
+    """Open the database and create the schema if it does not exist.
+
+    Engine selection lives in engine.select_engine(): no ``DATABASE_URL``
+    means SQLite (the local-first default), which is what lets the app
+    start on a clean machine with no configuration at all.
+    """
+    global _connection_pool, _sqlite_conn
+
+    engine = engine_mod.select_engine()
+    if engine == ENGINE_SQLITE:
+        _init_db_sqlite()
+        return
+
+    _init_db_postgres()
+
+
+def _init_db_sqlite() -> None:
+    """Open (or create) the local SQLite file and build the schema.
+
+    No pool: the stdlib driver has none, and a single local file is not a
+    contended resource the way a shared Postgres is. The connection is
+    opened with ``check_same_thread=False`` because gunicorn's gevent
+    worker serves requests as greenlets off one OS thread.
+
+    Schema creation is the same sequence ``_init_db_postgres`` runs, minus
+    the advisory lock — SQLite takes an exclusive lock on the file itself
+    for the duration of the write transaction, which is the equivalent
+    guarantee when there is one process.
+    """
+    global _sqlite_conn
+
+    if not _HAVE_PSYCOPG2 or sqlite_compat is None:  # pragma: no cover
+        pass  # sqlite needs no third-party driver; presence of psycopg2 is irrelevant
+
+    path = engine_mod.sqlite_path()
+    _sqlite_conn = sqlite_compat.connect(str(path))
+
+    with _sqlite_conn as conn:
+        _create_tables(sqlite_compat.cursor(conn))
+        conn.commit()
+
+    # Seed local user (id=1) and the addon catalog, same as Postgres. The
+    # seed is idempotent so a restart is a no-op.
+    _seed_local_user()
+
+    from addons_seed import seed_addon_catalog
+    seed_addon_catalog()
+
+    # Feature-owned DDL. These live in their feature packages (Phase 9
+    # out-of-scope note in the Postgres path applies here too).
+    from calendar_import.schema import create_calendar_import_tables
+    with get_db() as conn:
+        with sqlite_compat.cursor(conn) as cur:
+            create_calendar_import_tables(cur)
+        conn.commit()
+
+    from images.schema import create_images_tables
+    with get_db() as conn:
+        with sqlite_compat.cursor(conn) as cur:
+            create_images_tables(cur)
+        conn.commit()
+
+
+def _init_db_postgres() -> None:
+    """Open the Postgres pool and build the schema (the v3 path)."""
     global _connection_pool
 
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
         raise RuntimeError('DATABASE_URL environment variable not set')
+    if not _HAVE_PSYCOPG2:  # pragma: no cover
+        raise RuntimeError(
+            'psycopg2 is not installed but the postgres engine was selected. '
+            'Install it, or unset DATABASE_URL to use the local SQLite file.'
+        )
 
     # maxconn=20: the pool is per-process, so each gunicorn worker can hold up
     # to 20. Sized well above the concurrency one worker serves so a burst of
@@ -100,16 +211,21 @@ def _seed_local_user() -> None:
 
     Uses ON CONFLICT for idempotency. Resets the users.id sequence to avoid
     colliding with id=1 on future inserts.
+
+    On SQLite there is no sequence to reset: AUTOINCREMENT is driven by
+    ``sqlite_sequence``, and inserting the explicit id=1 updates that
+    counter automatically. The equivalent Postgres call is skipped.
     """
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO users (id, email, password_hash, name)
-                VALUES (1, 'local@studyflow.app', 'local-no-auth', 'Usuario Local')
-                ON CONFLICT (id) DO NOTHING
-                """
-            )
+        cur = _cursor_for(conn)
+        cur.execute(
+            """
+            INSERT INTO users (id, email, password_hash, name)
+            VALUES (1, 'local@studyflow.app', 'local-no-auth', 'Usuario Local')
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+        if engine_mod.active_engine() != ENGINE_SQLITE:
             cur.execute(
                 """
                 SELECT setval(
@@ -122,7 +238,12 @@ def _seed_local_user() -> None:
 
 
 def _create_tables(cur) -> None:
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist.
+
+    Takes an already-open cursor — a ``CompatCursor`` on SQLite, a
+    RealDictCursor on Postgres — because both the feature DDL helpers and
+    the migration helpers below are written against that one interface.
+    """
     for ddl in _TABLE_DDL:
         cur.execute(ddl)
     _create_ai_tasks(cur)
@@ -785,11 +906,25 @@ _POST_INDEXES = [
 
 @contextmanager
 def get_db():
-    """Get a database connection from the pool."""
-    global _connection_pool
+    """Yield a database connection, whichever engine is active.
+
+    On Postgres this borrows from the pool and returns it afterwards. On
+    SQLite it yields the single connection: the stdlib driver has no pool
+    and there is one local file, so there is nothing to borrow from.
+    The ``with``/``cursor()``/``commit()`` sequence the callers already
+    use works unchanged on both — ``CompatCursor`` translates the dialect.
+    """
+    global _connection_pool, _sqlite_conn
+    engine = engine_mod.active_engine()
+
+    if engine == ENGINE_SQLITE or (engine is None and not os.environ.get('DATABASE_URL')):
+        if _sqlite_conn is None:
+            init_db()
+        yield _sqlite_conn
+        return
+
     if _connection_pool is None:
         init_db()
-
     conn = _connection_pool.getconn()
     try:
         yield conn
@@ -797,50 +932,75 @@ def get_db():
         _connection_pool.putconn(conn)
 
 
+def _cursor_for(conn):
+    """A dialect-translating cursor on SQLite, the raw one on Postgres.
+
+    The Postgres pool is already configured with ``cursor_factory=
+    RealDictCursor``, so its cursors need no wrapping. SQLite cursors do,
+    which is what lets the feature modules keep issuing ``%s`` and
+    Postgres DDL unchanged.
+    """
+    if engine_mod.active_engine() == ENGINE_SQLITE:
+        return sqlite_compat.cursor(conn)
+    return conn.cursor()
+
+
 def execute(query: str, params: tuple = None) -> int:
     """Execute a query (INSERT, UPDATE, DELETE) and return row count."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            conn.commit()
-            return cur.rowcount
+        cur = _cursor_for(conn)
+        cur.execute(query, params)
+        conn.commit()
+        return cur.rowcount
 
 
 def fetchone(query: str, params: tuple = None) -> Optional[Dict[str, Any]]:
     """Fetch a single row as a dictionary."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchone()
+        cur = _cursor_for(conn)
+        cur.execute(query, params)
+        return cur.fetchone()
 
 
 def fetchall(query: str, params: tuple = None) -> List[Dict[str, Any]]:
     """Fetch all rows as a list of dictionaries."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchall()
+        cur = _cursor_for(conn)
+        cur.execute(query, params)
+        return cur.fetchall()
 
 
 def fetchone_raw(query: str, params: tuple = None):
     """Fetch a single row as a raw tuple (for counts, etc)."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchone()
+        cur = _cursor_for(conn)
+        cur.execute(query, params)
+        return cur.fetchone()
 
 
 def close_pool() -> None:
-    """Close the connection pool."""
-    global _connection_pool
+    """Close the database connection(s)."""
+    global _connection_pool, _sqlite_conn
     if _connection_pool:
         _connection_pool.closeall()
         _connection_pool = None
+    if _sqlite_conn is not None:
+        _sqlite_conn.close()
+        _sqlite_conn = None
 
 
 # ─── v2-compatible helpers (port) ─────────────────────────────────
 def get_connection():
-    """Borrow a raw connection from the pool (caller manages tx + close)."""
+    """Borrow a raw connection from the pool (caller manages tx + close).
+
+    On SQLite this returns the single shared connection, so a caller that
+    does ``put_connection()`` afterwards is a no-op rather than an error.
+    """
+    global _connection_pool, _sqlite_conn
+    if engine_mod.active_engine() == ENGINE_SQLITE:
+        if _sqlite_conn is None:
+            init_db()
+        return _sqlite_conn
     if _connection_pool is None:
         init_db()
     return _connection_pool.getconn()
@@ -848,6 +1008,8 @@ def get_connection():
 
 def put_connection(conn) -> None:
     """Return a connection borrowed via get_connection() to the pool."""
+    if engine_mod.active_engine() == ENGINE_SQLITE:
+        return  # the single shared connection is not pooled
     if _connection_pool is not None:
         _connection_pool.putconn(conn)
 
@@ -855,27 +1017,29 @@ def put_connection(conn) -> None:
 def query(sql: str, params: tuple = None) -> List[Dict[str, Any]]:
     """Run a SELECT and return all rows as dicts."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
+        cur = _cursor_for(conn)
+        cur.execute(sql, params)
+        return cur.fetchall()
 
 
 def query_one(sql: str, params: tuple = None):
     """Run a SELECT and return the first row as a dict (or None)."""
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchone()
+        cur = _cursor_for(conn)
+        cur.execute(sql, params)
+        return cur.fetchone()
 
 
 def execute_returning(sql: str, params: tuple = None):
     """Run INSERT/UPDATE/DELETE … RETURNING and return the first row.
 
     Returns None when no row was returned (e.g. zero rows affected).
+    Works on both engines: SQLite supports the RETURNING clause natively
+    from 3.35, which sqlite_compat enforces.
     """
     with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            conn.commit()
-            return row
+        cur = _cursor_for(conn)
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        conn.commit()
+        return row
