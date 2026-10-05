@@ -603,3 +603,115 @@ def test_copy_from_rejects_a_row_with_the_wrong_field_count(db):
         # stream must be rejected, not silently half-applied.
         with pytest.raises(sqlite3.ProgrammingError, match="expected 2"):
             cur.copy_from(io.StringIO("1\tk\textra\n"))
+
+
+# ─── full backup round trip ───────────────────────────────────────────
+# The export and the restore are the two halves of the user's only safety
+# net: there is no server holding a second copy. Together they also
+# exercise the translation layer harder than any single query does --
+# COPY out, COPY in, staging tables, the re-owned user_id cast, and a bare
+# ON CONFLICT inside INSERT ... SELECT.
+
+
+def _seed_graph(conn):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Curso Real')")
+        cur.execute(
+            "INSERT INTO courses (user_id, title) VALUES (1, %s)",
+            ('con tab\ty y newline\n',),
+        )
+        cur.execute("INSERT INTO weeks (week_id, user_id) VALUES ('W1', 1)")
+        cur.execute("INSERT INTO topics (course_id, user_id, title) VALUES (1, 1, 'Tema')")
+    conn.commit()
+
+
+def test_export_then_restore_round_trip(db):
+    import backup_user
+    import backup_user_restore
+
+    conn = db.get_connection()
+    _seed_graph(conn)
+    before = db.fetchall("SELECT id, title FROM courses ORDER BY id")
+
+    dump = backup_user._export_user_db(conn, 1)
+    assert dump, "the export produced no tables at all"
+
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM topics")
+        cur.execute("DELETE FROM courses")
+        cur.execute("DELETE FROM weeks")
+    conn.commit()
+    assert db.fetchone("SELECT COUNT(*) AS n FROM courses")["n"] == 0
+
+    parsed = [(t, dump[t]["columns"], dump[t]["data"]) for t in dump]
+    backup_user_restore._import_tables(conn, parsed, 1)
+    conn.commit()
+
+    assert db.fetchall("SELECT id, title FROM courses ORDER BY id") == before
+    assert db.fetchall("SELECT title FROM topics") == [{"title": "Tema"}]
+    assert db.fetchall("SELECT week_id FROM weeks") == [{"week_id": "W1"}]
+
+
+def test_restore_is_idempotent(db):
+    """Restoring the same archive twice must not duplicate or error.
+
+    The restore path uses ON CONFLICT DO NOTHING precisely so a user can
+    re-import an archive they already have.
+    """
+    import backup_user
+    import backup_user_restore
+
+    conn = db.get_connection()
+    _seed_graph(conn)
+    dump = backup_user._export_user_db(conn, 1)
+    parsed = [(t, dump[t]["columns"], dump[t]["data"]) for t in dump]
+
+    backup_user_restore._import_tables(conn, parsed, 1)
+    conn.commit()
+    backup_user_restore._import_tables(conn, parsed, 1)
+    conn.commit()
+
+    assert db.fetchone("SELECT COUNT(*) AS n FROM courses")["n"] == 2
+    assert db.fetchone("SELECT COUNT(*) AS n FROM topics")["n"] == 1
+
+
+def test_catalogue_views_agree_with_the_live_schema(db):
+    """The FK ordering in the export is derived from the catalogue views.
+
+    If information_schema.tables reports the wrong table_type, every
+    table_type = 'BASE TABLE' predicate silently matches nothing and the
+    export comes back with only the users row.
+    """
+    import backup_db
+
+    conn = db.get_connection()
+    available = backup_db.available_tables(conn)
+    assert "courses" in available
+
+    user_tables = backup_user_tables(conn)
+    assert "courses" in user_tables, user_tables
+
+    # A table with a real foreign key must produce an edge for _order_tables.
+    rows = backup_db.query_on_conn(
+        conn,
+        """
+        SELECT tc.table_name AS child, ccu.table_name AS parent
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.constraint_schema = kcu.constraint_schema
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.constraint_schema = tc.constraint_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_name = ANY(%s)
+        """,
+        (list(user_tables),),
+    )
+    assert ("topics", "courses") in [(r[0], r[1]) for r in rows], rows
+
+
+def backup_user_tables(conn):
+    import backup_user
+
+    return backup_user._user_tables(conn)

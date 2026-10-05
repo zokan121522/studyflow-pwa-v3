@@ -170,10 +170,21 @@ def translate_ddl(ddl: str) -> str:
 
 
 #: Postgres catalogue view name → the temp view that emulates it.
+#: The app's SQL is written against Postgres, where the schema is always
+#: 'public' and is spelled out in a few queries. SQLite has one unnamed
+#: schema, so the catalogue views below report 'public' -- the name the
+#: queries filter on. Reporting 'main' made every
+#: ``table_schema = 'public'`` predicate silently match nothing, which
+#: surfaced as the backup exporter resolving zero tables.
+#:
 #: SQLite identifiers cannot contain a dot, so the name is rewritten
 #: rather than quoted.
 _CATALOGUE_VIEW_MAP = (
     ("information_schema.columns", "information_schema_columns"),
+    ("information_schema.tables", "information_schema_tables"),
+    ("information_schema.table_constraints", "information_schema_table_constraints"),
+    ("information_schema.key_column_usage", "information_schema_key_column_usage"),
+    ("information_schema.constraint_column_usage", "information_schema_constraint_column_usage"),
 )
 
 #: Postgres ``DROP TABLE ... CASCADE`` — SQLite has no CASCADE there and
@@ -203,6 +214,10 @@ def translate_sql(sql: str) -> str:
         sql = _PYNAME_RE.sub("?", sql)
     if "EXTRACT" in sql.upper():
         sql = _rewrite_extract_epoch(sql)
+    if _BARE_ON_CONFLICT_RE.search(sql):
+        sql = _fix_bare_on_conflict(sql)
+    if "::" in sql:
+        sql = _rewrite_postgres_casts(sql)
     if "%s" not in sql:
         return sql
     return _PYFORMAT_RE.sub("?", sql)
@@ -225,6 +240,47 @@ def _rewrite_extract_epoch(sql: str) -> str:
         lambda m: f"((julianday({m.group('a')}) - julianday({m.group('b')})) * 86400.0)",
         sql,
     )
+
+
+#: Postgres ``col = ANY(%s)`` — an array membership test. SQLite has no
+#: arrays, so it becomes ``col IN (...)``. The placeholders are expanded
+#: to match, and the single bound value (a Python list) is dropped, since
+#: SQLite cannot bind one value to several markers.
+_ANY_RE = re.compile(
+    r"(?P<col>[\w.\"]+)\s*=\s*ANY\s*\(\s*%\s*s\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _expand_any(sql: str, params=None) -> tuple[str, Any]:
+    """Rewrite ``= ANY(%s)`` into ``IN (?, ?, ...)``.
+
+    One placeholder per element of the bound list -- not one per occurrence
+    of the clause: each occurrence is a separate membership test over the
+    same array. The list is spliced out and its elements returned in order,
+    to be spliced into the parameter list in place of the single bound
+    value, since sqlite3 cannot bind one value to several markers.
+    """
+    matches = _ANY_RE.findall(sql)
+    if not matches:
+        # Hand the params back untouched. Coercing to a tuple here would
+        # turn a dict into its *keys* and drop every value before
+        # translate_params gets a chance to map them by name.
+        return sql, params
+    array = params[0] if params and isinstance(params[0], (list, tuple)) else None
+    rest = list(params[1:]) if params else []
+    if array is not None:
+        # The bound value IS the array: splice its elements in place of it.
+        sql = _ANY_RE.sub(
+            lambda m: f'{m.group("col")} IN ({", ".join("?" * len(array))})', sql
+        )
+        return sql, list(array) + rest
+    # No array bound (should not happen, but do not silently mis-bind):
+    # keep one marker per occurrence and drop nothing.
+    sql = _ANY_RE.sub(
+        lambda m: f'{m.group("col")} IN ({", ".join("?" * len(matches))})', sql
+    )
+    return sql, rest
 
 
 def translate_params(sql: str, params: Optional[Sequence]) -> tuple:
@@ -291,11 +347,76 @@ def _register_functions(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TEMP VIEW IF NOT EXISTS information_schema_columns AS
-        SELECT m.name AS table_name,
+        SELECT 'public' AS table_schema,
+               m.name AS table_name,
                p.name AS column_name,
-               p.type AS data_type
+               p.type AS data_type,
+               p.cid AS ordinal_position
         FROM sqlite_master AS m
         JOIN pragma_table_info(m.name) AS p
+        WHERE m.type = 'table'
+        """
+    )
+    # The backup path resolves its table list through
+    # information_schema.tables, and filters on table_type = 'BASE TABLE'
+    # -- SQLite's own type string is lowercase 'table', so the predicate
+    # would match nothing and the export would come back empty. The view
+    # reports the Postgres spelling, which is the only one callers know.
+    conn.execute(
+        """
+        CREATE TEMP VIEW IF NOT EXISTS information_schema_tables AS
+        SELECT 'public' AS table_schema,
+               name AS table_name,
+               CASE type WHEN 'view' THEN 'VIEW' ELSE 'BASE TABLE' END AS table_type
+        FROM sqlite_master
+        WHERE type IN ('table', 'view')
+        """
+    )
+    # Foreign-key metadata, as the three Postgres catalogue views the FK
+    # ordering in backup_user._order_tables() joins them through. SQLite
+    # exposes the same information one table at a time through
+    # PRAGMA foreign_key_list, and pragma functions can be joined against
+    # sqlite_master to get every table in one query.
+    #
+    # The constraint names are synthesised as "<table>_fk_<n>" because the
+    # join is on constraint_name; SQLite does not store names for foreign
+    # keys, and the ordering code only needs the edges, not the names.
+    conn.execute(
+        """
+        CREATE TEMP VIEW IF NOT EXISTS information_schema_table_constraints AS
+        SELECT m.name AS constraint_schema,
+               'public' AS table_schema,
+               m.name AS table_name,
+               m.name || '_fk_' || f."id" AS constraint_name,
+               'FOREIGN KEY' AS constraint_type
+        FROM sqlite_master AS m
+        JOIN pragma_foreign_key_list(m.name) AS f
+        WHERE m.type = 'table'
+        """
+    )
+    conn.execute(
+        """
+        CREATE TEMP VIEW IF NOT EXISTS information_schema_key_column_usage AS
+        SELECT m.name AS constraint_schema,
+               'public' AS table_schema,
+               m.name AS table_name,
+               m.name || '_fk_' || f."id" AS constraint_name,
+               f."from" AS column_name
+        FROM sqlite_master AS m
+        JOIN pragma_foreign_key_list(m.name) AS f
+        WHERE m.type = 'table'
+        """
+    )
+    conn.execute(
+        """
+        CREATE TEMP VIEW IF NOT EXISTS information_schema_constraint_column_usage AS
+        SELECT m.name AS constraint_schema,
+               'public' AS table_schema,
+               m.name || '_fk_' || f."id" AS constraint_name,
+               f."table" AS table_name,
+               f."to" AS column_name
+        FROM sqlite_master AS m
+        JOIN pragma_foreign_key_list(m.name) AS f
         WHERE m.type = 'table'
         """
     )
@@ -335,15 +456,149 @@ def _parse_copy_line(line: str, width: int) -> list:
     return fields
 
 
-#: The COPY statement forms the compat layer understands.
+#: The COPY statement forms the compat layer understands. The export path
+#: uses both: ``COPY <table> (cols) TO STDOUT`` and the query form
+#: ``COPY (SELECT ...) TO STDOUT``, which needs no table name because the
+#: query is self-contained.
 _COPY_TO_RE = re.compile(
-    r"^\s*COPY\s+(?P<table>[\w.\"]+)\s*\((?P<cols>[^)]*)\)\s*TO\s+STDOUT",
-    re.IGNORECASE,
+    r"^\s*COPY\s+"
+    r"(?:\(\s*(?P<query>SELECT\b.*)\)\s*|(?P<table>[\w.\"]+)\s*(?:\((?P<cols>[^)]*)\))?\s*)"
+    r"TO\s+STDOUT",
+    re.IGNORECASE | re.DOTALL,
 )
 _COPY_FROM_RE = re.compile(
     r"^\s*COPY\s+(?P<table>[\w.\"]+)\s*\((?P<cols>[^)]*)\)\s*FROM\s+STDIN",
     re.IGNORECASE,
 )
+
+
+#: Postgres ``CREATE TEMP TABLE _stage (LIKE "courses")`` — the restore path
+#: stages a table before merging it. SQLite has no LIKE clause, so the shape
+#: is rebuilt from ``PRAGMA table_info``: column names, types and NOT NULL are
+#: enough for a staging table whose only job is to hold rows verbatim.
+_CREATE_TEMP_LIKE_RE = re.compile(
+    r"^\s*CREATE\s+(?P<temp>TEMP(?:ORARY)?\s+)?TABLE\s+(?P<name>[\w.\"]+)\s*"
+    r"\(\s*LIKE\s+(?P<src>[\w.\"]+)\s*\)\s*;?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _expand_create_like(cur: sqlite3.Cursor, sql: str) -> Optional[str]:
+    """Rewrite ``CREATE TEMP TABLE x (LIKE y)`` into an explicit column list."""
+    m = _CREATE_TEMP_LIKE_RE.match(sql)
+    if not m:
+        return None
+    src = m.group("src").strip('"`')
+    cols = []
+    for row in cur.execute(f'PRAGMA table_info("{src}")').fetchall():
+        # PRAGMA rows come back as dicts on the app's connections, and a
+        # dict is not indexable by position -- read them by column name.
+        if isinstance(row, dict):
+            name, ctype, notnull = row["name"], row["type"] or "", row["notnull"]
+        else:
+            name, ctype, notnull = row[1], row[2] or "", row[3]
+        part = f'"{name}" {ctype}'.rstrip()
+        if notnull:
+            part += " NOT NULL"
+        cols.append(part)
+    if not cols:
+        raise sqlite3.ProgrammingError(f"cannot stage: no columns in {src!r}")
+    temp = "TEMP " if m.group("temp") else ""
+    name = m.group("name").strip('"')
+    return f'CREATE {temp}TABLE "{name}" ({", ".join(cols)})' 
+
+
+#: Postgres ``SET session_replication_role = replica`` suspends foreign-key
+#: enforcement for the session; the restore path uses it to load tables in
+#: an order the constraints would otherwise reject.
+#:
+#: In SQLite this is already the default: ``PRAGMA foreign_keys`` is off
+#: unless a connection opts in, and this app never does. So the statement
+#: becomes a no-op rather than a PRAGMA -- the pragma is silently ignored
+#: inside a transaction, and the transaction is already open by the time a
+#: cursor executes anything, so issuing it would be a false promise.
+_SESSION_REPLICATION_RE = re.compile(
+    r"^\s*SET\s+session_replication_role\s*=\s*(?:replica|DEFAULT|ORIGINAL)\s*;?\s*$",
+    re.IGNORECASE,
+)
+
+
+#: A bare ``ON CONFLICT DO NOTHING`` in an INSERT ... SELECT.
+#:
+#: SQLite cannot parse it: with no conflict target there is nothing for the
+#: parser to attach the DO clause to, and it reports "near DO: syntax
+#: syntax error" (a WHERE true before the clause does not help -- that
+#: produces "near ON" instead). Postgres accepts the bare form.
+#:
+#: The faithful equivalent is INSERT OR IGNORE, which has identical
+#: semantics: skip rows that violate a uniqueness constraint, let every
+#: other row through. A targeted ``ON CONFLICT (col) DO NOTHING`` is left
+#: alone -- SQLite parses that form fine.
+_BARE_ON_CONFLICT_RE = re.compile(
+    r"\bON\s+CONFLICT\s+DO\s+NOTHING\b(?!\s*\()",
+    re.IGNORECASE,
+)
+_INSERT_SELECT_RE = re.compile(
+    r"^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\b.*\bSELECT\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _fix_bare_on_conflict(sql: str) -> str:
+    """Turn a bare ``ON CONFLICT DO NOTHING`` into ``INSERT OR IGNORE``.
+
+    Only for INSERT ... SELECT. A VALUES insert parses fine as written,
+    and rewriting its VALUES list would be a much larger change than the
+    problem needs.
+    """
+    if not _BARE_ON_CONFLICT_RE.search(sql):
+        return sql
+    if not _INSERT_SELECT_RE.match(sql):
+        return sql
+    sql = _BARE_ON_CONFLICT_RE.sub("", sql).rstrip()
+    return re.sub(
+        r"^\s*INSERT\s+INTO\b",
+        "INSERT OR IGNORE INTO",
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+
+#: Postgres ``expr::type`` casts. SQLite spells these CAST(expr AS type), and
+#: the restore path uses them to coerce the re-owned user_id back to an
+#: integer. The expression group must be able to swallow a %s placeholder --
+#: it usually is one, and matching only ``s`` would rewrite ``%s::int`` into
+#: ``CAST(s AS INTEGER)`` and orphan the parameter.
+_POSTGRES_CAST_RE = re.compile(
+    r"(?P<expr>%\(\w+\)s|%s|[\w.\"'()]+|\([^()]*\))\s*::\s*"
+    r"(?P<type>bigint|integer|int|smallint|bool|boolean|text|varchar|"
+    r"character varying|timestamp|timestamptz|date|numeric|real|double(?:\s+precision)?|jsonb?|uuid)",
+    re.IGNORECASE,
+)
+_SQLITE_CAST_TYPES = {
+    "int": "INTEGER", "integer": "INTEGER", "bigint": "INTEGER",
+    "smallint": "INTEGER", "bool": "INTEGER", "boolean": "INTEGER",
+    "text": "TEXT", "varchar": "TEXT", "character varying": "TEXT",
+    "timestamp": "TEXT", "timestamptz": "TEXT", "date": "TEXT",
+    "numeric": "NUMERIC", "real": "REAL", "json": "TEXT", "jsonb": "TEXT",
+    "uuid": "TEXT",
+}
+
+
+def _rewrite_postgres_casts(sql: str) -> str:
+    """Rewrite ``x::type`` into ``CAST(x AS TYPE)``, repeatedly for chains."""
+    out = sql
+    for _ in range(4):  # :: is right-associative; a few nested casts is plenty
+        new = _POSTGRES_CAST_RE.sub(
+            lambda m: f'CAST({m.group("expr")} AS '
+                      f'{_SQLITE_CAST_TYPES.get(re.sub(r"\\s+", " ", m.group("type").lower()), "TEXT")})',
+            out,
+        )
+        if new == out:
+            return out
+        out = new
+    return out
 
 
 def plain_row_factory(cursor: sqlite3.Cursor, row) -> tuple:
@@ -414,12 +669,19 @@ class CompatCursor:
         # translate_ddl rather than translate_sql; the clause is stripped
         # there. The catalogue-view rewrite lives in translate_sql, so DDL
         # gets it applied here too via the same helper.
+        if _SESSION_REPLICATION_RE.match(sql):
+            return self
         if _is_ddl(sql):
-            statement = translate_ddl(sql)
+            like = _expand_create_like(self._cur, sql)
+            statement = translate_ddl(like if like is not None else sql)
             bound = tuple(params) if params else ()
         else:
+            # ANY(%s) binds one array value to several markers, so the
+            # rewrite has to happen before the params are ordered: the
+            # spliced elements shift every position after it.
+            sql, bound = _expand_any(sql, params)
             statement = translate_sql(sql)
-            bound = translate_params(sql, params)
+            bound = translate_params(sql, bound) if bound else ()
         return self._cur.execute(statement, bound)
 
     def executemany(self, sql: str, seq_of_params: Iterable[Sequence]):
@@ -474,15 +736,45 @@ class CompatCursor:
         :meth:`copy_from`, which is the only consumer.
         """
         m = _COPY_TO_RE.match(sql)
-        if not m:  # pragma: no cover - callers only pass COPY ... TO STDOUT
-            raise sqlite3.ProgrammingError(f"not a COPY ... TO STDOUT: {sql!r}")
-        table = m.group("table").strip('"')
-        cols = [c.strip().strip('"') for c in m.group("cols").split(",")]
-        collist = ", ".join(f'"{c}"' for c in cols)
-        # The WHERE clause, if any, rides through verbatim; translate_sql
-        # rewrites its %s placeholders and Postgres-only constructs.
-        tail = sql[m.end():]
-        cur = self._cur.execute(translate_sql(f'SELECT {collist} FROM "{table}"{tail}'))
+        if m is None:
+            # psycopg2's copy_expert carries both directions, and the restore
+            # path loads its staging table with COPY ... FROM STDIN and the
+            # payload as the stream argument. So this is not a no-op: the
+            # stream is read straight into the target table here.
+            fm = _COPY_FROM_RE.match(sql)
+            if not fm:  # pragma: no cover - callers only pass COPY forms
+                raise sqlite3.ProgrammingError(f"not a COPY statement: {sql!r}")
+            table = fm.group("table").strip('"')
+            cols = [c.strip().strip('"') for c in fm.group("cols").split(",")]
+            self._copy_target = (table, cols)
+            self.copy_from(stream)
+            return
+        names: List[str] = []
+        if m.group("query"):
+            # COPY (SELECT ...) TO STDOUT -- the query stands on its own and
+            # the column list comes from the result, so translate it as-is.
+            cur = self._cur.execute(translate_sql(m.group("query")))
+        else:
+            table = m.group("table").strip('"')
+            raw_cols = m.group("cols")
+            cols = (
+                [c.strip().strip('"') for c in raw_cols.split(",")]
+                if raw_cols
+                else None
+            )
+            if cols is None:
+                # No column list: SELECT * would reorder on restore anyway,
+                # so spell the columns out in declaration order.
+                cols = [
+                    r[1]
+                    for r in self._cur.execute(
+                        f'PRAGMA table_info("{table}")'
+                    ).fetchall()
+                ]
+            collist = ", ".join(f'"{c}"' for c in cols)
+            cur = self._cur.execute(
+                translate_sql(f'SELECT {collist} FROM "{table}"')
+            )
         names = [d[0] for d in (cur.description or ())]
         if not names:
             return
