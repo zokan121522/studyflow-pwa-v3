@@ -525,6 +525,10 @@ window.App.CoursesSidebar = (function () {
     attachSidebarEvents,
     updateSelection,
     setTopicExpanded,
+    // Exported so courses-blocks.js resolves icons with the same rule
+    // instead of its own TYPE_META lookup, which painted a second 📝 on
+    // every markdown block and made the two views disagree.
+    getBlockIcon,
   };
 })();
 

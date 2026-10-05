@@ -120,6 +120,24 @@ addBlock, updateBlock, deleteBlock,
       || { icon: "📌", label: type || "Bloque", strip: "var(--border-light)" };
   }
 
+  // Icon for a concrete block, not for a type.
+  //
+  // `meta(type).icon` was used here and it put a second 📝 on every markdown
+  // block: the sidebar already suppresses it (a hand-written title is the
+  // point of a block), so the two views of the same block disagreed. Three
+  // of four blocks rendered with two icons. The rule now lives in one place
+  // — App.CoursesSidebar.getBlockIcon — and this delegates to it.
+  // courses-sidebar.js loads before this file (see index.html), but the
+  // lookup is still done lazily at render time so a future reorder of the
+  // script tags cannot silently reintroduce the duplicate.
+  function blockIcon(b, fallback) {
+    var sidebar = window.App && window.App.CoursesSidebar;
+    if (sidebar && typeof sidebar.getBlockIcon === "function") {
+      return sidebar.getBlockIcon(b);
+    }
+    return fallback;
+  }
+
   // ── _looksLikeHtml(str) → boolean ──────────────────────────────
   // Conservative heuristic: true when the string contains an opening or
   // closing tag (e.g. `<img`, `</p>`, `<audio`). Plain prose without tags
@@ -284,7 +302,7 @@ addBlock, updateBlock, deleteBlock,
     }" data-block-id="${b.id}" data-block-type="${escHtml(type)}"
        data-course-id="${courseId}">
       <div class="sf-td-block-head sf-td-block-head-inner">
-        <span class="sf-td-block-icon">${m.icon}</span>
+        <span class="sf-td-block-icon">${blockIcon(b, m.icon)}</span>
         <span class="sf-td-block-title">${title}</span>
       </div>
       ${aiToolbarHtml}
@@ -775,7 +793,7 @@ async function _embedPdfBlock(domCourse, domTopic, sourceBlockId, pdf, title) {
         <button class="sf-bc-collapse ht-btn-mini" title="Plegar / desplegar">${
           collapsed ? "▶" : "▼"
         }</button>
-        <span class="sf-bc-icon">${m.icon}</span>
+        <span class="sf-bc-icon">${blockIcon(b, m.icon)}</span>
         <span class="sf-bc-title">${title}</span>
         <span class="sf-bc-actions">
           <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>
