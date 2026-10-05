@@ -289,3 +289,133 @@ def test_env_var_overrides_dsn(monkeypatch, tmp_path):
     monkeypatch.setenv("STUDYFLOW_DB_ENGINE", "sqlite")
     monkeypatch.setattr(engine, "_active_engine", None, raising=False)
     assert engine.select_engine() == "sqlite"
+
+
+# ─── transaction atomicity ────────────────────────────────────────────
+# The v2 backup importer owns its transaction: on failure it calls
+# conn.rollback() and must leave the database untouched. With
+# isolation_level=None every statement autocommits, so without explicit
+# transaction handling rollback() would be a no-op and a half-finished
+# import would be left in the user's file.
+
+
+def test_rollback_undoes_an_uncommitted_write(db):
+    """A write that is never committed must not survive rollback."""
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Temp')")
+    conn.rollback()
+    assert db.fetchone(
+        "SELECT title FROM courses WHERE title = 'Temp'"
+    ) is None, "rollback did not undo the insert"
+
+
+def test_commit_persists_through_the_wrapper(db):
+    """The mirror case: an explicit commit is durable."""
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Kept')")
+    conn.commit()
+    assert db.fetchone("SELECT title FROM courses WHERE title = 'Kept'") is not None
+
+
+def test_two_wrappers_share_one_transaction(db):
+    """get_connection() returns a new wrapper each call, over one connection.
+
+    Regression guard: per-wrapper transaction state made the second
+    caller issue a nested BEGIN, which SQLite rejects. The transaction
+    belongs to the connection, so a second wrapper must see the same state
+    and a second BEGIN must not be attempted.
+    """
+    first = db.get_connection()
+    second = db.get_connection()
+    with first.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'A')")
+    # No exception here: the second wrapper joins the open transaction.
+    with second.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'B')")
+    second.rollback()
+    assert db.fetchone("SELECT title FROM courses WHERE title = 'A'") is None
+    assert db.fetchone("SELECT title FROM courses WHERE title = 'B'") is None
+
+
+def test_close_pool_releases_an_open_transaction(db, data_dir):
+    """An abandoned transaction must not lock the file out of the next boot.
+
+    The importer's failure path can leave a transaction open; if init_db()
+    then hit "database is locked", the app would refuse to start on a
+    database it had just written.
+    """
+    import database
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Abandoned')")
+    # No commit, no rollback: the worst case.
+    database.close_pool()
+
+    import engine
+    engine._active_engine = None
+    database.init_db()
+    assert database.fetchone(
+        "SELECT title FROM courses WHERE title = 'Abandoned'"
+    ) is None, "an uncommitted row survived close_pool()"
+
+
+def test_close_clears_transaction_state(db, data_dir):
+    """close() must not leave a stale flag behind for the next connection.
+
+    _TXN_STATE is keyed by id(conn) and CPython reuses addresses, so a
+    flag left True by a closed connection would be inherited by whatever
+    connection lands on that address next — which would then skip its
+    BEGIN and autocommit. The failure is silent and data-corrupting, so it
+    gets an explicit test rather than relying on a GC timing coincidence.
+    """
+    import sqlite3
+
+    import sqlite_compat
+
+    conn = sqlite_compat.connect(str(data_dir / "probe.db"))
+    with sqlite_compat.wrap_connection(conn).cursor() as cur:
+        cur.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    assert sqlite_compat._txn_active(conn) is True
+
+    sqlite_compat.close(conn)
+    assert sqlite_compat._txn_active(conn) is False, "close() left stale state"
+
+    # A fresh connection at the same address must start with no transaction.
+    for _ in range(20):
+        other = sqlite_compat.connect(str(data_dir / "probe.db"))
+        if id(other) == id(conn):
+            assert sqlite_compat._txn_active(other) is False, (
+                "a recycled connection id inherited a stale transaction flag"
+            )
+        sqlite_compat.close(other)
+
+
+def test_close_rolls_back_before_closing(db, data_dir):
+    """An uncommitted write is discarded when the connection is closed.
+
+    The rollback takes the DDL with it, because DDL is transactional in
+    Postgres too — the implicit transaction covers everything since BEGIN,
+    not just the INSERT. Asserting the table survives would encode a
+    SQLite-in-autocommit behaviour that the Postgres original never had.
+    """
+    import sqlite3
+
+    import sqlite_compat
+
+    conn = sqlite_compat.connect(str(data_dir / "probe.db"))
+    wrapped = sqlite_compat.wrap_connection(conn)
+    with wrapped.cursor() as cur:
+        cur.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+        cur.execute("INSERT INTO t (id) VALUES (1)")
+    sqlite_compat.close(conn)
+
+    # Reopen from disk: the whole uncommitted transaction is gone.
+    again = sqlite_compat.connect(str(data_dir / "probe.db"))
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="no such table"):
+            again.execute("SELECT COUNT(*) AS n FROM t")
+    finally:
+        sqlite_compat.close(again)

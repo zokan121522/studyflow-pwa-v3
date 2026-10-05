@@ -529,6 +529,116 @@ def check_sqlite_version() -> str:
     return version
 
 
+#: Open-transaction bookkeeping, keyed by ``id(sqlite3.Connection)``.
+#: See _txn_active for why this is a module-level map and not an
+#: attribute on the connection or the wrapper.
+_TXN_STATE: Dict[int, bool] = {}
+
+
+class CompatConnection:
+    """A sqlite3 connection whose cursors translate the dialect.
+
+    The counterpart to :class:`CompatCursor`, one level up. It exists for
+    the ~21 call sites that reach for ``conn.cursor()`` directly instead
+    of going through database.py's helpers — the v2 backup importer
+    (v2_domains, migrate_studies) is the largest cluster, with 11 raw
+    cursors between them.
+
+    Wrapping the connection rather than rewriting those 21 sites is what
+    keeps the importer readable as Postgres, and keeps the change
+    reversible: on Postgres, database.py hands out the raw pool
+    connection and this class is never instantiated.
+    """
+
+    __slots__ = ("_conn",)
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def cursor(self, *args, **kwargs) -> "_TxnCursor":
+        return _TxnCursor(self, *args, **kwargs)
+
+    # ── pass-through ────────────────────────────────────────────────
+    @property
+    def row_factory(self):
+        return self._conn.row_factory
+
+    @property
+    def total_changes(self) -> int:
+        return self._conn.total_changes
+
+    @property
+    def in_transaction(self) -> bool:
+        return _txn_active(self._conn)
+
+    # ── transaction control ─────────────────────────────────────────
+    # The connection runs with isolation_level=None, which means every
+    # statement autocommits. That is right for the helper path — execute()
+    # commits explicitly, so there is nothing to defer — but it makes
+    # rollback() a no-op, and the v2 backup importer relies on it: a failed
+    # import must leave the database untouched, not half-written.
+    #
+    # So the first statement on this connection opens a transaction
+    # implicitly, giving rollback() something real to undo. commit() and
+    # rollback() both close it, which is the behaviour the psycopg2
+    # connection the importer was written against had: one transaction,
+    # explicitly ended by the caller.
+    def _ensure_transaction(self) -> None:
+        if not _txn_active(self._conn):
+            self._conn.execute("BEGIN")
+            _mark_txn(self._conn, True)
+
+    def commit(self) -> None:
+        if _txn_active(self._conn):
+            self._conn.commit()
+            _mark_txn(self._conn, False)
+
+    def rollback(self) -> None:
+        if _txn_active(self._conn):
+            self._conn.rollback()
+            _mark_txn(self._conn, False)
+
+    def close(self) -> None:
+        # An open transaction would be discarded by close() anyway, but
+        # rolling back first releases the file lock deterministically.
+        if _txn_active(self._conn):
+            self._conn.rollback()
+            _mark_txn(self._conn, False)
+        self._conn.close()
+
+    def execute(self, sql: str, params: Optional[Iterable] = None):
+        self._ensure_transaction()
+        return CompatCursor(self._conn.cursor()).execute(sql, params)
+
+    def __enter__(self) -> "CompatConnection":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
+class _TxnCursor(CompatCursor):
+    """A cursor that opens its connection's transaction on first execute.
+
+    The transaction belongs to the connection, not the cursor, and it must
+    begin before the first statement so a rollback after a failed import
+    can undo it. Starting it lazily here — rather than in
+    ``CompatConnection.cursor()`` — means a caller that opens a cursor for
+    reads only never takes a write lock.
+    """
+
+    def __init__(self, conn: "CompatConnection", *args, **kwargs):
+        super().__init__(conn._conn.cursor(*args, **kwargs))
+        self._conn = conn
+
+    def execute(self, sql: str, params: Optional[Iterable] = None):
+        self._conn._ensure_transaction()
+        return super().execute(sql, params)
+
+    def executemany(self, sql: str, seq_of_params: Iterable[Sequence]):
+        self._conn._ensure_transaction()
+        return super().executemany(sql, seq_of_params)
+
 def connect(path: str, *, read_only: bool = False) -> sqlite3.Connection:
     """Open a SQLite connection configured like the Postgres pool was.
 
@@ -578,6 +688,59 @@ def cursor(conn: sqlite3.Connection) -> CompatCursor:
     that execute raw Postgres DDL, so those keep their existing signature.
     """
     return CompatCursor(conn.cursor())
+
+
+def _txn_active(conn: sqlite3.Connection) -> bool:
+    """Whether a transaction is open on the shared connection.
+
+    ``sqlite3.Connection`` does not accept arbitrary attributes (no
+    ``__dict__``), so the flag cannot live on the connection object. It
+    lives in a module-level map keyed by ``id(conn)`` instead.
+
+    Why it cannot simply live on the wrapper: ``get_connection()`` hands
+    out a **new** wrapper on every call, and all of them share one
+    underlying connection. Per-wrapper state meant two callers each
+    believed they owned the transaction, and the second ``BEGIN`` failed
+    with "cannot start a transaction within a transaction". The
+    transaction is a property of the connection, so the bookkeeping has to
+    be too.
+    """
+    return _TXN_STATE.get(id(conn), False)
+
+
+def _mark_txn(conn: sqlite3.Connection, active: bool) -> None:
+    if active:
+        _TXN_STATE[id(conn)] = True
+    else:
+        _TXN_STATE.pop(id(conn), None)
+
+
+def wrap_connection(conn: sqlite3.Connection) -> CompatConnection:
+    """Wrap a connection so its cursors translate the dialect.
+
+    Used for the callers that receive a connection and open their own
+    cursors — the v2 backup importer is the main one. Wrapping at the
+    boundary means those modules keep writing plain Postgres.
+    """
+    if isinstance(conn, CompatConnection):
+        return conn
+    return CompatConnection(conn)
+
+
+def close(conn: sqlite3.Connection) -> None:
+    """Roll back anything open, close the connection, forget its state.
+
+    Clearing _TXN_STATE is not optional housekeeping: it is keyed by
+    ``id(conn)``, and CPython reuses addresses. A stale True left behind by
+    a closed connection would be inherited by the next connection to land
+    on that address, which would then skip its BEGIN and autocommit.
+    """
+    try:
+        if _txn_active(conn):
+            conn.rollback()
+    finally:
+        _mark_txn(conn, False)
+        conn.close()
 
 
 def execute(conn: sqlite3.Connection, sql: str, params: Optional[Sequence] = None):

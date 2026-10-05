@@ -90,12 +90,23 @@ def _init_db_sqlite() -> None:
     if not _HAVE_PSYCOPG2 or sqlite_compat is None:  # pragma: no cover
         pass  # sqlite needs no third-party driver; presence of psycopg2 is irrelevant
 
+    # Re-init must release the previous handle first. The old connection is
+    # left holding an open transaction (the schema transaction above is
+    # committed, but a failed or abandoned one is not), and an open
+    # transaction keeps a write lock on the file — so the second init_db()
+    # would hit "database is locked" on the very database it just wrote.
+    if _sqlite_conn is not None:
+        sqlite_compat.close(_sqlite_conn)
+
     path = engine_mod.sqlite_path()
     _sqlite_conn = sqlite_compat.connect(str(path))
 
-    with _sqlite_conn as conn:
-        _create_tables(sqlite_compat.cursor(conn))
-        conn.commit()
+    # Not a `with` block: the wrapper's __exit__ closes the connection, but
+    # this handle is module-global and stays open for the whole process
+    # lifetime. Schema creation is one transaction, ended explicitly.
+    conn = sqlite_compat.wrap_connection(_sqlite_conn)
+    _create_tables(conn.cursor())
+    conn.commit()
 
     # Seed local user (id=1) and the addon catalog, same as Postgres. The
     # seed is idempotent so a restart is a no-op.
@@ -979,28 +990,44 @@ def fetchone_raw(query: str, params: tuple = None):
 
 
 def close_pool() -> None:
-    """Close the database connection(s)."""
+    """Close the database connection(s).
+
+    On SQLite the shared connection may have an open transaction left by a
+    caller that never committed or rolled back — the v2 importer's failure
+    path does exactly that. Rolling back first matters: an open transaction
+    holds a write lock on the file, and a later init_db() would fail with
+    "database is locked".
+    """
     global _connection_pool, _sqlite_conn
     if _connection_pool:
         _connection_pool.closeall()
         _connection_pool = None
     if _sqlite_conn is not None:
-        _sqlite_conn.close()
+        conn = _sqlite_conn
         _sqlite_conn = None
+        # Ask the compat layer, not the driver: the connection runs with
+        # isolation_level=None, so sqlite3's own in_transaction is always
+        # False and would silently skip the rollback. The compat layer
+        # tracks the implicit BEGIN it opens.
+        sqlite_compat.close(conn)
 
 
 # ─── v2-compatible helpers (port) ─────────────────────────────────
 def get_connection():
-    """Borrow a raw connection from the pool (caller manages tx + close).
+    """Borrow a connection for callers that open their own cursors.
 
-    On SQLite this returns the single shared connection, so a caller that
-    does ``put_connection()`` afterwards is a no-op rather than an error.
+    On Postgres this borrows from the pool. On SQLite it returns the
+    single shared connection **wrapped** in a CompatConnection, so the
+    ~21 sites that call ``conn.cursor()`` directly — the v2 backup
+    importer is the biggest cluster — get dialect translation without
+    being rewritten. ``put_connection()`` is then a no-op rather than an
+    error, which is what lets the importer's try/finally stay as it is.
     """
     global _connection_pool, _sqlite_conn
     if engine_mod.active_engine() == ENGINE_SQLITE:
         if _sqlite_conn is None:
             init_db()
-        return _sqlite_conn
+        return sqlite_compat.wrap_connection(_sqlite_conn)
     if _connection_pool is None:
         init_db()
     return _connection_pool.getconn()
