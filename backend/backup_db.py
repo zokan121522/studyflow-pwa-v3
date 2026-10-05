@@ -29,8 +29,25 @@ Nothing in here decides what a scope contains -- that stays in
 backup_selection.py. This module only reports what v3 can actually answer.
 """
 
-from psycopg2.extensions import cursor as PlainCursor
-from psycopg2.extras import RealDictCursor
+# Cursor factories. Which set applies depends on the CONNECTION handed in,
+# not on whether psycopg2 is importable: psycopg2 is a declared dependency
+# and is normally installed even when the app runs on SQLite, so an
+# ImportError guard would pass the Postgres factories to the stdlib driver.
+# The connection type is the reliable signal.
+try:
+    from psycopg2.extensions import cursor as PlainCursor
+    from psycopg2.extras import RealDictCursor
+except ImportError:  # pragma: no cover - psycopg2 is a declared dependency
+    PlainCursor = RealDictCursor = None
+
+import sqlite_compat
+
+
+def _factories_for(conn):
+    """(plain, real_dict) cursor factories matching `conn`'s driver."""
+    if isinstance(conn, sqlite_compat.CompatConnection):
+        return sqlite_compat.PLAIN_CURSOR, sqlite_compat.REAL_DICT_CURSOR
+    return PlainCursor, RealDictCursor
 
 # hub table name -> v3 table name. Only renames belong here; a table that
 # simply does not exist in v3 is handled by resolve_tables, not by an alias,
@@ -55,7 +72,8 @@ def query_on_conn(conn, sql: str, params: tuple = None) -> list:
     "keep the connection's factory". The plain factory has to be named
     explicitly.
     """
-    cur = conn.cursor(cursor_factory=PlainCursor)
+    plain, _ = _factories_for(conn)
+    cur = conn.cursor(cursor_factory=plain)
     try:
         cur.execute(sql, params)
         return cur.fetchall()
@@ -83,7 +101,8 @@ def query_dicts_on_conn(conn, sql: str, params: tuple = None) -> list:
     indexable by position and by name is the kind of convenience that lets a
     column reorder slip through unnoticed.
     """
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    _, real = _factories_for(conn)
+    cur = conn.cursor(cursor_factory=real)
     try:
         cur.execute(sql, params)
         return cur.fetchall()

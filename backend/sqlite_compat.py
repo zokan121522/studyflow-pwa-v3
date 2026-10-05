@@ -301,6 +301,75 @@ def _register_functions(conn: sqlite3.Connection) -> None:
     )
 
 
+def _parse_copy_line(line: str, width: int) -> list:
+    """Decode one COPY text line into Python values.
+
+    Inverse of the escaping in :meth:`CompatCursor.copy_expert`: ``\\N``
+    becomes None, ``\\x<hex>`` becomes bytes, and the tab / newline /
+    carriage-return / backslash escapes are undone. Splitting on tabs
+    first is safe because every literal tab in the data was escaped.
+    """
+    fields: List = []
+    for raw in line.split("\t"):
+        if raw == r"\N":
+            fields.append(None)
+        elif raw.startswith(r"\x"):
+            fields.append(bytes.fromhex(raw[2:]))
+        else:
+            out = []
+            i = 0
+            while i < len(raw):
+                ch = raw[i]
+                if ch == "\\" and i + 1 < len(raw):
+                    nxt = raw[i + 1]
+                    out.append({"t": "\t", "n": "\n", "r": "\r", "\\": "\\"}.get(nxt, nxt))
+                    i += 2
+                else:
+                    out.append(ch)
+                    i += 1
+            fields.append("".join(out))
+    if len(fields) != width:
+        raise sqlite3.ProgrammingError(
+            f"COPY line has {len(fields)} fields, expected {width}"
+        )
+    return fields
+
+
+#: The COPY statement forms the compat layer understands.
+_COPY_TO_RE = re.compile(
+    r"^\s*COPY\s+(?P<table>[\w.\"]+)\s*\((?P<cols>[^)]*)\)\s*TO\s+STDOUT",
+    re.IGNORECASE,
+)
+_COPY_FROM_RE = re.compile(
+    r"^\s*COPY\s+(?P<table>[\w.\"]+)\s*\((?P<cols>[^)]*)\)\s*FROM\s+STDIN",
+    re.IGNORECASE,
+)
+
+
+def plain_row_factory(cursor: sqlite3.Cursor, row) -> tuple:
+    """Row factory equivalent to psycopg2's plain cursor: a bare tuple.
+
+    Used where the caller relies on positional access, e.g. the backup
+    export path concatenating columns positionally so the dump stays
+    replayable independent of dict ordering.
+    """
+    return tuple(row)
+
+
+def real_dict_row_factory(cursor: sqlite3.Cursor, row) -> dict:
+    """Row factory equivalent to psycopg2's RealDictCursor."""
+    return {
+        desc[0]: row[idx]
+        for idx, desc in enumerate(cursor.description or ())
+    }
+
+
+#: Cursor factories by the name the ported Postgres code imports them
+#: under. ``cursor_factory=PlainCursor`` in backup_db.py resolves here.
+PLAIN_CURSOR = plain_row_factory
+REAL_DICT_CURSOR = real_dict_row_factory
+
+
 class CompatCursor:
     """A sqlite3 cursor that speaks Postgres.
 
@@ -315,12 +384,28 @@ class CompatCursor:
     ``RealDictCursor``.
     """
 
-    __slots__ = ("_cur",)
+    __slots__ = ("_cur", "_row_factory", "_copy_target")
 
-    def __init__(self, cur: sqlite3.Cursor):
+    def __init__(self, cur: sqlite3.Cursor, cursor_factory=None):
         self._cur = cur
+        self._copy_target = None
+        # backup_db.py passes cursor_factory=PlainCursor because it needs
+        # positional rows; the stdlib cursor has no such parameter, so the
+        # factory is applied to the driver's cursor here instead.
+        self._row_factory = cursor_factory
+        if cursor_factory is not None:
+            cur.row_factory = cursor_factory
 
     def execute(self, sql: str, params: Optional[Iterable] = None):
+        # COPY ... FROM STDIN has no SQLite equivalent: the statement itself
+        # carries no data, the stream handed to copy_from() does. Record the
+        # target so copy_from() knows where the rows are going.
+        m = _COPY_FROM_RE.match(sql)
+        if m:
+            table = m.group("table").strip('"')
+            cols = [c.strip().strip('"') for c in m.group("cols").split(",")]
+            self._copy_target = (table, cols)
+            return self
         # Handled specially: Postgres's multi-column ADD COLUMN has no
         # SQLite equivalent, so it becomes one guarded statement per column.
         if _alter_add_columns(self._cur, sql):
@@ -373,6 +458,80 @@ class CompatCursor:
 
     def fetchall(self):
         return self._cur.fetchall()
+
+    def copy_expert(self, sql: str, stream) -> None:
+        """Emulate Postgres ``COPY ... TO STDOUT`` onto a text stream.
+
+        The backup exporter is built on COPY: it is the only way to get a
+        byte-faithful dump without quoting bugs, and the output has to
+        replay later through ``COPY ... FROM STDIN``. sqlite3 has no
+        equivalent, so the statement is run as a plain SELECT and each row
+        is rendered into the tab-separated COPY text format.
+
+        Postel's law note: the result is COPY *shaped* but not a genuine
+        COPY -- NULLs and embedded tabs/newlines are rendered with the
+        escape sequences below. That is enough to round-trip through
+        :meth:`copy_from`, which is the only consumer.
+        """
+        m = _COPY_TO_RE.match(sql)
+        if not m:  # pragma: no cover - callers only pass COPY ... TO STDOUT
+            raise sqlite3.ProgrammingError(f"not a COPY ... TO STDOUT: {sql!r}")
+        table = m.group("table").strip('"')
+        cols = [c.strip().strip('"') for c in m.group("cols").split(",")]
+        collist = ", ".join(f'"{c}"' for c in cols)
+        # The WHERE clause, if any, rides through verbatim; translate_sql
+        # rewrites its %s placeholders and Postgres-only constructs.
+        tail = sql[m.end():]
+        cur = self._cur.execute(translate_sql(f'SELECT {collist} FROM "{table}"{tail}'))
+        names = [d[0] for d in (cur.description or ())]
+        if not names:
+            return
+        # Materialise first: the cursor may carry a dict row_factory, and
+        # iterating a dict yields its KEYS, not its values -- which silently
+        # turns every row into its own column-name "header". A dict row is
+        # re-ordered by `names` so the output follows the COPY column list
+        # rather than the driver's column order.
+        for row in cur.fetchall():
+            if isinstance(row, dict):
+                values = [row.get(name) for name in names]
+            else:
+                values = list(row)
+            fields = []
+            for value in values:
+                if value is None:
+                    fields.append(r"\N")
+                elif isinstance(value, bytes):
+                    fields.append(r"\x" + value.hex())
+                else:
+                    text = str(value)
+                    text = text.replace("\\", "\\\\").replace("\t", "\\t")
+                    text = text.replace("\n", "\\n").replace("\r", "\\r")
+                    fields.append(text)
+            stream.write("\t".join(fields) + "\n")
+
+    def copy_from(self, stream) -> None:
+        """Emulate Postgres ``COPY ... FROM STDIN`` from a text stream.
+
+        Paired with :meth:`copy_expert`. Undoes its escaping and inserts
+        the rows in a single transaction, so a truncated or malformed
+        stream leaves the table untouched.
+        """
+        # INSERT INTO <table> (cols...) is carried in the statement the
+        # caller paired with the stream; recover it from the cursor's
+        # last-set context, which copy_from_setup records.
+        target = getattr(self, "_copy_target", None)
+        if target is None:  # pragma: no cover - guarded by copy_from_setup
+            raise sqlite3.ProgrammingError("copy_from called without a target table")
+        table, columns = target
+        placeholders = ",".join("?" * len(columns))
+        collist = ",".join(f'"{c}"' for c in columns)
+        insert = f'INSERT INTO "{table}" ({collist}) VALUES ({placeholders})'
+        for raw in stream:
+            line = raw.rstrip("\n")
+            if line == "":
+                continue
+            self.execute(insert, _parse_copy_line(line, len(columns)))
+        self._copy_target = None
 
     def close(self):
         self._cur.close()
@@ -555,8 +714,8 @@ class CompatConnection:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
 
-    def cursor(self, *args, **kwargs) -> "_TxnCursor":
-        return _TxnCursor(self, *args, **kwargs)
+    def cursor(self, *args, cursor_factory=None, **kwargs) -> "_TxnCursor":
+        return _TxnCursor(self, *args, cursor_factory=cursor_factory, **kwargs)
 
     # ── pass-through ────────────────────────────────────────────────
     @property
@@ -627,9 +786,9 @@ class _TxnCursor(CompatCursor):
     reads only never takes a write lock.
     """
 
-    def __init__(self, conn: "CompatConnection", *args, **kwargs):
-        super().__init__(conn._conn.cursor(*args, **kwargs))
+    def __init__(self, conn: "CompatConnection", *args, cursor_factory=None, **kwargs):
         self._conn = conn
+        super().__init__(conn._conn.cursor(*args, **kwargs), cursor_factory=cursor_factory)
 
     def execute(self, sql: str, params: Optional[Iterable] = None):
         self._conn._ensure_transaction()

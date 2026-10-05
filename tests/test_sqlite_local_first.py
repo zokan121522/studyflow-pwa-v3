@@ -22,6 +22,8 @@ import datetime
 import sys
 from pathlib import Path
 
+import sqlite3
+
 import pytest
 
 BACKEND = Path(__file__).resolve().parent.parent / "backend"
@@ -419,3 +421,185 @@ def test_close_rolls_back_before_closing(db, data_dir):
             again.execute("SELECT COUNT(*) AS n FROM t")
     finally:
         sqlite_compat.close(again)
+
+
+# ─── backup_db row shapes ─────────────────────────────────────────────
+# backup_db.query_on_conn() is called by the export path, which concatenates
+# columns positionally so the dump stays replayable; query_dicts_on_conn()
+# serves the file-attribution layer, which reads row["storage_path"]. Both
+# go through the same connection, so one call must not leave the other with
+# the wrong row shape.
+
+
+def test_query_on_conn_returns_tuples(db):
+    import backup_db
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'T')")
+    conn.commit()
+
+    rows = backup_db.query_on_conn(conn, "SELECT id, title FROM courses")
+    assert isinstance(rows[0], tuple), f"expected a tuple, got {type(rows[0])}"
+    assert rows[0][0] == 1
+
+
+def test_query_dicts_on_conn_returns_dicts(db):
+    import backup_db
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'T')")
+    conn.commit()
+
+    rows = backup_db.query_dicts_on_conn(conn, "SELECT id, title FROM courses")
+    assert isinstance(rows[0], dict), f"expected a dict, got {type(rows[0])}"
+    assert rows[0]["title"] == "T"
+
+
+def test_row_factory_does_not_leak_between_calls(db):
+    """A positional read must not leave the shared connection returning tuples."""
+    import backup_db
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'T')")
+    conn.commit()
+
+    backup_db.query_on_conn(conn, "SELECT id FROM courses")
+    # The helper path always hands back dicts; if the plain factory had
+    # stuck to the shared connection this would be a tuple.
+    assert db.fetchone("SELECT title FROM courses") == {"title": "T"}
+
+
+def test_backup_db_factories_follow_the_connection_not_the_driver(db):
+    """psycopg2 being installed must not decide the factory.
+
+    Regression guard: the first attempt branched on ImportError, but
+    psycopg2 is a declared dependency and stays installed on a SQLite-only
+    machine, so the Postgres cursor classes were handed to the stdlib
+    driver and every backup query raised TypeError.
+    """
+    import backup_db
+
+    conn = db.get_connection()
+    plain, real = backup_db._factories_for(conn)
+    assert plain is not backup_db.PlainCursor or backup_db.PlainCursor is None
+    assert callable(plain) and callable(real)
+
+
+# ─── COPY TO/FROM STDOUT ──────────────────────────────────────────────
+# The backup exporter is built on COPY: it is the only way to get a
+# dump that replays byte-for-byte, and sqlite3 has no equivalent. The
+# compat layer emulates both directions so backup_user.py keeps working
+# unchanged.
+
+
+def _seed_courses(conn):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Round Trip')")
+        cur.execute(
+            "INSERT INTO courses (user_id, title) VALUES (1, %s)",
+            ('con tab\ty comilla " y newline\n',),
+        )
+    conn.commit()
+    return [r["title"] for r in db_fetchall(conn, "SELECT title FROM courses ORDER BY id")]
+
+
+def db_fetchall(conn, sql):
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        return cur.fetchall()
+
+
+def test_copy_to_stdout_emits_tab_separated_rows(db):
+    import backup_user
+
+    conn = db.get_connection()
+    _seed_courses(conn)
+    dump = backup_user._copy_out(conn, "COPY courses (id, title) TO STDOUT")
+    lines = dump.splitlines()
+    assert len(lines) == 2, f"expected 2 data rows, got {lines}"
+    assert lines[0].endswith("Round Trip")
+    # A dict row_factory must not turn each row into its own column names.
+    assert not lines[0].startswith("id\t")
+
+
+def test_copy_escapes_embedded_tabs_and_newlines(db):
+    import backup_user
+
+    conn = db.get_connection()
+    _seed_courses(conn)
+    dump = backup_user._copy_out(conn, "COPY courses (id, title) TO STDOUT")
+    # A literal tab in the data would be read back as a field separator.
+    assert r"\t" in dump and r"\n" in dump
+
+
+def test_copy_round_trip_preserves_values(db):
+    """Dump then restore must return byte-identical values.
+
+    Guards the escaping in both directions at once: a value that is
+    escaped on the way out but not unescaped on the way in would still
+    round-trip here, while the reverse -- unescaped out, escaped in --
+    would corrupt the data.
+    """
+    import io
+
+    import backup_user
+
+    conn = db.get_connection()
+    original = _seed_courses(conn)
+    dump = backup_user._copy_out(conn, "COPY courses (id, title) TO STDOUT")
+
+    conn2 = db.get_connection()
+    with conn2.cursor() as cur:
+        cur.execute("DELETE FROM courses")
+    conn2.commit()
+    with conn2.cursor() as cur:
+        cur.execute("COPY courses (id, title) FROM STDIN")
+        cur.copy_from(io.StringIO(dump))
+    conn2.commit()
+
+    restored = [r["title"] for r in db_fetchall(conn2, "SELECT title FROM courses ORDER BY id")]
+    assert restored == original
+
+
+def test_copy_from_preserves_nulls(db):
+    import io
+
+    import backup_user
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        # description is left unset, so it is NULL -- the only place COPY's
+        # \N escape can appear.
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'k')")
+    conn.commit()
+
+    dump = backup_user._copy_out(conn, "COPY courses (id, title, description) TO STDOUT")
+    assert r"\N" in dump, "a NULL should be dumped as COPY's \\N marker"
+
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM courses")
+    conn.commit()
+    with conn.cursor() as cur:
+        cur.execute("COPY courses (id, title, description) FROM STDIN")
+        cur.copy_from(io.StringIO(dump))
+    conn.commit()
+    rows = db_fetchall(conn, "SELECT title, description FROM courses ORDER BY id")
+    assert rows == [{"title": "k", "description": None}], rows
+
+
+def test_copy_from_rejects_a_row_with_the_wrong_field_count(db):
+    import io
+
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'k')")
+    conn.commit()
+    with conn.cursor() as cur:
+        cur.execute("COPY courses (id, title) FROM STDIN")
+        # Three fields into a two-column table: a truncated or corrupt
+        # stream must be rejected, not silently half-applied.
+        with pytest.raises(sqlite3.ProgrammingError, match="expected 2"):
+            cur.copy_from(io.StringIO("1\tk\textra\n"))
