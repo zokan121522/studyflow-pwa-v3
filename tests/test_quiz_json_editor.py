@@ -368,10 +368,21 @@ def test_the_editor_loads_before_the_module_that_calls_it():
 
 
 def test_the_asset_cache_was_bumped_for_r5():
+    """Pin the CURRENT cache version, not a fixed one.
+
+    Hard-coding v88 made this test fail the moment the backup work bumped the
+    cache to v89 for an unrelated reason, which trains people to ignore it.
+    What the test is actually for is the rule underneath the number: a bump
+    carries its reason in a comment. So it reads the version out of the source
+    and checks THAT entry is documented, which survives the next bump.
+    """
     src = _src(SW)
-    assert "studyflow-assets-v88" in src
+    found = re.search(r"ASSET_CACHE\s*=\s*['\"]studyflow-assets-v(\d+)['\"]", src)
+    assert found, "could not read the cache version out of sw.js"
+    version = found.group(1)
+    assert f"studyflow-assets-v{version}" in src
     # ...with the reason recorded, or the next bump is a guess.
-    assert re.search(r"//\s*v88:.*R5", src, re.S)
+    assert re.search(rf"//\s*v{version}:", src)
 
 
 def test_save_is_blocked_while_the_json_is_invalid():
