@@ -187,6 +187,20 @@ window.App.AI = Object.assign(window.App.AI, (function () {
         { id: "youtube-zen", label: "YouTube Zen", icon: "🎥", cat: "generate", order: 61,
           md: "youtube", pdf: "youtube",
           task: { md: "youtube_zen", pdf: "youtube_zen" } },
+        // English Exercises on OpenZen. NotebookLM has had this since Phase 61
+        // but it was hardwired to its own provider, so this addon had no way
+        // to offer it. Same modal, same module — only the provider differs,
+        // and the backend already ran the OpenZen branch (single-call, no
+        // material condensation) without ever being reachable from here.
+        // Markdown only, same as NotebookLM: the grammar task rejects PDFs.
+        { id: "openzen-english", label: "English", icon: "✏️", cat: "generate", order: 62,
+          md: "openzen-english", pdf: "",
+          task: { md: "generate_grammar" } },
+        // Vocabulary Suite (ported from v2). Topic-only launch: the student
+        // types the words in the config overlay, so no source block is read.
+        { id: "openzen-vocab", label: "Vocabulary", icon: "📚", cat: "generate", order: 63,
+          md: "openzen-vocab", pdf: "",
+          task: { md: "vocabulary" } },
       ],
     });
   }
@@ -366,14 +380,26 @@ window.App.AI = Object.assign(window.App.AI, (function () {
       } else {
         _showStatus(bid, "⚠️ Módulo Gen. Contenido no disponible", true);
       }
-    } else if (action === "notebooklm-english") {
+    } else if (action === "notebooklm-english" || action === "openzen-english") {
       // Phase 61 (#257) — English Exercises config modal (markdown only).
+      // Both providers share the same modal and the same english-grammar
+      // module; only the provider that does the work differs.
       const eng = window.App.EnglishGrammar;
       if (eng && eng.showGrammarConfig) {
         const sourceType = btn.closest("[data-scope]")?.dataset.scope === "pdf" ? "pdf" : "markdown";
-        await eng.showGrammarConfig(bid, tid, sourceType, { provider: "notebooklm" });
+        const provider = action === "openzen-english" ? "opencode-acp" : "notebooklm";
+        await eng.showGrammarConfig(bid, tid, sourceType, { provider });
       } else {
         _showStatus(bid, "⚠️ Módulo English no disponible", true);
+      }
+    } else if (action === "openzen-vocab") {
+      // Vocabulary Suite config modal (ported from v2). Topic-only: there is
+      // no source block, the words come from the student's textarea.
+      const vocab = window.App.Vocabulary;
+      if (vocab && vocab.showVocabularyConfig) {
+        await vocab.showVocabularyConfig(tid, window.STATE?.currentCourseId, { provider: "opencode-acp" });
+      } else {
+        _showStatus(bid, "⚠️ Módulo Vocabulary no disponible", true);
       }
     } else if (action === "audio" || action === "nb-audio") {
       // Phase 7.7 — audio config modal (duration + language)

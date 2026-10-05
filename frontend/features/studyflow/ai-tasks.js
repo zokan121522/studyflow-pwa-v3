@@ -498,6 +498,10 @@ window.App.AI.Tasks = (function () {
                  window.App.EnglishGrammar.onGrammarSuccess) {
         // English Grammar → interactive block (english-practice.html CONFIG)
         await window.App.EnglishGrammar.onGrammarSuccess(task, blockId, topicId);
+      } else if (format === "vocabulary" && window.App.Vocabulary &&
+                 window.App.Vocabulary.onVocabularySuccess) {
+        // Vocabulary Suite → interactive block (vocabulary-suite.html CONFIG)
+        await window.App.Vocabulary.onVocabularySuccess(task, blockId, topicId);
       } else if (ai && ai._onContentSuccess) {
         await ai._onContentSuccess(task, blockId, topicId, format, capturedCourseId);
       } else {

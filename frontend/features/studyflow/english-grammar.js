@@ -152,7 +152,7 @@ window.App.EnglishGrammar = (function () {
       <div class="inf-config-overlay" id="eng-config-overlay">
         <div class="inf-config-modal eng-config-modal">
           <div class="inf-config-header">
-            <span class="inf-config-title">✏️ Configurar English Exercises${provider === "notebooklm" ? " · NotebookLM" : ""}</span>
+            <span class="inf-config-title">✏️ Configurar English Exercises${provider === "notebooklm" ? " · NotebookLM" : provider === "opencode-acp" ? " · OpenZen" : ""}</span>
             <button class="inf-config-close" id="eng-close" title="Cerrar">✕</button>
           </div>
           <div class="inf-config-body">

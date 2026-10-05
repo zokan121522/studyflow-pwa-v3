@@ -55,8 +55,12 @@ _MAX_CHUNK_RETRIES = 1
 _MULTI_CALL_THRESHOLD = 5  # per_type <= 5 → single call with all types
 
 # Phase 66 (#257) — provider parametric. Allowlist mirrors backend/routes/ai.py.
-_GRAMMAR_PROVIDERS = {"notebooklm"}
-_GRAMMAR_LABEL = {"opencode-acp": "opencode-acp (server config)", "notebooklm": "NotebookLM (Gemini)"}
+# "opencode-acp" is the OpenZen sidecar, already registered in ai.providers;
+# the rest of the pipeline was provider-parametric from the start (the
+# NotebookLM-only branches are gated on provider_name), it was just never
+# allowlisted here — so the OpenZen button had nothing to call.
+_GRAMMAR_PROVIDERS = {"notebooklm", "opencode-acp"}
+_GRAMMAR_LABEL = {"opencode-acp": "OpenZen (opencode-acp)", "notebooklm": "NotebookLM (Gemini)"}
 
 # Phase 68 (#259) — NotebookLM pre-condensation (line-greedy slice digest).
 # Six input slices of <=2600 chars, each condensed to ~366 chars (6*366=2196<=2200),
@@ -751,7 +755,8 @@ def create_grammar_task(
         )
     if provider not in _GRAMMAR_PROVIDERS:
         raise ValueError(
-            f"Invalid provider: '{provider}'. Only 'notebooklm' is available in v3"
+            f"Invalid provider: '{provider}'. "
+            f"Available: {', '.join(sorted(_GRAMMAR_PROVIDERS))}"
         )
 
     source_block = db.query_one(
