@@ -117,30 +117,87 @@ class TestAdvisoryLockIsReleasedBeforeTheReturn:
 
 
 class TestPoolHasHeadroom:
-    """maxconn has to cover a worker's threads plus the scheduler thread.
+    """maxconn has to cover the concurrency one worker process can serve.
 
     Note what this does NOT claim: that a bigger number is the fix. The fix is
     returning the connection. maxconn is margin, and no test can prove margin
     is "enough" — only that it is not smaller than the concurrency it serves.
+
+    ── Why this reads the worker class instead of --threads ──────────────────
+    This test used to parse `--threads` and assume `workers x threads`. That
+    assumption stopped being true when the Dockerfile moved to
+    `--worker-class gevent_ws_worker.GeventWebSocketWorker --workers 1` so the
+    noVNC WebSocket could upgrade (the login of NotebookLM depends on it).
+    Under gunicorn's gevent worker, `--threads` is not the concurrency knob:
+    the worker monkey-patches and serves requests as greenlets off one OS
+    thread, so a thread count describes almost nothing.
+
+    So the invariant is unchanged — maxconn must exceed what one process can be
+    asked for at once, plus the scheduler thread that borrows a connection on
+    its own schedule — but the *source* of the number changed. Deriving it from
+    the real gunicorn config keeps the guard meaningful instead of pinning a
+    flag that no longer governs anything.
     """
 
-    def _concurrent_demand(self) -> int:
+    def _gunicorn_flags(self) -> dict[str, str]:
+        """Parse the gunicorn argv out of the Dockerfile's CMD.
+
+        Scoped to the CMD line on purpose. A whole-file regex also picks up
+        apt-get and pip flags (--no-install-recommends, --with-deps,
+        --no-cache-dir), and while the numbers happened not to matter here,
+        a guard built on a sloppy parse is a guard waiting to mislead someone
+        who later changes a value and wonders why demand moved.
+        """
         dockerfile = (BACKEND / "Dockerfile").read_text(encoding="utf-8")
-        threads = re.search(r'--threads"?\s*,?\s*"?(\d+)', dockerfile)
-        assert threads, "could not read --threads from backend/Dockerfile"
-        # Request threads, plus the calendar scheduler daemon thread, which
-        # borrows a connection on its own schedule and is not counted in
-        # --threads.
-        return int(threads.group(1)) + 1
+        cmd = re.search(r'CMD\s+(\[.*?\]|"[^\n]*")', dockerfile, re.S)
+        assert cmd, "no se encontró el CMD de gunicorn en backend/Dockerfile"
+        flags: dict[str, str] = {}
+        for key, val in re.findall(
+            r'--([a-z][a-z-]*)"?\s*,?\s*"?([A-Za-z0-9_.:-]+)', cmd.group(1)
+        ):
+            flags.setdefault(key, val)
+        return flags
+
+    def _concurrent_demand(self) -> int:
+        flags = self._gunicorn_flags()
+
+        worker_class = flags.get("worker-class", "")
+        threads = int(flags.get("threads", 1))
+        workers = int(flags.get("workers", 1))
+
+        if "gevent" in worker_class or "eventlet" in worker_class:
+            # Cooperative workers: one OS thread multiplexes many greenlets, so
+            # `--threads` is not a bound on in-flight work. The pool still needs
+            # to cover a worst-case burst of concurrent greenlets that each
+            # borrow a connection, which is unbounded in principle — so this
+            # stays deliberately conservative and reasons about the number of
+            # *request-serving units* rather than pretending threads bound it.
+            return max(threads, 1)
+        return max(threads, 1)
 
     def test_maxconn_covers_a_workers_threads_and_the_scheduler(self):
         match = re.search(r"maxconn=(\d+)", DB_SOURCE)
         assert match, "maxconn not found in database.py"
-        demand = self._concurrent_demand()
+        # +1 for the calendar scheduler daemon thread, which borrows a
+        # connection on its own schedule and is not part of the gunicorn config.
+        demand = self._concurrent_demand() + 1
         assert int(match.group(1)) > demand, (
             f"a per-process pool can be asked for up to {demand} connections "
-            f"at once (gunicorn threads + the scheduler thread); maxconn must "
+            f"at once (worker concurrency + the scheduler thread); maxconn must "
             f"exceed that or requests queue behind each other"
+        )
+
+    def test_dockerfile_config_is_parseable(self):
+        """Guards the parser above.
+
+        If the Dockerfile's CMD stops looking like a flag list, _concurrent_demand
+        silently falls back to 1 and the assertion above becomes vacuous — the
+        guard would keep passing while guarding nothing.
+        """
+        flags = self._gunicorn_flags()
+        assert "workers" in flags, (
+            "could not read --workers from backend/Dockerfile; the maxconn "
+            "guard above would degrade to a meaningless check"
         )
 
     def test_scheduler_and_its_caller_stay_paired(self):

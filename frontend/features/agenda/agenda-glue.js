@@ -40,10 +40,12 @@ window.App.Auth = Object.assign(window.App.Auth || {}, {
       ? window.Auth.getHeaders()
       : { "Content-Type": "application/json" };
   },
-  // v2 uses this when the dashboard side-panel navigates back to the agenda
-  // tab. v3 PWA has no dashboard view, so this is a no-op (the tab switch
-  // is handled by `_navigateToAgendaDay` itself).
-  hideDashboard: function () { /* noop */ },
+    // v2 uses this when the dashboard side-panel navigates back to the agenda
+    // tab. v3 now has the same dashboard home (habits + agenda panel), so
+    // hide it for real — the tab click that follows will show the agenda view.
+    hideDashboard: function () {
+      document.getElementById("view-dashboard")?.classList.add("hidden");
+    },
 });
 
 // ─── App.UI.displayTitle (v2 timeline + core call it) ────────────

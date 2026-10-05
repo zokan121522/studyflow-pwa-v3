@@ -8,12 +8,62 @@
 //   • renderView(centerEl) takes over the center panel when
 //     STATE._view === "quiz" (courses.js routes it before the
 //     topic/course branches).
+//
+// Unlike the center panel, #studyflow-left-stats is NOT wiped on every
+// render, so the nav has to clean up after itself: renderNav() removes
+// its own section first and only re-injects it when the addon is live.
+// Gating on Addons.isEnabled + listening to "addons:changed" is what
+// makes 📊 Quiz / Resumen por Card / Preguntas Falladas disappear the
+// moment the user uninstalls the quiz addon (v2 behaviour, Phase 46).
 
 (function () {
   if (window.App === undefined) window.App = {};
   if (window.App.QuizCenter !== undefined) return;
 
   let _tab = "summary";
+
+  // ── addon gate ─────────────────────────────────────────────
+  // null = not probed yet. Cached so a sidebar rebuild (which happens on
+  // every course/topic switch) doesn't refetch the catalog.
+  let _quizActive = null;
+
+  async function _isQuizActive() {
+    if (_quizActive !== null) return _quizActive;
+    const A = window.App && window.App.Addons;
+    if (!A || typeof A.isEnabled !== "function") return (_quizActive = true);
+    try {
+      _quizActive = await A.isEnabled("quiz");
+    } catch (_) {
+      _quizActive = true; // fail-open: never hide the nav on a probe error
+    }
+    return _quizActive;
+  }
+
+  function _removeNav() {
+    const statsEl = document.getElementById("studyflow-left-stats");
+    if (!statsEl) return;
+    // All of them, not just the first: an older build (or a render that
+    // raced) can leave duplicates behind, and a lone orphan would keep
+    // showing the quiz nav forever.
+    statsEl.querySelectorAll("[data-qc-nav]").forEach((n) => n.remove());
+  }
+
+  // Uninstalling must also eject the user from the quiz view, otherwise
+  // they're stranded in a center panel whose nav item just vanished.
+  function _ejectIfStranded() {
+    try {
+      if (window.STATE && window.STATE._view === "quiz") {
+        window.STATE._view = null;
+        const C = window.App.Courses;
+        if (C && typeof C.updateCenter === "function") C.updateCenter();
+      }
+    } catch (_) { /* cosmetic */ }
+  }
+
+  window.addEventListener("addons:changed", () => {
+    _quizActive = null;  // invalidate: enable/disable/install/uninstall
+    renderNav().catch(() => {});  // nav is optional cosmetic
+  });
 
   // ── sidebar nav ─────────────────────────────────────────────
   function _injectNav(statsEl) {
@@ -33,7 +83,7 @@
       el.addEventListener("click", async () => {
         _tab = el.dataset.qcView;
         try { window.STATE._view = "quiz"; } catch (_) {}
-        renderNav();
+        await renderNav();
         if (window.App.Courses && typeof window.App.Courses.updateCenter === "function") {
           await window.App.Courses.updateCenter();
         }
@@ -41,14 +91,48 @@
     });
   }
 
-  function renderNav() {
+  // ── sidebar nav ─────────────────────────────────────────────
+  async function _renderOnce() {
     const statsEl = document.getElementById("studyflow-left-stats");
     if (!statsEl) return;
-    if (!statsEl.querySelector("[data-qc-nav]")) _injectNav(statsEl);
+
+    // Always clean up first — a disabled addon must leave nothing behind.
+    _removeNav();
+    if (!(await _isQuizActive())) {
+      _ejectIfStranded();
+      return;
+    }
+
+    // Re-query AFTER the async gate: a sidebar rebuild may have swapped
+    // the element out while we were awaiting.
+    const el = document.getElementById("studyflow-left-stats");
+    if (!el) return;
+    _injectNav(el);
     const active = window.STATE && window.STATE._view === "quiz";
-    statsEl.querySelectorAll("[data-qc-view]").forEach((el) => {
-      el.classList.toggle("active", !!active && el.dataset.qcView === _tab);
+    el.querySelectorAll("[data-qc-view]").forEach((n) => {
+      n.classList.toggle("active", !!active && n.dataset.qcView === _tab);
     });
+  }
+
+  // The gate above is async, so two callers can both pass the removal and
+  // then both inject — the sidebar ends up with a duplicate 📊 Quiz section.
+  // Serialise instead: a call arriving mid-render flags a re-run instead of
+  // returning, so an install/uninstall that lands during a render is never
+  // dropped. A plain `if (busy) return` (v2's approach) loses that update.
+  let _rendering = false;
+  let _renderAgain = false;
+
+  async function renderNav() {
+    if (_rendering) { _renderAgain = true; return; }
+    _rendering = true;
+    try {
+      do {
+        _renderAgain = false;
+        await _renderOnce();
+      } while (_renderAgain);
+    } finally {
+      _rendering = false;
+    }
   }
 
   // ── center view ─────────────────────────────────────────────
