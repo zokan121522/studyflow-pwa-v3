@@ -33,8 +33,9 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Node (if any frontend build tools added later)
+# Node / build del frontend
 node_modules/
+frontend-dist/
 dist/
 build/
 
@@ -54,3 +55,24 @@ htmlcov/
 # Misc
 *.tmp
 *.temp
+
+# Core dumps. backend/core is a 160 MB gunicorn crash dump from the aarch64
+# server: the app died and the kernel dumped its address space. Never source.
+core
+core.*
+*.core
+
+# Install media. The Ubuntu ISO is a 3.8 GB download artifact, not a source
+# file; SHA256SUMS only certifies it. Bump the version in the filename instead.
+*.iso
+SHA256SUMS
+
+# Scratch files from ad-hoc debugging. Named for what they are.
+tmp_*.py
+untitled.md
+snapshot.json
+
+# Raw recording material behind frontend/landing/videos/. The committed mp4s
+# are the deliverable; the pilot run and its per-step audio are not.
+tools/walkthrough/pilot/
+tools/walkthrough/storyboards/
