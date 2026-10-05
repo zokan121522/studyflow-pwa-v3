@@ -26,7 +26,24 @@ import subprocess
 import unicodedata
 from pathlib import Path
 
-from weasyprint import HTML
+try:
+    from weasyprint import HTML
+except ImportError:  # pragma: no cover - depends on the local install
+    # WeasyPrint is an optional heavy native dependency: it pulls in pango and
+    # cairo, and on some desktops the install fails on the native side even
+    # when pip reports success. Importing it at module scope meant one missing
+    # optional library took down the whole import chain, so ``import server``
+    # raised and the app refused to start -- over a single button.
+    #
+    # Degrade instead: the app boots, and only this one feature reports itself
+    # unavailable. markdown_to_pdf() turns this into a clear error at call time.
+    HTML = None
+
+#: Explains the failure to the API layer and the log, in one place.
+WEASYPRINT_UNAVAILABLE = (
+    "WeasyPrint is not installed, so markdown-to-PDF is unavailable. "
+    "Install the optional dependency: pip install weasyprint"
+)
 
 # ── Paths ────────────────────────────────────────────────────────
 _REPO_ROOT = Path(__file__).resolve().parents[2]          # repo root
@@ -149,6 +166,9 @@ def markdown_to_pdf(
     markdown cannot be rendered, so the caller can answer with a 4xx instead of
     a 500 and the user learns what went wrong.
     """
+    if HTML is None:
+        raise MdRenderError(WEASYPRINT_UNAVAILABLE)
+
     fragment = render_markdown_to_html(markdown)
     if not fragment.strip():
         raise MdRenderError("the note is empty")

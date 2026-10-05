@@ -219,11 +219,150 @@ def translate_sql(sql: str) -> str:
         sql = _PYNAME_RE.sub("?", sql)
     if "EXTRACT" in sql.upper():
         sql = _rewrite_extract_epoch(sql)
+        sql = _rewrite_extract_fields(sql)
+    if "to_date" in sql:
+        sql = _rewrite_to_date(sql)
+    if "AT TIME ZONE" in sql.upper():
+        sql = _AT_TIME_ZONE_RE.sub("", sql)
+    if "INTERVAL" in sql.upper():
+        sql = _rewrite_intervals(sql)
     if _BARE_ON_CONFLICT_RE.search(sql):
         sql = _fix_bare_on_conflict(sql)
     if "%s" not in sql:
         return sql
     return _PYFORMAT_RE.sub("?", sql)
+
+
+
+#: Postgres EXTRACT(<field> FROM <expr>) over a single value. The EPOCH
+#: difference form is handled separately by _rewrite_extract_epoch, which runs
+#: first; this covers the calendar-field spellings, of which
+#: ``EXTRACT(DAY FROM to_date(day_date, 'YYYY-MM-DD'))`` in the agenda month
+#: view is the one in the codebase today.
+_EXTRACT_FIELD_RE = re.compile(
+    r"EXTRACT\s*\(\s*(?P<field>EPOCH|DAY|MONTH|YEAR|DOY|DOW|HOUR|MINUTE|SECOND)"
+    r"\s+FROM\s+(?P<expr>(?:[^()]*(?:\([^()]*\)[^()]*)*))\s*\)",
+    re.IGNORECASE,
+)
+
+#: strftime format per Postgres EXTRACT field. SQLite's strftime reads the
+#: same ISO-8601 text the app stores, so these agree by construction.
+_EXTRACT_FORMATS = {
+    "DAY": "%d", "MONTH": "%m", "YEAR": "%Y", "DOY": "%j", "DOW": "%w",
+    "HOUR": "%H", "MINUTE": "%M", "SECOND": "%S",
+    # %s is seconds since the epoch, which is what EPOCH means in Postgres.
+    "EPOCH": "%s",
+}
+
+
+def _rewrite_extract_fields(sql: str) -> str:
+    """Rewrite calendar-field EXTRACT() to strftime().
+
+    ``EXTRACT(DAY FROM to_date(day_date, 'YYYY-MM-DD'))`` becomes
+    ``CAST(strftime('%d', date(day_date)) AS INTEGER)``.
+
+    The CAST is not decoration: the route downstream does int() on the value
+    and builds a dict key from it, and Postgres's EXTRACT yields an integer,
+    so returning a zero-padded string would change the API's response shape.
+    """
+
+    def repl(m: "re.Match") -> str:
+        fmt = _EXTRACT_FORMATS.get(m.group("field").upper())
+        if fmt is None:
+            return m.group(0)
+        return f"CAST(strftime('{fmt}', {m.group('expr')}) AS INTEGER)"
+
+    return _EXTRACT_FIELD_RE.sub(repl, sql)
+
+
+#: Postgres to_date(text, format). SQLite's date() parses the ISO-8601 text
+#: the app stores directly, so the format argument is simply dropped. The
+#: format is checked first: a non-ISO layout means date() would silently
+#: return NULL, and a loud no-op is better than a wrong answer.
+_TO_DATE_RE = re.compile(
+    r"\bto_date\s*\(\s*(?P<value>[^,()]+?)\s*,\s*'(?P<fmt>[^']*)'\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_to_date(sql: str) -> str:
+    """Rewrite to_date(value, 'YYYY-MM-DD') to date(value)."""
+
+    def repl(m: "re.Match") -> str:
+        if m.group("fmt").upper() not in ("YYYY-MM-DD", "YYYY-MM-DD HH24:MI:SS"):
+            return m.group(0)
+        return f"date({m.group('value')})"
+
+    return _TO_DATE_RE.sub(repl, sql)
+
+
+#: ``<expr> AT TIME ZONE 'UTC'``. On Postgres this converts a timestamp with
+#: a zone into a naive timestamp, and the app uses it to reduce an instant to
+#: a UTC calendar day. SQLite has no time zones and the values are already
+#: stored as UTC ISO-8601 text, so the conversion is a no-op and the clause is
+#: dropped. Keeping it would be a syntax error; leaving the call site to strip
+#: it would mean 32 modules each learning about the storage format.
+_AT_TIME_ZONE_RE = re.compile(
+    r"\s+AT\s+TIME\s+ZONE\s+'[^']*'", re.IGNORECASE
+)
+
+
+#: ``NOW() - INTERVAL '1 hour'`` and its ``+`` mirror. The whole subtraction
+#: is folded, rather than the interval alone, because NOW() is a registered
+#: function returning ISO text: leaving it as ``text - strftime(...)`` would
+#: be SQLite's *numeric* subtraction on two leading digits, silently
+#: producing a plausible-looking wrong number. SQLite has no timestamp
+#: arithmetic type, so the only correct translation moves the step into
+#: strftime's own modifier argument, where "now" is a real reference point.
+_INTERVAL_OFFSET_RE = re.compile(
+    r"(?P<base>NOW\s*\(\s*\)|CURRENT_TIMESTAMP|"
+    r"\bstrftime\s*\([^()]*?\))"
+    r"\s*(?P<sign>[+-])\s*"
+    r"INTERVAL\s+'(?P<value>[-+]?\d+(?:\.\d+)?)\s*(?P<unit>[a-zA-Z]+)?'",
+    re.IGNORECASE,
+)
+
+#: strftime modifier per Postgres interval unit. The modifier carries its own
+#: unit suffix, which is how strftime walks time in either direction.
+_INTERVAL_UNITS = {
+    "second": "seconds", "seconds": "seconds", "sec": "seconds", "secs": "seconds",
+    "minute": "minutes", "minutes": "minutes", "min": "minutes", "mins": "minutes",
+    "hour": "hours", "hours": "hours", "hr": "hours", "hrs": "hours",
+    "day": "days", "days": "days",
+    "week": "days", "weeks": "days",
+    "month": "months", "months": "months",
+    "year": "years", "years": "years",
+}
+
+#: The app stores UTC ISO-8601 text, so an instant shifted in time is
+#: rendered in exactly the format utcnow_iso() produces. Without the
+#: fractional part and the Z, the shifted value would not compare equal, as
+#: text, to the stored values it is being compared against.
+_INTERVAL_OUT = "%Y-%m-%dT%H:%M:%fZ"
+
+
+def _rewrite_intervals(sql: str) -> str:
+    """Rewrite ``NOW() - INTERVAL '1 hour'`` to a strftime step back from now.
+
+    A bare ``INTERVAL '1 hour'`` with nothing to subtract it from is left
+    alone, so it raises a syntax error in review rather than quietly
+    comparing a string against NULL.
+    """
+
+    def repl(m: "re.Match") -> str:
+        unit = (m.group("unit") or "day").lower()
+        modifier = _INTERVAL_UNITS.get(unit)
+        if modifier is None:
+            return m.group(0)
+        amount = float(m.group("value"))
+        if unit in ("week", "weeks"):
+            amount *= 7          # strftime has no week modifier
+        sign = "-" if m.group("sign") == "-" else ""
+        amount = -amount if amount < 0 else amount
+        return (f"strftime('{_INTERVAL_OUT}', 'now', "
+                f"'{sign}{amount:g} {modifier}')")
+
+    return _INTERVAL_OFFSET_RE.sub(repl, sql)
 
 
 def _rewrite_extract_epoch(sql: str) -> str:
@@ -341,6 +480,58 @@ def _register_functions(conn: sqlite3.Connection) -> None:
         return table if row else None
 
     conn.create_function("to_regclass", 1, to_regclass)
+
+    # ── Postgres string functions ────────────────────────────────
+    # left()/right() are used by the backup selectors to trim a label for
+    # display, and SQLite has neither. substr() is the equivalent, but
+    # left(s, n) and substr(s, 1, n) reorder their arguments, so this is a
+    # function rather than a textual rewrite.
+
+    def _pg_left(value, length=None):
+        if value is None:
+            return None
+        if length is None:
+            return str(value)[:1]
+        return str(value)[:int(length)]
+
+    def _pg_right(value, length=None):
+        if value is None:
+            return None
+        text = str(value)
+        if length is None:
+            return text[-1:]
+        n = int(length)
+        return text[-n:] if n else ""
+
+    def _pg_repeat(value, times):
+        return None if value is None else str(value) * int(times)
+
+    conn.create_function("left", 2, _pg_left)
+    conn.create_function("left", 1, _pg_left)
+    conn.create_function("right", 2, _pg_right)
+    conn.create_function("right", 1, _pg_right)
+    conn.create_function("repeat", 2, _pg_repeat)
+
+    # ── Advisory locks ────────────────────────────────────────────
+    # Postgres uses these to serialise a job that must not run twice. The
+    # local-first app is one process, one user, one request at a time, and
+    # its own transaction already provides that exclusion, so there is
+    # nothing to lock. The alternative is registering no function at all,
+    # which turns "this queue already has a sync running" into a 500.
+
+    def _advisory_lock(*_args) -> int:
+        return 1
+
+    def _advisory_unlock(*_args) -> int:
+        return 1
+
+    for name in ("pg_try_advisory_lock", "pg_advisory_lock",
+                 "pg_try_advisory_xact_lock", "pg_advisory_xact_lock"):
+        conn.create_function(name, 1, _advisory_lock)
+        conn.create_function(name, 2, _advisory_lock)
+    for name in ("pg_advisory_unlock", "pg_advisory_unlock_all"):
+        conn.create_function(name, 0, _advisory_unlock)
+        conn.create_function(name, 1, _advisory_unlock)
 
     # information_schema.columns is referenced as a table, not called, so
     # it is emulated as a real view over PRAGMA table_info exposing the
@@ -724,10 +915,12 @@ class CompatCursor:
             sql, bound = _expand_any(sql, params)
             statement = translate_sql(sql)
             bound = translate_params(sql, bound) if bound else ()
+        _note_write(self._cur, statement)
         return self._cur.execute(statement, bound)
 
     def executemany(self, sql: str, seq_of_params: Iterable[Sequence]):
         statement = translate_ddl(sql) if _is_ddl(sql) else translate_sql(sql)
+        _note_write(self._cur, statement)
         return self._cur.executemany(statement, seq_of_params)
 
     def executescript(self, script: str):
@@ -1027,6 +1220,12 @@ def check_sqlite_version() -> str:
 #: attribute on the connection or the wrapper.
 _TXN_STATE: Dict[int, bool] = {}
 
+#: Connections whose *open* transaction has issued a data-changing
+#: statement. Kept apart from _TXN_STATE because "a transaction is open" and
+#: "there is uncommitted work" are different facts: the first happens on
+#: every read, the second is what makes closing it lossy.
+_TXN_WROTE: Dict[int, bool] = {}
+
 
 class CompatConnection:
     """A sqlite3 connection whose cursors translate the dialect.
@@ -1043,10 +1242,13 @@ class CompatConnection:
     connection and this class is never instantiated.
     """
 
-    __slots__ = ("_conn",)
+    __slots__ = ("_conn", "_borrowed")
 
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, *, borrowed: bool = False):
         self._conn = conn
+        # A borrowed wrapper stands for the process-wide connection, handed
+        # out by database.get_connection(). See close().
+        self._borrowed = borrowed
 
     def cursor(self, *args, cursor_factory=None, **kwargs) -> "_TxnCursor":
         return _TxnCursor(self, *args, cursor_factory=cursor_factory, **kwargs)
@@ -1092,6 +1294,30 @@ class CompatConnection:
             _mark_txn(self._conn, False)
 
     def close(self) -> None:
+        """End the transaction; close the handle only if we own it.
+
+        Closing the shared connection is fatal. On SQLite there is exactly
+        one connection for the whole process, so a single request that
+        reached this -- and three did, each in a ``finally: conn.close()``
+        written against a pool where closing a borrowed connection just
+        returns it -- left every later request failing with "Cannot operate
+        on a closed database". The health endpoint could report healthy
+        while the app was dead.
+
+        So a *borrowed* wrapper treats close() as what the callers mean by
+        it: end the transaction and hand the connection back. The handle
+        stays open, and database.close_pool() remains the one thing that
+        really shuts it, which is what tests and shutdown need.
+
+        A connection this wrapper owns -- opened by connect() for a single
+        task, such as the v2 importer's -- still closes for real, so no
+        handle leaks.
+        """
+        if self._borrowed:
+            if _txn_active(self._conn):
+                self._conn.rollback()
+                _mark_txn(self._conn, False)
+            return
         # An open transaction would be discarded by close() anyway, but
         # rolling back first releases the file lock deterministically.
         if _txn_active(self._conn):
@@ -1206,6 +1432,77 @@ def _mark_txn(conn: sqlite3.Connection, active: bool) -> None:
         _TXN_STATE[id(conn)] = True
     else:
         _TXN_STATE.pop(id(conn), None)
+        _TXN_WROTE.pop(id(conn), None)
+
+
+def txn_has_writes(conn: sqlite3.Connection) -> bool:
+    """Whether the open transaction has issued a data-changing statement.
+
+    An open transaction is not by itself a problem: the compat layer begins
+    one on the first statement of any kind so that rollback() has something
+    to undo, which means a read-only request also leaves one open. What
+    matters is whether a request left *work* behind, because that is the
+    only case where closing the transaction can lose data.
+
+    So the caller that ends the transaction asks this first, and warns about
+    the paths that actually discard something, instead of logging a warning
+    on every read the app ever makes.
+    """
+    return _TXN_WROTE.get(id(conn), False)
+
+
+def _mark_write(conn: sqlite3.Connection) -> None:
+    _TXN_WROTE[id(conn)] = True
+
+
+#: Leading keyword of a statement that changes stored data. DDL counts: an
+#: uncommitted CREATE TABLE that gets rolled back is work lost just as surely
+#: as a lost INSERT, and the v2 importer leans on that.
+_WRITE_LEADERS = ("INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "DROP",
+                  "ALTER", "TRUNCATE")
+
+
+def _driver_connection(obj):
+    """Reach the raw ``sqlite3.Connection`` behind any layer of wrappers.
+
+    The wrappers nest, and the three starting points are all real cases:
+    a driver ``Cursor`` (which exposes ``.connection``), a ``CompatCursor``
+    (which holds the object below it in ``_cur``), and a ``_TxnCursor`` /
+    ``CompatConnection`` pair (which hold it in ``_conn``). The visited set
+    makes a cycle harmless rather than fatal, and returning None on anything
+    unrecognised keeps this from ever raising -- it only backs a warning.
+    """
+    seen = set()
+    while obj is not None and not isinstance(obj, sqlite3.Connection):
+        if id(obj) in seen:
+            return None
+        seen.add(id(obj))
+        for attr in ("connection", "_conn", "_cur"):
+            nxt = getattr(obj, attr, None)
+            if nxt is not None:
+                obj = nxt
+                break
+        else:
+            return None
+    return obj
+
+
+def _note_write(driver_cursor, statement: str) -> None:
+    """Record that this statement changed data, if it did.
+
+    The transaction and its bookkeeping belong to the connection, so the
+    cursor is only a way in.
+
+    Best effort by design: this backs a diagnostic warning, never a
+    correctness decision, so a cursor or statement too odd to classify here
+    simply does not set the flag rather than raising.
+    """
+    conn = _driver_connection(driver_cursor)
+    if conn is None or not _txn_active(conn):
+        return
+    head = statement.lstrip().lstrip("(").split(None, 1)
+    if head and head[0].upper() in _WRITE_LEADERS:
+        _mark_write(conn)
 
 
 def wrap_connection(conn: sqlite3.Connection) -> CompatConnection:
@@ -1218,6 +1515,18 @@ def wrap_connection(conn: sqlite3.Connection) -> CompatConnection:
     if isinstance(conn, CompatConnection):
         return conn
     return CompatConnection(conn)
+
+
+def borrow(conn: sqlite3.Connection) -> CompatConnection:
+    """Wrap the process-wide connection for a caller that will hand it back.
+
+    The difference from :func:`wrap_connection` is ownership: a borrowed
+    wrapper's ``close()`` ends the transaction without closing the shared
+    handle. database.get_connection() is the only caller.
+    """
+    if isinstance(conn, CompatConnection):
+        return conn
+    return CompatConnection(conn, borrowed=True)
 
 
 def close(conn: sqlite3.Connection) -> None:

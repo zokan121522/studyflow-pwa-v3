@@ -18,6 +18,7 @@ string the column stores and is returned untouched.
 
 from __future__ import annotations
 
+import datetime
 from typing import Any, Optional
 
 
@@ -35,3 +36,32 @@ def iso(value: Any) -> Optional[str]:
     if isoformat is None:
         return str(value)
     return isoformat()
+
+
+def as_datetime(value: Any) -> Any:
+    """Coerce a temporal column value into a datetime, or None.
+
+    :func:`iso` is the right tool for *formatting* a value, because returning
+    the stored text unchanged is exactly correct. This is for the rarer case
+    where the value has to be *computed on* -- an age in hours, a comparison,
+    arithmetic. That cannot be done on text, so the SQLite string is parsed.
+
+    Naive values are assumed to be UTC, which is what the app stores: SQLite
+    has no time zones, and the compat layer writes ``utcnow_iso()``. A value
+    that is already aware is left alone, and an unparseable string is
+    returned as-is so the caller's own error surfaces rather than a
+    fabricated datetime.
+    """
+    if value is None or isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip().replace("Z", "+00:00")
+        for parse in (datetime.datetime.fromisoformat,):
+            try:
+                parsed = parse(text)
+            except ValueError:
+                continue
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=datetime.timezone.utc)
+            return parsed
+    return value

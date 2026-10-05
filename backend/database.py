@@ -20,12 +20,15 @@ the SQLite port a change to this file plus one new module, rather than a
 change to 32 of them.
 """
 
+import logging
 import os
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
 
 import engine as engine_mod
 from engine import ENGINE_POSTGRES, ENGINE_SQLITE
+
+logger = logging.getLogger(__name__)
 
 # psycopg2 is only imported on the Postgres path. Under SQLite the
 # dependency is absent from the install, and an import-time reference
@@ -934,11 +937,19 @@ def get_db():
         # The wrapper, not the raw handle. This is the whole point of the
         # function: the callers write ``with conn.cursor() as cur`` and
         # psycopg2's cursor is a context manager while sqlite3's is not, so
-        # handing back the raw connection makes every one of those fail
-        # with "does not support the context manager protocol" -- on SQLite
+        # handing back the raw handle makes every one of those fail with
+        # "does not support the context manager protocol" -- on SQLite
         # only, which is exactly where nobody tests by hand.
-        yield get_connection()
+        conn = get_connection()
+        try:
+            yield conn
+        except BaseException:
+            _close_sqlite_txn(conn, 'get_db', commit=False)
+            raise
+        else:
+            _close_sqlite_txn(conn, 'get_db', commit=True)
         return
+
 
     if _connection_pool is None:
         init_db()
@@ -1033,18 +1044,84 @@ def get_connection():
     if engine_mod.active_engine() == ENGINE_SQLITE:
         if _sqlite_conn is None:
             init_db()
-        return sqlite_compat.wrap_connection(_sqlite_conn)
+        # borrow(), not wrap_connection(): the caller hands this back, and
+        # three of them do it with conn.close() out of pool habit. A borrowed
+        # handle's close() ends the transaction and leaves the shared
+        # connection open.
+        return sqlite_compat.borrow(_sqlite_conn)
     if _connection_pool is None:
         init_db()
     return _connection_pool.getconn()
 
 
 def put_connection(conn) -> None:
-    """Return a connection borrowed via get_connection() to the pool."""
+    """Return a connection borrowed via get_connection() to the pool.
+
+    On SQLite the connection is shared, not pooled, so there is nothing to
+    return it to -- but the transaction still has to be closed, because the
+    Postgres branch closes it as a side effect of resetting the pooled
+    connection. Leaving it open was the single most damaging bug in the port:
+    the leftover transaction held a RESERVED lock, so the next writer died
+    with "database is locked" and every route behind it returned 500 from a
+    healthy database. Fourteen call sites across seven modules share this
+    seam, so the fix belongs here rather than in the callers.
+    """
     if engine_mod.active_engine() == ENGINE_SQLITE:
-        return  # the single shared connection is not pooled
+        # Conservative: this is reached from a finally, so the transaction is
+        # closed by rollback whether or not the request succeeded. Callers
+        # that intend to keep their writes commit inside the block.
+        _close_sqlite_txn(conn, 'put_connection', commit=False)
+        return
     if _connection_pool is not None:
         _connection_pool.putconn(conn)
+
+
+def _close_sqlite_txn(conn, source: str, *, commit: bool) -> None:
+    """End the shared connection's transaction. Never leave it open.
+
+    Leaving it open was the single most damaging bug in the port: the
+    leftover transaction held a RESERVED lock, so the next writer died with
+    "database is locked" and every route behind it returned 500 from a
+    perfectly healthy database. A read-only request could trigger it.
+
+    ``commit`` decides what happens to work the block left behind, and the
+    two callers want opposite answers:
+
+    * ``get_db`` commits on a clean exit, because the helpers built on it --
+      ``query``, ``fetchone``, ``fetchall`` -- are used for INSERT ...
+      RETURNING as well as SELECT, and none of them commits. That is not an
+      oversight on their part: on Postgres the write simply stayed pending on
+      the pooled connection and was committed by whatever ran next on it.
+      Rollback there was equally arbitrary, in the other direction. Making it
+      explicit is what lets the same code be correct on both engines.
+    * ``put_connection`` rolls back, because it runs from a ``finally`` and
+      cannot tell a completed request from one that just raised. Discarding is
+      the safe reading of "I'm done with this connection": no partial work is
+      ever persisted. Callers that mean to keep their writes commit inside
+      the block, which is what the module's own docstring says they do.
+
+    The warning fires only when writes are actually lost, so a read-only
+    request -- which also leaves a transaction open, because the compat layer
+    begins one on the first statement of any kind -- stays quiet, and the one
+    warning that matters is not buried under it.
+    """
+    try:
+        if not getattr(conn, 'in_transaction', False):
+            return
+        raw = getattr(conn, '_conn', conn)
+        had_writes = sqlite_compat.txn_has_writes(raw)
+        if commit and had_writes:
+            conn.commit()
+            return
+        conn.rollback()
+        if had_writes:
+            logger.warning(
+                '%s: rolled back a transaction left open with uncommitted '
+                'writes -- the caller did not commit inside the block',
+                source,
+            )
+    except Exception:
+        logger.exception('%s: failed to close the transaction', source)
 
 
 def query(sql: str, params: tuple = None) -> List[Dict[str, Any]]:

@@ -25,6 +25,8 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
+from serial import as_datetime, iso
+
 logger = logging.getLogger(__name__)
 
 # A run older than this and the panel says so. The job runs every 24 h, so
@@ -121,6 +123,11 @@ def _hours_since(ts, now=None):
     if not ts:
         return None
     now = now or datetime.now(timezone.utc)
+    # Postgres hands back a datetime here; SQLite returns the stored ISO text,
+    # and the subtraction below is arithmetic, not formatting -- so the value
+    # has to be parsed before it can be aged. serial.iso() is the sibling for
+    # the formatting case and would be wrong here.
+    ts = as_datetime(ts)
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return (now - ts).total_seconds() / 3600.0
@@ -181,7 +188,8 @@ def status(cur, user_id, pending_notices=0, now=None):
 
 
 def _iso(ts):
-    return ts.isoformat() if ts else None
+    """Format a temporal value for the response, on either engine."""
+    return iso(ts)
 
 
 def _humanise(hours):

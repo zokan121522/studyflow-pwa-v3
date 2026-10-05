@@ -999,3 +999,120 @@ def test_course_routes_work_on_sqlite(db):
     assert created.status_code == 201, created.get_data(as_text=True)[:200]
     body = created.get_json()["course"]
     assert isinstance(body["created_at"], str)
+
+
+# ─── a borrowed connection cannot be closed out from under the app ──
+# SQLite has ONE connection for the process. Three call sites ended their
+# block with conn.close(), written against a pool where closing a borrowed
+# connection just returns it -- so the first request to /backup/mine/options
+# left every later request failing with "Cannot operate on a closed
+# database", while /api/health still reported healthy.
+
+
+def test_closing_a_borrowed_connection_leaves_it_open(db):
+    from database import get_connection
+
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 AS n")
+        assert cur.fetchone()["n"] == 1
+    conn.close()
+
+    again = get_connection()
+    try:
+        with again.cursor() as cur:
+            cur.execute("SELECT 2 AS n")
+            assert cur.fetchone()["n"] == 2
+    finally:
+        again.close()
+
+
+def test_an_owned_connection_still_closes(db, tmp_path):
+    """Otherwise closing becomes a no-op and every handle leaks."""
+    import sqlite_compat
+
+    own = sqlite_compat.connect(str(tmp_path / "own.db"))
+    try:
+        own.execute("CREATE TABLE t (id INTEGER)")
+    finally:
+        own.close()
+    with pytest.raises(sqlite3.ProgrammingError):
+        own.execute("SELECT 1")
+
+
+def test_put_connection_ends_the_transaction(db):
+    """The leftover transaction held a lock and blocked every later writer."""
+    from database import get_connection, put_connection
+
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Sin commit')")
+    assert conn.in_transaction, "expected an open transaction to be left behind"
+
+    put_connection(conn)
+    assert not conn.in_transaction
+
+
+def test_get_db_commits_a_write_it_was_handed(db):
+    """query/fetchone/fetchall are used for INSERT ... RETURNING too.
+
+    None of them commits, and on Postgres the write merely stayed pending on
+    the pooled connection until the next statement happened to commit it.
+    get_db() now makes that explicit, which is what lets the same call be
+    correct on both engines.
+    """
+    row = db.fetchone(
+        "INSERT INTO courses (user_id, title) VALUES (1, %s) RETURNING id",
+        ("Commitada",),
+    )
+    assert row["id"]
+    stored = db.fetchone(
+        "SELECT title FROM courses WHERE id = %s", (row["id"],)
+    )
+    assert stored["title"] == "Commitada"
+
+
+def test_get_db_rolls_back_when_the_block_raises(db):
+    """A failed request must not persist the half of the work it did do."""
+    from database import get_db
+
+    with pytest.raises(RuntimeError):
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO courses (user_id, title) VALUES (1, 'Parcial')"
+                )
+            raise RuntimeError("boom")
+
+    rows = db.fetchall("SELECT title FROM courses WHERE title = %s", ("Parcial",))
+    assert rows == []
+
+
+def test_uncommitted_work_is_discarded_not_silently_kept(db):
+    """put_connection() rolls back: it runs from a finally and cannot tell a
+    finished request from one that just raised."""
+    from database import get_connection, put_connection
+
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO courses (user_id, title) VALUES (1, 'Perdida')")
+    put_connection(conn)
+
+    rows = db.fetchall("SELECT title FROM courses WHERE title = %s", ("Perdida",))
+    assert rows == [], "uncommitted row must not survive"
+
+
+def test_a_read_leaves_no_warning(db, caplog):
+    """A read-only request also leaves a transaction open, and that is fine.
+
+    Warning on every SELECT would train everyone to ignore the warning that
+    matters: the one about a route forgetting to commit.
+    """
+    import sqlite_compat
+    from database import get_connection
+
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1")
+        cur.fetchone()
+    assert not sqlite_compat.txn_has_writes(getattr(conn, "_conn", conn))
