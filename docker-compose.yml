@@ -93,10 +93,12 @@ services:
       INFOGRAPHIC_MAX_CHARS: ${INFOGRAPHIC_MAX_CHARS:-12000}
 
       # ── PWA ──
-      # static_serve.py deduce "<backend>/../frontend"; con el repo montado
-      # en /srv eso ya cae en /srv/frontend. Se declara explícita para no
-      # depender de la deducción.
-      FRONTEND_DIR: /srv/frontend
+      # /srv/frontend-dist, NO /srv/frontend. El repo completo se monta en
+      # /srv, así que el build de scripts/build-frontend.sh ya es visible
+      # aquí. Servir el directorio de trabajo significaba entregar en
+      # producción los .js sin minificar y el trabajo que el precaché del
+      # service worker no coincide con lo que el navegador descarga.
+      FRONTEND_DIR: /srv/frontend-dist
 
       # ── scraping de webs ──
       SCRAPING_ENABLED: ${SCRAPING_ENABLED:-false}
