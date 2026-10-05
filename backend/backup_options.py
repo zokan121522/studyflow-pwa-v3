@@ -40,9 +40,17 @@ from backup_selection import SCOPE_TABLES
 from backup_user import CHILD_TABLE_SPECS
 from routes.auth import token_required
 
+from engine import data_dir as _engine_data_dir
+
 bp = Blueprint("backup_options", __name__)
 
-DATA_DIR = os.environ.get("DATA_DIR", "/data")
+# DATA_DIR kept for the container (the launcher mounts it at /data), but the
+# local default has to come from engine.data_dir(), which resolves to
+# ~/Library/Application Support/studyflow on macOS. Hardcoding "/data" made
+# every backup/restore fail on a Mac with
+# "[Errno 30] Read-only file system: '/data'", because the root of the
+# filesystem is read-only under SIP.
+DATA_DIR = os.environ.get("DATA_DIR") or str(_engine_data_dir())
 
 # A rough bytes-per-row for the scopes the tree does not cover. The exact
 # weight of, say, `notices` varies, but the export is dominated by media

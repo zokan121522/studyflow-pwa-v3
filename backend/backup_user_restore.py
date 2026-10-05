@@ -19,10 +19,17 @@ from routes.auth import token_required
 
 import backup_db as bdb
 import database as db
+from engine import data_dir as _engine_data_dir
 
 bp = Blueprint("backup_user_restore", __name__)
 
-DATA_DIR = os.environ.get("DATA_DIR", "/data")
+# DATA_DIR kept for the container (the launcher mounts it at /data), but the
+# local default has to come from engine.data_dir(), which resolves to
+# ~/Library/Application Support/studyflow on macOS. Hardcoding "/data" made
+# every personal restore fail on a Mac with
+# "[Errno 30] Read-only file system: '/data'", because the root of the
+# filesystem is read-only under SIP.
+DATA_DIR = os.environ.get("DATA_DIR") or str(_engine_data_dir())
 # A hand-made zip must not be able to write outside the data directory.
 BACKUP_FORMAT = "studyflow-user-backup"
 

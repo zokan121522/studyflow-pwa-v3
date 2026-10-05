@@ -61,9 +61,17 @@ from backup_selection import Selection
 # declared on the blueprint itself. Leaving "/api/backup" in place would
 # therefore be silently ignored and the routes would mount at /api/mine --
 # reachable, wrong, and easy to mistake for a routing bug elsewhere.
+from engine import data_dir as _engine_data_dir
+
 bp = Blueprint("backup_user", __name__)
 
-DATA_DIR = os.environ.get("DATA_DIR", "/data")
+# DATA_DIR kept for the container (the launcher mounts it at /data), but the
+# local default has to come from engine.data_dir(), which resolves to
+# ~/Library/Application Support/studyflow on macOS. Hardcoding "/data" made
+# every backup/restore fail on a Mac with
+# "[Errno 30] Read-only file system: '/data'", because the root of the
+# filesystem is read-only under SIP.
+DATA_DIR = os.environ.get("DATA_DIR") or str(_engine_data_dir())
 
 # Session tokens are deliberately never exported. Replaying them would
 # resurrect live sessions, and a backup is the wrong place to carry
