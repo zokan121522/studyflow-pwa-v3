@@ -199,14 +199,131 @@ _DROP_CASCADE_RE = re.compile(
 )
 
 
+#: Postgres scalar max/min. SQLite has no ``GREATEST``/``LEAST`` at all --
+#: its ``MAX``/``MIN`` are aggregates over a column, and only become scalar
+#: two-or-more-argument functions when given more than one argument.
+#: ``MAX(a, b)`` is therefore the right shape, but with one important
+#: difference in NULL handling (see _scalar_max_min).
+_SCALAR_MAX_MIN = {"GREATEST": "MAX", "LEAST": "MIN"}
+_SCALAR_MAX_MIN_RE = re.compile(r"\b(GREATEST|LEAST)\s*\(", re.IGNORECASE)
+
+
+def _split_top_level(inner: str) -> list[str]:
+    """Split on commas that are not nested in parentheses or quotes."""
+    parts: list[str] = []
+    depth = 0
+    quote = None
+    start = 0
+    idx = 0
+    while idx < len(inner):
+        char = inner[idx]
+        if quote is not None:
+            if char == quote:
+                if idx + 1 < len(inner) and inner[idx + 1] == quote:
+                    idx += 2
+                    continue
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(inner[start:idx])
+            start = idx + 1
+        idx += 1
+    parts.append(inner[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _find_call_end(sql: str, open_paren: int) -> int:
+    """Index of the ``)`` closing the paren at ``open_paren``, or -1.
+
+    Scans from just after the opening paren, so depth 0 means "directly inside
+    the call" and the first ``)`` seen there is the one that closes it.
+    """
+    depth = 0
+    quote = None
+    idx = open_paren + 1
+    while idx < len(sql):
+        char = sql[idx]
+        if quote is not None:
+            if char == quote:
+                if idx + 1 < len(sql) and sql[idx + 1] == quote:
+                    idx += 2
+                    continue
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                return idx
+            depth -= 1
+        idx += 1
+    return -1
+
+
+def _rewrite_scalar_max_min(sql: str) -> str:
+    """Rewrite ``GREATEST(a, b)`` to SQLite's scalar ``MAX(a, b)``.
+
+    A regex cannot do this: the arguments contain nested parentheses,
+    subqueries and commas. The single-argument spelling is skipped on
+    purpose -- Postgres ``GREATEST(x)`` is the identity, whereas SQLite
+    ``MAX(x)`` is an aggregate over a column, so rewriting it would silently
+    change the query's meaning.
+
+    The rewrite is a plain rename, which means it preserves the argument
+    list verbatim and therefore never disturbs placeholder numbering. An
+    earlier attempt wrapped each argument in a rotated ``COALESCE`` to copy
+    Postgres's ignore-NULL rule; it reproduced that rule correctly and then
+    silently broke every named-parameter query, because each rotation
+    duplicated the ``?`` the argument had already been rewritten to and
+    shifted every later bind. Two spellings of ``%(now)s`` became two binds
+    and the statement failed to execute -- a worse outcome than the NULL
+    difference, which callers can close with an explicit ``COALESCE``.
+
+    The remaining difference is NULL handling: Postgres ``GREATEST`` skips
+    NULLs, SQLite's scalar ``MAX`` returns NULL if *any* argument is NULL.
+    Queries that depend on the clamp should wrap the call themselves::
+
+        COALESCE(GREATEST(0, delta), 0)   # 0 in both dialects
+    """
+    out = []
+    pos = 0
+    while True:
+        match = _SCALAR_MAX_MIN_RE.search(sql, pos)
+        if match is None:
+            out.append(sql[pos:])
+            return "".join(out)
+
+        close = _find_call_end(sql, match.end() - 1)
+        args = (
+            [] if close == -1
+            else _split_top_level(sql[match.end():close])
+        )
+        if len(args) < 2:
+            # Unbalanced, or the one-argument identity form.
+            out.append(sql[pos:match.end()])
+            pos = match.end()
+            continue
+
+        func = _SCALAR_MAX_MIN[match.group(1).upper()]
+        out.append(sql[pos:match.start()])
+        out.append(func + "(" + ", ".join(args) + ")")
+        pos = close + 1
+
+
 def translate_sql(sql: str) -> str:
     """Normalise Postgres DML for the sqlite3 driver.
 
     Rewrites the placeholder style (both ``%s`` and ``%(name)s``), the one
-    catalogue view the migration helpers query, and the
-    timestamp-difference EPOCH extraction. Everything else (``ON
-    CONFLICT``, ``RETURNING``, ``EXCLUDED``, window functions, CTEs) is
-    already valid SQLite and must be left alone.
+    catalogue view the migration helpers query, the timestamp-difference
+    EPOCH extraction, and the scalar ``GREATEST``/``LEAST`` spellings.
+    Everything else (``ON CONFLICT``, ``RETURNING``, ``EXCLUDED``, window
+    functions, CTEs) is already valid SQLite and must be left alone.
     """
     for postgres_name, sqlite_name in _CATALOGUE_VIEW_MAP:
         if postgres_name in sql:
@@ -227,6 +344,8 @@ def translate_sql(sql: str) -> str:
         sql = _AT_TIME_ZONE_RE.sub("", sql)
     if "INTERVAL" in sql.upper():
         sql = _rewrite_intervals(sql)
+    if _SCALAR_MAX_MIN_RE.search(sql):
+        sql = _rewrite_scalar_max_min(sql)
     if _BARE_ON_CONFLICT_RE.search(sql):
         sql = _fix_bare_on_conflict(sql)
     if "%s" not in sql:
