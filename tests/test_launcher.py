@@ -266,3 +266,122 @@ def test_data_survives_the_server_going_away(instance):
     assert not str(db).startswith(str(REPO)), "database is inside the repository"
     assert db.read_bytes()[:16] == b"SQLite format 3\x00"
     assert db.stat().st_size == first
+
+# ─── ventana de aplicación ───────────────────────────────────────────
+#
+# El usuario pidió que StudyFlow no pareciera una web. La PWA instalada por
+# Edge lo conseguía, pero arrancaba sola al iniciar Windows apuntando a un
+# localhost sin servidor detrás: una ventana de error en cada arranque. Aquí se
+# reutiliza el mismo mecanismo (el flag --app) pero desde el launcher, después
+# de levantar el servidor.
+
+
+def test_edge_command_uses_app_mode_and_the_real_entry_point(launch):
+    """A window opening on a bare 404 would be a poor first impression."""
+    argv = launch.edge_command(r"C:\...\msedge.exe", "http://127.0.0.1:8477")
+
+    assert argv[0] == r"C:\...\msedge.exe"
+    assert "--app=http://127.0.0.1:8477/index.html" in argv
+    assert not any(a.startswith("--new-window") or a.startswith("http://127.0.0.1") for a in argv[1:]), (
+        "sin --app el usuario vería el navegador normal, que es justo lo que pidió evitar"
+    )
+
+
+def test_edge_command_does_not_touch_the_user_profile(launch):
+    """Launching into a temporary profile would log them out every time."""
+    argv = launch.edge_command("msedge.exe", "http://127.0.0.1:8477")
+
+    assert not any("--user-data-dir" in a for a in argv), (
+        "un --user-data-dir propio perdería la sesión y el service worker"
+    )
+
+
+def test_find_edge_returns_none_off_windows(launch, monkeypatch):
+    """macOS has no Edge app mode to borrow, so windowed must degrade quietly."""
+    monkeypatch.setattr(launch.os, "name", "posix")
+
+    assert launch.find_edge() is None
+
+
+def test_find_edge_prefers_the_32_bit_install(monkeypatch, tmp_path):
+    """Where Edge actually lives on a normal 64-bit Windows install."""
+    spec = importlib.util.spec_from_file_location("sf_launch_edges", LAUNCHER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for label in ("x86", "x64"):
+        folder = tmp_path / label / "Microsoft" / "Edge" / "Application"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "msedge.exe").write_text("")
+    monkeypatch.setattr(module.os, "name", "nt")
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "x86"))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "x64"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+
+    expected = tmp_path / "x86" / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    assert module.find_edge() == str(expected)
+
+
+def test_open_windowed_reports_failure_instead_of_crashing(launch, monkeypatch):
+    """A missing Edge must fall back to a browser, never take the launcher down."""
+    monkeypatch.setattr(launch, "find_edge", lambda: None)
+
+    assert launch.open_windowed(8477) is False
+
+
+def test_open_app_falls_back_to_the_browser_when_edge_is_missing(launch, monkeypatch):
+    """The degradation path is the one that must work; it is the one nobody tests."""
+    seen = []
+    monkeypatch.setattr(launch, "open_windowed", lambda port: False)
+    monkeypatch.setattr(launch, "open_browser", lambda port: seen.append(port))
+
+    launch.open_app(8477, windowed=True)
+
+    assert seen == [8477], "sin Edge debe abrirse igualmente en el navegador"
+
+
+def test_open_app_uses_the_window_when_edge_is_there(launch, monkeypatch):
+    """And the windowed path must not also open a browser tab."""
+    calls = []
+    monkeypatch.setattr(launch, "open_windowed", lambda port: (calls.append(("window", port)), True)[1])
+    monkeypatch.setattr(launch, "open_browser", lambda port: calls.append(("browser", port)))
+
+    launch.open_app(8477, windowed=True)
+
+    assert calls == [("window", 8477)]
+
+
+def test_browser_flag_forces_the_normal_browser(launch, monkeypatch):
+    """--browser is the escape hatch if the window ever misbehaves."""
+    seen = {}
+    monkeypatch.setattr(launch, "start", lambda open_it, windowed: seen.update(
+        open_it=open_it, windowed=windowed
+    ))
+
+    launch.main(["--browser"])
+
+    assert seen == {"open_it": True, "windowed": False}
+
+
+def test_no_browser_still_opens_nothing(launch, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(launch, "start", lambda open_it, windowed: seen.update(
+        open_it=open_it, windowed=windowed
+    ))
+
+    launch.main(["--no-browser"])
+
+    assert seen["open_it"] is False
+
+
+def test_stop_never_opens_a_window(launch, monkeypatch):
+    """Regression guard: 'parar' abriendo una ventana sería absurdo."""
+    monkeypatch.setattr(launch, "stop", lambda: 0)
+
+    def explode(*a, **k):  # pragma: no cover
+        raise AssertionError("stop no debe abrir nada")
+
+    monkeypatch.setattr(launch, "open_app", explode)
+    monkeypatch.setattr(launch, "open_windowed", explode)
+
+    assert launch.main(["stop"]) == 0

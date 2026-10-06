@@ -316,6 +316,91 @@ def open_browser(port: int) -> None:
     webbrowser.open(f"http://127.0.0.1:{port}/")
 
 
+# ── Ventana de aplicación ────────────────────────────────────────────
+#
+# El usuario pidió que no se viera como una web. La PWA instalada por Edge
+# resolvía eso (una ventana sin barra de direcciones), pero lived en la carpeta
+# de apps del navegador y arrancaba SOLA al iniciar Windows, apuntando a
+# 127.0.0.1:8477 sin servidor detrás: una ventana de error en cada arranque.
+#
+# Reutilizamos el mismo motor que usa esa PWA -- el flag --app de Edge -- pero
+# desde aquí, después de levantar el servidor. Así el orden es correcto por
+# construcción y desaparece el arranque fantasma.
+#
+# Nada de esto añade dependencias. Edge ya está en Windows, y una dependencia
+# más sería exactamente el tipo de suposición que ha costado cuatro fallos.
+
+_EDGE_SUFFIX = ("Microsoft", "Edge", "Application", "msedge.exe")
+
+
+def find_edge() -> str | None:
+    """Locate msedge.exe without shelling out to ``where``.
+
+    ``os.environ`` is consulted rather than the registry so the whole lookup is
+    testable, and so it behaves identically under SSH where the interactive
+    session's environment is the only one available.
+
+    The suffix is built from separate components rather than one backslashed
+    string: a literal ``\\`` is a perfectly ordinary filename character on POSIX,
+    so the joined-with-``os.path.join`` version of this only ever resolved on
+    Windows -- and therefore could not be tested anywhere except the machine
+    with the bug on it.
+    """
+    if os.name != "nt":
+        return None
+    bases = [
+        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+        os.environ.get("ProgramFiles", r"C:\Program Files"),
+        os.environ.get("LOCALAPPDATA", ""),
+    ]
+    for base in filter(None, bases):
+        candidate = os.path.join(base, *_EDGE_SUFFIX)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def edge_command(edge: str, url: str) -> list[str]:
+    """The argv for a chromeless app window.
+
+    ``/index.html`` rather than ``/`` because that is the entry point the
+    installed PWA used, and a window that opens on a bare 404 would be a poor
+    first impression of the whole project.
+    """
+    return [
+        edge,
+        f"--app={url}/index.html",
+        "--no-first-run",
+        "--no-default-browser-check",
+    ]
+
+
+def open_windowed(port: int) -> bool:
+    """Open the app in a window that looks native. False if Edge is missing."""
+    edge = find_edge()
+    if edge is None:
+        return False
+    flags = 0
+    for name in ("DETACHED_PROCESS", "CREATE_NEW_PROCESS_GROUP"):
+        flags |= getattr(subprocess, name, 0)
+    try:
+        subprocess.Popen(
+            edge_command(edge, f"http://127.0.0.1:{port}"),
+            close_fds=True,
+            creationflags=flags or None,
+        )
+    except OSError:
+        return False
+    return True
+
+
+def open_app(port: int, windowed: bool = True) -> None:
+    """Open the app, preferring a real window and degrading to a browser."""
+    if windowed and open_windowed(port):
+        return
+    open_browser(port)
+
+
 def stop() -> int:
     port = running_port()
     if port is None:
@@ -370,7 +455,7 @@ def status() -> int:
     return 0
 
 
-def start(open_it: bool = True) -> int:
+def start(open_it: bool = True, windowed: bool = True) -> int:
     directory = data_dir()
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -380,7 +465,7 @@ def start(open_it: bool = True) -> int:
         # the app that is already running instead of starting a rival.
         print(f"StudyFlow ya está corriendo en http://127.0.0.1:{existing}/")
         if open_it:
-            open_browser(existing)
+            open_app(existing, windowed=windowed)
         return 0
 
     port = pick_port()
@@ -399,7 +484,7 @@ def start(open_it: bool = True) -> int:
     print(f"  datos : {directory}")
     print(f"  log   : {log_file()}")
     if open_it:
-        open_browser(port)
+        open_app(port, windowed=windowed)
     return 0
 
 
@@ -432,7 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="launch.py",
         description="Arranca la instancia local de StudyFlow.",
     )
-    parser.add_argument("--no-browser", action="store_true", help="no abrir el navegador")
+    parser.add_argument("--no-browser", action="store_true", help="no abrir nada")
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="abrir en el navegador normal en vez de una ventana de aplicación",
+    )
     parser.add_argument("--foreground", action="store_true", help="servir en esta terminal")
     parser.add_argument("--stop", action="store_true", help="detener la instancia local")
     parser.add_argument("command", nargs="?", choices=["start", "stop", "status"])
@@ -444,7 +534,12 @@ def main(argv: list[str] | None = None) -> int:
         return status()
     if args.foreground:
         return foreground()
-    return start(open_it=not args.no_browser)
+    # Windowed is the default on Windows because that is what the launcher is
+    # for; elsewhere there is no Edge app mode to borrow, so it degrades.
+    return start(
+        open_it=not args.no_browser,
+        windowed=not args.browser,
+    )
 
 
 if __name__ == "__main__":
