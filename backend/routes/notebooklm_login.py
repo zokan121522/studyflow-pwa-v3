@@ -32,6 +32,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -54,15 +55,38 @@ DISPLAY = f":{DISPLAY_NUM}"
 
 # Shared state via JSON file. The gevent worker runs a single process, but the
 # state file keeps the API stateless across restarts / worker respawns.
-STATE_FILE = "/tmp/notebooklm_login.json"
+# NOT a hardcoded "/tmp/...": Windows has no /tmp by default, and writing to
+# C:\tmp (sic) would raise FileNotFoundError on every state write.
+STATE_FILE = os.path.join(tempfile.gettempdir(), "notebooklm_login.json")
 
 PYTHON = sys.executable  # the python running the Flask app
 
-# Desktop Chrome executables that ``channel="chrome"`` would resolve to. Used
-# only by the macOS fallback; probed, never assumed.
+# Desktop Chrome executables that ``channel="chrome"`` would resolve to via
+# PATH. Used by the Chrome-window fallback; probed, never assumed.
 _CHROME_BINARIES = (
     "google-chrome", "google-chrome-stable", "chrome", "chromium-browser",
 )
+
+
+def _windows_chrome_paths() -> list[str]:
+    """Known install locations of Chrome on Windows.
+
+    On a normal Windows box Chrome is NOT on PATH: it lives under Program
+    Files. ``shutil.which("chrome")`` therefore reports it as missing even
+    though Playwright's ``channel="chrome"`` resolves it fine through the
+    registry (we verified that on the target machine: version 154 launched).
+    The guard in _missing_desktop_chrome() must probe these dirs too, or the
+    login button would answer "Falta Google Chrome" with Chrome installed.
+    """
+    dirs = [
+        os.environ.get("PROGRAMFILES"),
+        os.environ.get("ProgramFiles(x86)"),
+        os.environ.get("LOCALAPPDATA"),
+    ]
+    return [
+        os.path.join(d, "Google", "Chrome", "Application", "chrome.exe")
+        for d in dirs if d
+    ]
 
 
 def _vnc_available() -> bool:
@@ -72,7 +96,9 @@ def _vnc_available() -> bool:
 
 def _missing_desktop_chrome() -> bool:
     """True when the desktop Chrome required by ``--browser chrome`` is absent."""
-    return not any(shutil.which(name) for name in _CHROME_BINARIES)
+    if any(shutil.which(name) for name in _CHROME_BINARIES):
+        return False
+    return not any(os.path.isfile(path) for path in _windows_chrome_paths())
 
 
 # ── Shared state ───────────────────────────────────────────────────────
@@ -324,7 +350,7 @@ def _start_vnc(account_email: str | None, storage_path: str,
 
 
 def _start_chrome_window(account_email: str | None, storage_path: str):
-    """macOS native dev path: real desktop Chrome window."""
+    """Real desktop Chrome window (macOS native dev / Windows local install)."""
     if _missing_desktop_chrome():
         _write_state("idle")
         return jsonify({

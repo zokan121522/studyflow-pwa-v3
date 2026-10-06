@@ -44,19 +44,57 @@ def test_requirements_local_exists_and_is_pinned():
 
 @pytest.mark.parametrize(
     "package",
-    ["gunicorn", "psycopg2-binary", "weasyprint", "notebooklm-py", "playwright",
-     "selenium", "yt-dlp"],
+    ["gunicorn", "psycopg2-binary", "weasyprint", "selenium", "yt-dlp"],
 )
 def test_local_requirements_exclude_production_only_packages(package):
     """These break or block a local Windows install.
 
     gunicorn has no Windows support at all, and weasyprint needs pango/cairo.
-    notebooklm-py pulls Playwright and its browsers, which is a large download
-    for a feature the local install does not need to boot.
+    selenium and yt-dlp are for paths that ``server.py`` does not import.
+
+    ``notebooklm-py`` and ``playwright`` were in this list until now, on the
+    grounds that Playwright was "a large download for a feature the local
+    install does not need to boot". That premise was wrong on both halves:
+    playwright is an optional extra rather than a base dependency of
+    notebooklm-py, and pip never downloads the browsers -- that is a separate
+    ``playwright install``. Meanwhile the NotebookLM login button had no
+    implementation at all behind it on Windows, so pressing it produced
+    ``Failed to fetch`` and nothing in the log.
     """
     assert package not in _requirements(), (
         f"{package} no debe estar en requirements-local.txt: rompe o bloquea "
         f"la instalación local en Windows"
+    )
+
+
+def test_local_requirements_ship_the_notebooklm_login_stack():
+    """The login button must have an implementation behind it.
+
+    This is the load-bearing regression for the "it works on my machine" family
+    of bugs: on Windows ``login_start`` falls through to the desktop-Chrome path
+    and runs ``python -m notebooklm login``. With the package absent that fails
+    at import time, and because the UI offered the button anyway the user saw a
+    bare ``Failed to fetch`` with an empty server log -- no error, no traceback,
+    no clue where it broke.
+
+    0.8.4 specifically, not newer or older: Google moved NotebookLM to
+    notebook.google.com and 0.7.2 still waited for the old host, so it never
+    detected the login and never wrote storage_state.json. Keep the pin.
+    """
+    deps = _requirements()
+
+    assert "notebooklm-py" in deps, (
+        "sin notebooklm-py el botón de login de NotebookLM no puede funcionar: "
+        "python -m notebooklm revienta con ModuleNotFoundError y la interfaz "
+        "solo muestra 'Failed to fetch'"
+    )
+    assert deps["notebooklm-py"] == "0.8.4", (
+        f"notebooklm-py {deps['notebooklm-py']} no es 0.8.4: las versiones "
+        "anteriores esperan notebooklm.google.com y nunca detectan el login"
+    )
+    assert "playwright" in deps, (
+        "sin playwright --browser chrome no puede abrir la ventana de login: "
+        "es el extra 'browser' de notebooklm-py, no dependencia base"
     )
 
 

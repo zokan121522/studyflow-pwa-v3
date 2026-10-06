@@ -21,10 +21,10 @@
 # weasyprint          Import diferido en services/md_to_pdf.py. Arrancar en
 #                     Windows exigiría pango/cairo, muy difícil de instalar.
 #                     Solo afecta a la función MD→PDF.
-# notebooklm-py       Import diferido tras el fix de esta sesión. Pesa
-#                     muchísimo (arrastra Playwright + navegadores). Solo hace
-#                     falta para las funciones de NotebookLM.
-# playwright          Mismo motivo: dependencia de notebooklm-py.
+#                     (SÍ están notebooklm-py y playwright: eran "excluidos" por
+#                     considerarse pesados, lo que no era cierto y dejaba el
+#                     login de NotebookLM sin implementación posible en
+#                     Windows. Ver su entrada al final del fichero.)
 # selenium            scorm_import.py y runner.py, que server.py NO importa.
 # gevent / gevent-ws  SÍ están: los necesita routes/novnc_proxy.py para el
 #                     login embebido de NotebookLM. Ver la nota al final.
@@ -86,3 +86,24 @@ tzdata==2025.3
 # de comportamiento indefinido.
 gevent==25.9.1
 gevent-websocket==0.10.1
+
+# ── Login de NotebookLM ──────────────────────────────────────────────────────
+# backend/requirements.txt (la fuente canónica) ya los declaraba; aquí estaban
+# fuera por una nota que era FALSA: "pesa muchísimo (arrastra Playwright +
+# navegadores)". Verificado contra el wheel de 0.8.4 en 2026-10-06:
+#
+#   * playwright es extra opcional (`browser`), no dependencia base.
+#     La base de notebooklm-py es click, filelock, httpx, idna y rich.
+#   * pip NO descarga navegadores. Eso es `playwright install`, separado.
+#     Por tanto no instalamos nada aquí que pese 150 MB por su cuenta.
+#
+# El login local usa el Chrome del usuario, no el Chromium de Playwright:
+#   notebooklm: `channel = browser if browser != "chromium" else None`
+#   → --browser chrome → channel="chrome" → Chrome de sistema.
+# Su equipo también soporta --browser msedge. Ningún download de navegador.
+#
+# 0.8.4 NO es casual: Google migró NotebookLM a https://notebook.google.com y la
+# 0.7.2 seguía esperando el host viejo en page.wait_for_url(), por lo que nunca
+# detectaba el login ni escribía storage_state.json. Copiado de backend/requirements.txt.
+notebooklm-py==0.8.4
+playwright==1.63.0
