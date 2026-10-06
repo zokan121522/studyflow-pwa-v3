@@ -66,6 +66,16 @@ if errorlevel 1 (
 REM ── ¿Entorno listo? ─────────────────────────────────────────────────────────
 if "%~1"=="setup" goto setup
 if not exist "%VENV_PY%" goto setup
+REM ── ¿Dependencias realmente instaladas? ─────────────────────────────────────
+REM Comprobar que existe python.exe NO dice nada. Un install fallido (pin en
+REM conflicto, corte de red) deja el venv con SOLO pip dentro, y entonces este
+REM script lo daba por bueno para siempre: cada arranque posterior moria con
+REM "No module named 'flask'" y sin ningun camino de recuperacion. Hay que
+REM comprobar que las dependencias se IMPORTAN, que es lo unico que importa.
+REM gevent y tzdata se probean porque son las que han faltado en silencio:
+REM faltaban y la app arrancaba igual, en silencio.
+"%VENV_PY%" -c "import flask, psycopg2, gevent, tzdata" >nul 2>&1
+if errorlevel 1 goto setup
 if "%~1"=="" goto run
 if "%~1"=="stop"   goto run
 if "%~1"=="status" goto run
@@ -87,6 +97,10 @@ echo.
 if errorlevel 1 (
     echo.
     echo   [X] La instalacion fallo. Copia el error de arriba.
+    echo.
+    echo   Lo mas comun: un pin en conflicto con otro paquete del fichero.
+    echo   requirements-local.txt es la lista; nada mas.
+    echo.
     pause
     exit /b 1
 )

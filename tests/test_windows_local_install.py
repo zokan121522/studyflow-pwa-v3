@@ -79,6 +79,46 @@ def test_local_requirements_include_tzdata():
     )
 
 
+def test_tzdata_pin_satisfies_the_icalendar_floor():
+    """Being in the file is not enough -- the pin has to be installable.
+
+    ``tzdata==2025.2`` was here to fix the very bug above, and it was *worse*:
+    ``icalendar==7.3.0`` declares ``tzdata>=2025.3``, so that pin made the whole
+    ``pip install -r requirements-local.txt`` unresolvable. On the user's machine
+    that left a venv containing nothing but pip, and every launch afterwards
+    died with ``ModuleNotFoundError: No module named 'flask'``.
+
+    Worse still, the test right above passed the whole time. Presence says
+    nothing about installability, which is the lesson of every test in this
+    file: the developer's Mac already has all of these, so "it is in the
+    requirements" feels like coverage while proving nothing.
+    """
+    from packaging.requirements import Requirement
+    from packaging.version import Version
+
+    tzdata = Version(_requirements()["tzdata"])
+
+    # The floor is not hardcoded: it comes from icalendar's own metadata, so
+    # bumping icalendar later cannot quietly invalidate this pin.
+    try:
+        from importlib.metadata import requires
+
+        declared = [r for r in (requires("icalendar") or []) if r.lower().startswith("tzdata")]
+    except Exception:  # pragma: no cover - icalendar not installed here
+        declared = []
+
+    if not declared:  # pragma: no cover - offline fallback
+        pytest.skip("icalendar no esta instalado: no se puede leer su minimo de tzdata")
+
+    floor = Requirement(declared[0]).specifier
+    assert tzdata in floor, (
+        f"tzdata=={tzdata} no cumple el minimo que exige icalendar ({floor}): "
+        "el install completo de requirements-local.txt quedara irresoluble y el "
+        "launcher se quedara con un venv sin flask"
+    )
+
+
+
 @pytest.mark.parametrize("package", ["gevent", "gevent-websocket"])
 def test_local_requirements_include_the_novnc_dependencies(package):
     """server.py guards the noVNC import, so nothing errors when these are absent.

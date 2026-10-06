@@ -65,7 +65,12 @@ edge-tts==7.2.8
 # En el Mac no hace falta porque el sistema ya lo trae; allí lo que se estaba
 # usando era el tzdata de Anaconda, no una dependencia del proyecto. Por eso el
 # fallo solo aparece en Windows.
-tzdata==2025.2
+#
+# NO BAJAR DE 2025.3: icalendar (arriba) declara tzdata>=2025.3, así que un pin
+# menor hace que TODO el install de requirements-local.txt sea irresoluble y el
+# launcher se quede con un venv sin flask. tests/test_windows_local_install.py lo
+# verifica, porque un "esta en el fichero" no dice nada de si es instalable.
+tzdata==2025.3
 
 # ── Login embebido de NotebookLM (noVNC) ────────────────────────────────────
 # routes/novnc_proxy.py importa gevent A NIVEL DE MÓDULO. server.py lo envuelve
