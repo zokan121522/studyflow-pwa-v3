@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# StudyFlow — requirements MINIMOS para instalación LOCAL-FIRST (Windows / Mac)
+#
+# NO son los requirements de producción. Ver backend/requirements.txt para el
+# conjunto completo del contenedor Docker.
+#
+# Incluye SOLO lo verificado como necesario para que la app ARRANQUE y
+# funcione en local sobre SQLite. Verificado empíricamente el 2026-10-06:
+#
+#   venv limpio → pip install -r requirements-local.txt
+#                → create_app() OK, 181 rutas
+#                → /api/health HTTP 200 (engine=sqlite)
+#
+# Cada dependencia está fijada porque tiene ruedas oficiales para win_amd64.
+#
+# ── EXCLUIDO A PROPÓSITO, y por qué ────────────────────────────────────────
+# gunicorn            El launcher local usa Flask app.run(), no gunicorn.
+#                     Además gunicorn NO soporta Windows (solo fork workers).
+# psycopg2-binary     database.py lo importe dentro de try/except a propósito;
+#                     en modo SQLite no se usa y no hace falta.
+# weasyprint          Import diferido en services/md_to_pdf.py. Arrancar en
+#                     Windows exigiría pango/cairo, muy difícil de instalar.
+#                     Solo afecta a la función MD→PDF.
+# notebooklm-py       Import diferido tras el fix de esta sesión. Pesa
+#                     muchísimo (arrastra Playwright + navegadores). Solo hace
+#                     falta para las funciones de NotebookLM.
+# playwright          Mismo motivo: dependencia de notebooklm-py.
+# selenium            scorm_import.py y runner.py, que server.py NO importa.
+# gevent / gevent-ws  El bridge noVNC (login embebido de NotebookLM).
+#                     server.py ya lo importa con try/except.
+# yt-dlp              YouTubeZen; se invoca como binario por subprocess.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Núcleo del servidor
+Flask==3.1.1
+Flask-Cors==4.0.0
+python-dotenv==1.1.0
+
+# Autenticación (bcrypt/cryptography se necesitan entre sí)
+PyJWT==2.8.0
+bcrypt==4.1.2
+cryptography==50.0.2
+
+# Import DURO en routes/calendar.py: sin esto la app no arranca en un
+# entorno limpio. Ya estaba declarado en backend/requirements.txt.
+icalendar==7.3.0
+
+# Red (calendar / YouTube / providers de IA)
+requests==2.34.2
+httpx==0.28.1
+
+# PDF e imágenes (importados como "fitz" y "PIL")
+PyMuPDF==1.28.2
+pillow==12.3.0
+
+# Síntesis de voz
+edge-tts==7.2.8

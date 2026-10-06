@@ -19,7 +19,10 @@ import time
 from pathlib import Path
 
 import requests
-from notebooklm import NotebookLMClient
+try:  # pragma: no cover - optional, heavy SDK
+    from notebooklm import NotebookLMClient
+except ImportError:  # pragma: no cover
+    NotebookLMClient = None
 
 from database import execute, execute_returning, query_one
 from ai.notebooklm.client import _strip_citation_markers

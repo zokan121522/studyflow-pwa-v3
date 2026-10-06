@@ -249,19 +249,46 @@ def child_env(port: int) -> dict:
 # ─── lifecycle ─────────────────────────────────────────────────────
 
 
-def spawn(port: int, env: dict) -> subprocess.Popen:
+def child_executable() -> str:
+    """The interpreter to run the server with.
+
+    On Windows a double-clicked launcher leaves a console window on screen, and
+    the server never exits, so that window would sit there for the whole
+    session -- exactly the "web server on my desktop" impression the launcher
+    exists to avoid. ``pythonw.exe`` is the same interpreter without the
+    console, so output must go to the log file (which ``spawn`` already does)
+    rather than to a tty.
+
+    ``--foreground`` deliberately keeps the console interpreter: the user asked
+    for output and Ctrl-C in this terminal.
+    """
+    if os.name != "nt":
+        return sys.executable
+    # os.path.join rather than Path.with_name: the Path flavour follows the
+    # running OS, so on a Mac CI run Path("...").with_name("pythonw.exe") tries
+    # to build a WindowsPath and raises UnsupportedOperation. Here os.name has
+    # been faked to "nt" to exercise this branch, and the join must still work.
+    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    return pythonw if os.path.exists(pythonw) else sys.executable
+
+
+def spawn(port: int, env: dict, foreground: bool = False) -> subprocess.Popen:
     log = log_file()
     handle = open(log, "a", buffering=1)
     handle.write(f"\n--- start {time.strftime('%Y-%m-%d %H:%M:%S')} port={port} ---\n")
+    handle.close()
     return subprocess.Popen(
-        [sys.executable, str(repo_root() / "launcher" / "serve.py")],
+        [sys.executable if foreground else child_executable(),
+         str(repo_root() / "launcher" / "serve.py")],
         env=env,
-        stdout=handle,
+        stdout=open(log, "a", buffering=1),
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
         # New session: the server must outlive the terminal that launched it,
-        # which is what makes a double-click work.
-        start_new_session=True,
+        # which is what makes a double-click work. Windows has no setsid and
+        # ignores the flag, which is why the console is handled by pythonw.exe
+        # in child_executable() instead.
+        start_new_session=os.name != "nt",
         cwd=str(repo_root()),
     )
 
@@ -382,14 +409,14 @@ def foreground() -> int:
     directory.mkdir(parents=True, exist_ok=True)
     port = pick_port()
     env = child_env(port)
-    record_state(port, os.getpid())
     try:
-        subprocess.run(
-            [sys.executable, str(repo_root() / "launcher" / "serve.py")],
-            env=env,
-            cwd=str(repo_root()),
-            check=False,
-        )
+        # Record the CHILD's pid, not our own: --stop signals the recorded pid,
+        # and this launcher is still running while the server serves. Recording
+        # os.getpid() here made --stop kill the wrong process and then time out
+        # waiting for a port that a live server still holds.
+        process = spawn(port, env, foreground=True)
+        record_state(port, process.pid)
+        process.wait()
     except KeyboardInterrupt:
         pass
     finally:

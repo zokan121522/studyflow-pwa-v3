@@ -1,0 +1,20 @@
+# Default: let git detect text and normalise line endings to LF in the repo.
+* text=auto
+
+# Keep the common source types explicit.
+*.js   text
+*.css  text
+*.html text
+*.json text
+*.md   text
+*.py   text
+*.sh   text
+*.yml  text
+*.yaml text
+
+# Windows batch files MUST keep CRLF line endings.
+# This MUST come after the `* text=auto` above, because later lines win for the
+# same attribute: `* text=auto` would otherwise re-normalise these to LF and a
+# .bat with bare LF fails intermittently on Windows (labels/goto break).
+# `-text` disables all conversion, so the committed bytes stay as written.
+launcher/*.bat -text
