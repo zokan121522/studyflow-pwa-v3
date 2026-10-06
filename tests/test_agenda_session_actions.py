@@ -65,16 +65,46 @@ def test_settled_sessions_keep_delete_move_copy():
             "%s must still be rendered for completed/cancelled sessions — "
             "tidy-up is most often wanted *after* finishing" % cls
         )
-    # moveDelDisabled is the only gate that ever touched these two, and it keys
-    # off the timer, not off session state.
-    assert re.search(
-        r"var moveDelDisabled = \(ts === \"running\" \|\| ts === \"paused\"\)", fn
-    ), (
-        "delete/move must stay disabled only while the clock runs; keying this "
+    assert re.search(r'var moveDisabled = \(ts === "running" \|\| ts === "paused"\)',
+                     fn), (
+        "move must stay disabled while the clock runs or waits; keying this "
         "on session state is what hid the buttons after stopping the timer"
     )
-    assert not re.search(r"moveDelDisabled = .*settled", fn), (
-        "delete/move must not be disabled merely because a session is settled"
+    assert not re.search(r"moveDisabled = .*settled", fn), (
+        "move must not be disabled merely because a session is settled"
+    )
+
+
+def test_delete_is_enabled_while_paused():
+    """The bin must respond on a paused session. Reported, and fixed on purpose.
+
+    Delete used to share the move gate, so it was disabled for both "running"
+    and "paused". With the pause silently failing server-side, sessions got
+    stuck in "running" and the button looked simply broken.
+
+    A paused clock is not mid-measurement -- timer_elapsed already holds the
+    banked time -- so there is nothing to lose by deleting. A running one is
+    still blocked: that time is being accumulated and a delete would discard it.
+    """
+    fn = _actions_html_fn()
+    assert re.search(r'var delDisabled = \(ts === "running"\)', fn), (
+        "delete must be gated on 'running' alone, so a paused session can be "
+        "deleted"
+    )
+    # The disabled expression sits inside the button's own markup, after the
+    # class attribute, so read from there to the closing tag.
+    start = fn.index('class="btn-del"')
+    del_markup = fn[start: fn.index("</button>", start)]
+    assert "delDisabled" in del_markup, (
+        "the delete button must use delDisabled, not moveDisabled"
+    )
+    assert "moveDisabled" not in del_markup, (
+        "the delete button must not use the move gate"
+    )
+    move_start = fn.index('class="btn-move"')
+    move_markup = fn[move_start: fn.index("</button>", move_start)]
+    assert "moveDisabled" in move_markup, (
+        "the move button must keep the move gate"
     )
 
 
