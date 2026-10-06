@@ -26,8 +26,8 @@
 #                     falta para las funciones de NotebookLM.
 # playwright          Mismo motivo: dependencia de notebooklm-py.
 # selenium            scorm_import.py y runner.py, que server.py NO importa.
-# gevent / gevent-ws  El bridge noVNC (login embebido de NotebookLM).
-#                     server.py ya lo importa con try/except.
+# gevent / gevent-ws  SÍ están: los necesita routes/novnc_proxy.py para el
+#                     login embebido de NotebookLM. Ver la nota al final.
 # yt-dlp              YouTubeZen; se invoca como binario por subprocess.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -55,3 +55,18 @@ pillow==12.3.0
 
 # Síntesis de voz
 edge-tts==7.2.8
+
+# ── Login embebido de NotebookLM (noVNC) ────────────────────────────────────
+# routes/novnc_proxy.py importa gevent A NIVEL DE MÓDULO. server.py lo envuelve
+# en try/except, así que la app arranca igual sin esto — y por eso es una
+# trampa: la vista embebida no aparece y no hay ningún error visible, solo una
+# ventana que no abre. Son 2 MB y un par de segundos: valen la pena.
+#
+# Nota: esto solo da el proxy WebSocket. El cliente noVNC además espera los
+# estáticos en /opt/novnc, que es una ruta de contenedor y no existe en local.
+# En una máquina personal el login embebido seguirá sin funcionar aunque las
+# dependencias estén; para eso hace falta el contenedor. Lo que sí arregla es
+# que /api/settings/notebooklm/status responda y muestre un error claro en vez
+# de comportamiento indefinido.
+gevent==25.9.1
+gevent-websocket==0.10.1

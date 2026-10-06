@@ -37,10 +37,27 @@ from backup_selection import MEDIA_DIRS
 # itself serves files from rather than from a second hardcoded guess. Every
 # category below is a subdirectory of it, which is what lets the ZIP store
 # paths relative to a root the restore can re-root anywhere.
-DATA_DIR = os.path.dirname(
-    (os.environ.get("PDF_UPLOAD_FOLDER") or "/srv/backend/uploads/pdfs")
-    .rstrip("/")
-)
+def uploads_root() -> str:
+    """The directory the backup format stores its paths relative to.
+
+    This is the single source of truth for the base of ``files/`` inside the
+    archive. The restore MUST use this same value: it used to compute its own
+    base (engine.data_dir()) while the export used dirname(PDF_UPLOAD_FOLDER),
+    and those differ by one level -- on a local install the launcher points
+    PDF_UPLOAD_FOLDER at ``<data>/uploads/pdfs``. Every media file therefore
+    landed in ``<data>/pdfs/`` while the app kept serving ``<data>/uploads/pdfs/``:
+    the database rows came back (so titles rendered) but no PDF, audio or
+    infographic could be found. Deriving both sides from one function is what
+    makes a restore land where the app looks.
+    """
+    return os.path.dirname(
+        (os.environ.get("PDF_UPLOAD_FOLDER") or "/srv/backend/uploads/pdfs")
+        .rstrip("/")
+    )
+
+
+DATA_DIR = uploads_root()
+
 
 FILE_CATEGORIES = {
     "pdfs": "PDF subidos (asignaturas)",

@@ -45,7 +45,7 @@ def test_requirements_local_exists_and_is_pinned():
 @pytest.mark.parametrize(
     "package",
     ["gunicorn", "psycopg2-binary", "weasyprint", "notebooklm-py", "playwright",
-     "selenium", "gevent", "gevent-websocket", "yt-dlp"],
+     "selenium", "yt-dlp"],
 )
 def test_local_requirements_exclude_production_only_packages(package):
     """These break or block a local Windows install.
@@ -57,6 +57,38 @@ def test_local_requirements_exclude_production_only_packages(package):
     assert package not in _requirements(), (
         f"{package} no debe estar en requirements-local.txt: rompe o bloquea "
         f"la instalación local en Windows"
+    )
+
+
+@pytest.mark.parametrize("package", ["gevent", "gevent-websocket"])
+def test_local_requirements_include_the_novnc_dependencies(package):
+    """server.py guards the noVNC import, so nothing errors when these are absent.
+
+    That guard is why this was missed: the app booted perfectly and the
+    embedded NotebookLM login simply never opened, with no message anywhere.
+    Two megabytes is a cheap price for a feature that either works or clearly
+    does not.
+    """
+    assert package in _requirements(), (
+        f"{package} falta en requirements-local.txt: sin él la vista embebida "
+        f"de NotebookLM no abre y no hay ningún error que lo indique"
+    )
+
+
+def test_novnc_proxy_gevent_import_is_not_silent():
+    """The import must stay guarded in server.py, but the dependency is real.
+
+    Documents the two halves of the trade-off: the guard keeps a missing gevent
+    from breaking startup, and requirements-local.txt is what stops it from
+    being missing in the first place.
+    """
+    server_src = (BACKEND / "server.py").read_text()
+    assert "except Exception" in server_src and "novnc_proxy" in server_src, (
+        "server.py debe seguir importando novnc_proxy de forma tolerante"
+    )
+    proxy_src = (BACKEND / "routes" / "novnc_proxy.py").read_text()
+    assert "import gevent" in proxy_src, (
+        "novnc_proxy.py usa gevent; requirements-local.txt debe declararlo"
     )
 
 

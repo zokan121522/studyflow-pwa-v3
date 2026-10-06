@@ -20,16 +20,24 @@ from routes.auth import token_required
 import backup_db as bdb
 import database as db
 from engine import data_dir as _engine_data_dir
+from backup_files import uploads_root as _uploads_root
 
 bp = Blueprint("backup_user_restore", __name__)
 
-# DATA_DIR kept for the container (the launcher mounts it at /data), but the
-# local default has to come from engine.data_dir(), which resolves to
-# ~/Library/Application Support/studyflow on macOS. Hardcoding "/data" made
-# every personal restore fail on a Mac with
-# "[Errno 30] Read-only file system: '/data'", because the root of the
-# filesystem is read-only under SIP.
+# The base that `files/` inside the archive is relative to.
+#
+# It has to be the SAME value the export used, so it comes from
+# backup_files.uploads_root() rather than from a second guess here. Getting
+# this wrong is invisible and nasty: engine.data_dir() is one level ABOVE the
+# uploads root, so files landed in <data>/pdfs/ while the app kept serving
+# <data>/uploads/pdfs/. The database rows restored perfectly, so the restore
+# reported success and every course showed its titles — but PDFs, infographics
+# and audio were all missing, because they were one directory too high.
+#
+# DATA_DIR stays meaningful for the container (the launcher mounts it at /data),
+# so it is still consulted, but only as the input the export would have used.
 DATA_DIR = os.environ.get("DATA_DIR") or str(_engine_data_dir())
+_MEDIA_BASE = _uploads_root()
 # A hand-made zip must not be able to write outside the data directory.
 BACKUP_FORMAT = "studyflow-user-backup"
 
@@ -185,12 +193,13 @@ def _real_table(conn, table: str) -> str | None:
 def _write_missing_files(zf, names) -> int:
     """Copy files/ from the archive, skipping anything already on disk."""
     written = 0
+    base = os.path.abspath(_MEDIA_BASE)
     for member in names:
         if not member.startswith("files/"):
             continue
         rel = member[len("files/"):]
-        dest = os.path.normpath(os.path.join(DATA_DIR, rel))
-        if not dest.startswith(os.path.abspath(DATA_DIR)):
+        dest = os.path.normpath(os.path.join(base, rel))
+        if not dest.startswith(base):
             continue
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.exists(dest):      # never clobber what is already there
