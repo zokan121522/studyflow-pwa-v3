@@ -268,3 +268,51 @@ def test_spawn_is_valid_on_this_platform():
     kwargs = {"start_new_session": launch.os.name != "nt"}
     if launch.os.name == "nt":
         assert kwargs["start_new_session"] is False
+
+
+# ── launcher/StudyFlow.bat ───────────────────────────────────────────
+
+
+#: Import name -> distribution name, where they differ.
+_IMPORT_ALIASES = {
+    "flask_cors": "flask-cors",
+    "fitz": "pymupdf",
+    "jwt": "pyjwt",
+    "edge_tts": "edge-tts",
+    "yaml": "pyyaml",
+    "PIL": "pillow",
+    "dotenv": "python-dotenv",
+}
+
+
+def test_launcher_probe_only_uses_declared_dependencies():
+    """The launcher's readiness probe must not name undeclared packages.
+
+    The probe exists to notice a venv left empty by a failed install. The first
+    version of it probed ``psycopg2``, which ``requirements-local.txt`` points at
+    in a comment and deliberately leaves out -- ``database.py`` imports it inside
+    a try/except, because the local build runs on SQLite. Probing it meant the
+    probe could never pass, so the launcher would re-run setup forever instead of
+    ever starting: a perfectly broken install hiding behind a self-heal.
+
+    Worth locking down, because the failure mode is a silent infinite loop rather
+    than an error anyone would see.
+    """
+    bat = (REPO / "launcher" / "StudyFlow.bat").read_text()
+
+    probes = [
+        line for line in bat.splitlines()
+        if "-c \"import " in line and "%VENV_PY%" in line
+    ]
+    assert probes, "el launcher deberia sondear las dependencias antes de arrancar"
+
+    declared = _requirements()
+    for line in probes:
+        modules = line.split('-c "import ', 1)[1].split('"', 1)[0]
+        for module in (m.strip() for m in modules.split(",")):
+            distribution = _IMPORT_ALIASES.get(module, module)
+            assert distribution in declared, (
+                f"el launcher sondea '{module}' pero '{distribution}' no esta en "
+                "requirements-local.txt: la comprobacion nunca pasara y el launcher "
+                "reintentara el setup en bucle infinito"
+            )

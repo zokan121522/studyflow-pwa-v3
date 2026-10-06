@@ -72,9 +72,15 @@ REM conflicto, corte de red) deja el venv con SOLO pip dentro, y entonces este
 REM script lo daba por bueno para siempre: cada arranque posterior moria con
 REM "No module named 'flask'" y sin ningun camino de recuperacion. Hay que
 REM comprobar que las dependencias se IMPORTAN, que es lo unico que importa.
-REM gevent y tzdata se probean porque son las que han faltado en silencio:
-REM faltaban y la app arrancaba igual, en silencio.
-"%VENV_PY%" -c "import flask, psycopg2, gevent, tzdata" >nul 2>&1
+REM
+REM gevent y tzdata estan porque son las que han faltado EN SILENCIO: sin ellas
+REM la app arranca igual y el fallo aparece dias despues, en otra pantalla.
+REM
+REM Solo paquetes que requirements-local.txt declara de verdad. Probar algo que
+REM no este ahi (psycopg2 lo es, pero va en try/except a proposito) haria que
+REM esta comprobacion nunca pase y el launcher reintentara el setup para
+REM siempre, en un bucle infinito.
+"%VENV_PY%" -c "import flask, flask_cors, fitz, icalendar, jwt, requests, edge_tts, gevent, tzdata" >nul 2>&1
 if errorlevel 1 goto setup
 if "%~1"=="" goto run
 if "%~1"=="stop"   goto run
