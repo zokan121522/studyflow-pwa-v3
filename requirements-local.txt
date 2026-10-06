@@ -56,6 +56,17 @@ pillow==12.3.0
 # Síntesis de voz
 edge-tts==7.2.8
 
+# ── Zona horaria del calendario importado ────────────────────────────────
+# routes/calendar.py resuelve Europe/Madrid con zoneinfo. Windows no trae base
+# de datos de zonas horarias — no existe /usr/share/zoneinfo — así que sin este
+# paquete ZoneInfoNotFoundError y el import de calendario responde 500 con
+# "server timezone data missing". Verificado en el equipo del usuario.
+#
+# En el Mac no hace falta porque el sistema ya lo trae; allí lo que se estaba
+# usando era el tzdata de Anaconda, no una dependencia del proyecto. Por eso el
+# fallo solo aparece en Windows.
+tzdata==2025.2
+
 # ── Login embebido de NotebookLM (noVNC) ────────────────────────────────────
 # routes/novnc_proxy.py importa gevent A NIVEL DE MÓDULO. server.py lo envuelve
 # en try/except, así que la app arranca igual sin esto — y por eso es una

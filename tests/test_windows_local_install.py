@@ -60,6 +60,25 @@ def test_local_requirements_exclude_production_only_packages(package):
     )
 
 
+def test_local_requirements_include_tzdata():
+    """The imported-calendar feature cannot work on Windows without it.
+
+    ``routes/calendar.py`` resolves Europe/Madrid through ``zoneinfo``. Windows
+    ships no time zone database, so ``ZoneInfoNotFoundError`` makes the import
+    endpoint answer 500. Confirmed on the user's machine: ``ZONEINFO_FAIL:
+    ZoneInfoNotFoundError 'No time zone found with key Europe/Madrid'``.
+
+    macOS hides this, because the system provides the database -- and on the
+    dev machine it was Anaconda's ``tzdata`` being picked up, never a declared
+    dependency. That is why the feature looked fine locally and failed on the
+    portable build.
+    """
+    assert "tzdata" in _requirements(), (
+        "falta tzdata en requirements-local.txt: sin base de datos de zonas "
+        "horarias el import de calendario devuelve 500 en Windows"
+    )
+
+
 @pytest.mark.parametrize("package", ["gevent", "gevent-websocket"])
 def test_local_requirements_include_the_novnc_dependencies(package):
     """server.py guards the noVNC import, so nothing errors when these are absent.
