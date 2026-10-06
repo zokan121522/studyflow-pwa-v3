@@ -18,6 +18,28 @@ REM ─────────────────────────�
 setlocal enabledelayedexpansion
 cd /d "%~dp0.."
 
+REM ── ¿estamos en la raíz del proyecto? ───────────────────────────────────────
+REM Windows deja ejecutar un .bat directamente DENTRO de un ZIP: lo extrae a
+REM una carpeta temporal y lo lanza. Ahí "%~dp0.." no existe, el cd falla en
+REM silencio, y el pip acaba buscando requirements-local.txt en el sitio
+REM equivocado con un error que no dice nada útil.
+if not exist "requirements-local.txt" (
+    echo.
+    echo   [X] No encuentro requirements-local.txt.
+    echo.
+    echo       Estas ejecutando el lanzador desde dentro del ZIP, o el ZIP esta
+    echo       incompleto.
+    echo.
+    echo       Haz esto:
+    echo         1. Cierra esta ventana
+    echo         2. Abre el ZIP y pulsa "Extraer todo" / "Extract All"
+    echo         3. Entra en la carpeta StudyFlow-windows
+    echo         4. Doble clic en launcher\StudyFlow.bat
+    echo.
+    pause
+    exit /b 1
+)
+
 set "VENV=.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 
