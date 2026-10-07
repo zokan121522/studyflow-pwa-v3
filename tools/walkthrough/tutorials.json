@@ -1,0 +1,28 @@
+{
+  "voice": "es-ES-AlvaroNeural",
+  "rate": "-4%",
+  "viewport": [1280, 720],
+  "conventions": {
+    "tono": "coloquial, tuteo, sin decir 'Señor'",
+    "accion": "cada acción anclada a la palabra exacta del 'say'",
+    "cleanup": "si el guion crea datos, incluir bloque cleanup para borrarlos"
+  },
+  "tutorials": [
+    { "n": 1,  "slug": "01-intro",              "title": "StudyFlow PWA: qué es y para qué sirve", "anchor": "intro",        "feature": "presentación (hero de la landing + dashboard)" },
+    { "n": 2,  "slug": "02-instalar",           "title": "Cómo instalar la PWA",                  "anchor": "instalar",     "feature": "guía de instalación (Android/iOS/desktop)" },
+    { "n": 3,  "slug": "03-login",              "title": "Primer acceso",                         "anchor": "login",        "feature": "auth/login" },
+    { "n": 4,  "slug": "04-dashboard",          "title": "Vista general",                         "anchor": "dashboard",    "feature": "dashboard de inicio" },
+    { "n": 5,  "slug": "05-agenda",             "title": "Agenda: sesiones y citas",              "anchor": "agenda",       "feature": "agenda (HECHO: storyboards/agenda.json)" },
+    { "n": 6,  "slug": "06-habitos",            "title": "Hábitos: rutina diaria",                "anchor": "habitos",      "feature": "hábitos" },
+    { "n": 7,  "slug": "07-cursos",             "title": "Cursos y bloques de estudio",           "anchor": "cursos",       "feature": "studyflow/cursos" },
+    { "n": 8,  "slug": "08-pdfs",               "title": "Trabajar con PDFs",                     "anchor": "pdfs",         "feature": "visor PDF" },
+    { "n": 9,  "slug": "09-quiz",               "title": "Quiz y autoevaluación",                 "anchor": "quiz",         "feature": "quiz" },
+    { "n": 10, "slug": "10-cards",              "title": "Flashcards para repasar",               "anchor": "cards",        "feature": "cards" },
+    { "n": 11, "slug": "11-todos",              "title": "Tareas y pendientes",                   "anchor": "todos",        "feature": "todos" },
+    { "n": 12, "slug": "12-audio",              "title": "Audio y texto a voz",                   "anchor": "audio",        "feature": "audio/TTS" },
+    { "n": 13, "slug": "13-ia",                 "title": "IA en StudyFlow",                       "anchor": "ia",           "feature": "asistente IA/OpenZen" },
+    { "n": 14, "slug": "14-config",             "title": "Configuración y ajustes",               "anchor": "config",       "feature": "ajustes/tema" },
+    { "n": 15, "slug": "15-actualizaciones",    "title": "Actualizaciones de la app",             "anchor": "actualizaciones", "feature": "banner nueva versión" },
+    { "n": 16, "slug": "16-recorrido",          "title": "StudyFlow en 2 minutos",                "anchor": "recorrido",    "feature": "recorrido global" }
+  ]
+}

@@ -46,6 +46,7 @@ from ai.notebooklm.tasks_flashcards import create_notebooklm_flashcards_task
 from ai.notebooklm.md_templates_catalog import list_md_templates
 from ai.generation.knowledge_pipeline import create_knowledge_pipeline_task
 from ai.generation.grammar import create_grammar_task
+from ai.generation.vocabulary import create_vocabulary_task
 from ai.generation.openzen_source import (
     create_openzen_md_task, retry_openzen_chunk,
 )
@@ -375,7 +376,7 @@ def openzen_source_to_markdown(current_user_id: int):
 @bp.route("/ai/openzen/tasks/<task_id>/chunk/<int:chunk_num>/retry",
           methods=["POST"])
 @token_required
-def openzen_retry_chunk(task_id: str, chunk_num: int, current_user_id: int):
+def openzen_retry_chunk(current_user_id: int, task_id: str, chunk_num: int):
     """POST /api/ai/openzen/tasks/<id>/chunk/<n>/retry — regenerate ONE section.
 
     This is the "reiniciar el chunk" button in the warning that appears when a
@@ -472,10 +473,10 @@ def knowledge_pipeline_endpoint(current_user_id: int):
 def generate_grammar_exercises(current_user_id: int):
     """POST /api/ai/generate-grammar-exercises — english addon.
 
-    Body: {source_id, source_type, topic_id, per_type}
+    Body: {source_id, source_type, topic_id, per_type, provider}
     source_type: 'markdown' | 'content' (PDF out of scope in v1).
     per_type: exercises per type (1, 5, 10, 20, 40; default 10).
-    Always uses the v3 NotebookLM provider (the only one registered).
+    provider: 'notebooklm' (default) | 'opencode-acp' (OpenZen sidecar).
 
     Returns {"task_id": str} — poll GET /api/ai/tasks/<id> for status.
     """
@@ -487,6 +488,38 @@ def generate_grammar_exercises(current_user_id: int):
             source_type=body.get("source_type"),
             user_id=current_user_id,
             per_type=body.get("per_type", 10),
+            # Phase 66 made the pipeline provider-parametric but this route
+            # never forwarded the field, so the OpenZen button had no way to
+            # reach its own provider and everything fell back to NotebookLM.
+            provider=body.get("provider") or "notebooklm",
+        )
+        return jsonify(result), 201
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+
+
+@bp.route("/ai/generate-vocabulary", methods=["POST"])
+@token_required
+def generate_vocabulary(current_user_id: int):
+    """POST /api/ai/generate-vocabulary — Vocabulary Suite addon.
+
+    Body: {words_text (str, required), topic_id, provider?, course_id?, size?}
+    provider: 'notebooklm' | 'opencode-acp' (OpenZen sidecar, default when absent).
+    size: int|'all' — default 10 (vocabulary.js toolbar selector default).
+    Empty words_text -> 400.
+    Returns {"task_id": str} — poll GET /api/ai/tasks/<id> for status.
+    """
+    body = request.json or {}
+    try:
+        result = create_vocabulary_task(
+            words_text=body.get("words_text", ""),
+            topic_id=body.get("topic_id"),
+            user_id=current_user_id,
+            course_id=body.get("course_id"),
+            provider=body.get("provider") or "opencode-acp",
+            size=body.get("size"),
         )
         return jsonify(result), 201
     except ValueError as e:

@@ -1,0 +1,1333 @@
+{
+ "tabs": [
+  {
+   "tab": "agenda",
+   "cls": "tab-btn active",
+   "text": "📅 Agenda planificar + hábitos"
+  },
+  {
+   "tab": "studyflow",
+   "cls": "tab-btn",
+   "text": "📖 Studyflow cursos + tests"
+  },
+  {
+   "tab": "view",
+   "cls": "so-ntab active",
+   "text": ""
+  },
+  {
+   "tab": "edit",
+   "cls": "so-ntab",
+   "text": ""
+  }
+ ],
+ "sections": {
+  "agenda": {
+   "id": "view-agenda",
+   "buttons": [
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "vt-btn active",
+     "text": "📋 Lista",
+     "ph": "",
+     "action": "",
+     "view": "list"
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "vt-btn ",
+     "text": "📅 Día",
+     "ph": "",
+     "action": "",
+     "view": "timeline"
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "vt-btn ",
+     "text": "🗓️ Semana",
+     "ph": "",
+     "action": "",
+     "view": "week"
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "vt-btn ",
+     "text": "📅 Mes",
+     "ph": "",
+     "action": "",
+     "view": "month"
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ht-btn",
+     "text": "➕ Añadir sesión",
+     "ph": "",
+     "action": "add-session",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ht-btn",
+     "text": "📅 Calendarios",
+     "ph": "",
+     "action": "open-calendars",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "cal-import-status",
+     "text": "✅ Todo correcto · 1 h",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-expand",
+     "text": "▶",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-play",
+     "text": "▶️",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-pause",
+     "text": "⏸",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-stop",
+     "text": "⏹",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-del",
+     "text": "🗑️",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-move",
+     "text": "📅",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-copy",
+     "text": "📋",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-expand",
+     "text": "▶",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-play",
+     "text": "▶️",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-pause",
+     "text": "⏸",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-stop",
+     "text": "⏹",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-del",
+     "text": "🗑️",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-move",
+     "text": "📅",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-copy",
+     "text": "📋",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-expand",
+     "text": "▶",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-play",
+     "text": "▶️",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "btn-pause",
+     "text": "⏸",
+     "ph": "",
+     "action": "",
+     "view": ""
+    }
+   ],
+   "inputs": [
+    {
+     "sel": "input,textarea,select",
+     "tag": "textarea",
+     "id": "quick-note",
+     "cls": "",
+     "text": "",
+     "ph": "Escribe algo rápido...",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "hab-day-label",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "hab-num",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "input,textarea,select",
+     "tag": "input",
+     "id": "",
+     "cls": "hab-day-label",
+     "text": "",
+     "ph": "",
+     "action": "",
+     "view": ""
+    }
+   ],
+   "headings": [
+    "Sábado 3 de octubre",
+    "🏛️ Epicteto",
+    "🏛️ Séneca",
+    "🌅 El club de las 5 de la mañana",
+    "🎯 Los 7 hábitos de la gente altamente efectiva",
+    "⚔️ La meditación del guerrero"
+   ],
+   "empties": [
+    "",
+    "",
+    ""
+   ]
+  },
+  "studyflow": {
+   "id": "view-studyflow",
+   "buttons": [
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav on",
+     "text": "⭐",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "ci-fav",
+     "text": "☆",
+     "ph": "",
+     "action": "",
+     "view": ""
+    },
+    {
+     "sel": "button",
+     "tag": "button",
+     "id": "",
+     "cls": "topic-menu-toggle",
+     "text": "⋮",
+     "ph": "",
+     "action": "",
+     "view": ""
+    }
+   ],
+   "inputs": [],
+   "headings": [],
+   "empties": [
+    "📖\n\nSelecciona un curso del panel izquierdo o crea uno nuevo"
+   ]
+  },
+  "view": {
+   "error": "Page.click: Timeout 4000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-tab=\\\"view\\\"]\")\n    - locator resolved to "
+  },
+  "edit": {
+   "error": "Page.click: Timeout 4000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-tab=\\\"edit\\\"]\")\n    - locator resolved to "
+  }
+ },
+ "dashboard": {
+  "buttons": [
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "hamburger-btn",
+    "cls": "hamburger",
+    "text": "☰",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "nav-toggle-btn",
+    "cls": "nav-toggle",
+    "text": "⇤",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "hp-title",
+    "cls": "hp-title",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "hp-play",
+    "cls": "hp-btn",
+    "text": "⏸",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "hp-stop",
+    "cls": "hp-btn hp-stop",
+    "text": "⏹",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "dropdown-dashboard",
+    "cls": "dropdown-item",
+    "text": "🏠 Dashboard",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "btn-settings",
+    "cls": "dropdown-item",
+    "text": "⚙️ Ajustes",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "btn-logout",
+    "cls": "dropdown-item dropdown-danger",
+    "text": "🚪 Cerrar sesión",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "btn-theme",
+    "cls": "hdr-btn",
+    "text": "☀️",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "btn-backup",
+    "cls": "hdr-btn",
+    "text": "📦 Backup",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "btn-restore",
+    "cls": "hdr-btn",
+    "text": "⬆️ Restore",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "tab-btn active",
+    "text": "📅 Agenda planificar + hábitos",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": "agenda"
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "tab-btn",
+    "text": "📖 Studyflow cursos + tests",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": "studyflow"
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "so-close-btn",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "so-cat-add",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "so-ntab active",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": "view"
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "so-ntab",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": "edit"
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "B",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "I",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "H1",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "H2",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "H3",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "≡",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "button",
+    "tag": "button",
+    "id": "",
+    "cls": "md-tb-btn",
+    "text": "#.",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   }
+  ],
+  "inputs": [
+   {
+    "sel": "input,textarea,select",
+    "tag": "textarea",
+    "id": "quick-note",
+    "cls": "",
+    "text": "",
+    "ph": "Escribe algo rápido...",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-titulo",
+    "cls": "",
+    "text": "",
+    "ph": "Ej: Tema 5 - Base de datos",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "select",
+    "id": "so-categoria",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-start",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-end",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-te-h",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-te-m",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-te-s",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-tp-h",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-tp-m",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "input",
+    "id": "so-tp-s",
+    "cls": "",
+    "text": "",
+    "ph": "",
+    "action": "",
+    "view": "",
+    "tab": ""
+   },
+   {
+    "sel": "input,textarea,select",
+    "tag": "textarea",
+    "id": "so-notes",
+    "cls": "",
+    "text": "",
+    "ph": "Descripción o notas...",
+    "action": "",
+    "view": "",
+    "tab": ""
+   }
+  ],
+  "cards": [
+   {
+    "tab": "agenda",
+    "href": null,
+    "text": "📅 Agenda Planificar sesiones, hábitos, calendario semanal"
+   },
+   {
+    "tab": "studyflow",
+    "href": null,
+    "text": "📖 Studyflow Cursos, tests, PDFs, contenido de estudio"
+   },
+   {
+    "tab": null,
+    "href": "/landing/",
+    "text": "📘 Guía y tutoriales Cómo instalar la app (PWA) y videotutor"
+   }
+  ]
+ }
+}

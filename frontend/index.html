@@ -150,6 +150,9 @@
         <!-- Backup / Restore — local (ZIP on disk, issue #7) -->
         <button id="btn-backup" class="hdr-btn" title="Backup — guardar datos locales (ZIP)">📦 Backup</button>
         <button id="btn-restore" class="hdr-btn" title="Restore — restaurar desde un ZIP local">⬆️ Restore</button>
+        <!-- Restore picker. accept=".zip" (not the hub's stale ".tar.gz"):
+             POST /api/backup/mine/restore takes a ZIP. -->
+        <input type="file" id="restore-input" accept=".zip" style="display:none">
       </div>
     </header>
 
@@ -175,12 +178,9 @@
           </div>
         </div>
         <div class="dashboard-badges">
+          <span class="badge badge-google" id="badge-google" hidden>🔑 Google</span>
           <span class="badge badge-base">🏛️ Cuenta BASE</span>
         </div>
-        <!-- Issue #12: favourites row on the dashboard (v2 fase 72 F2).
-             Populated by courses-dashboard.js; hidden when empty so the
-             home does not grow a dead heading for users with no stars. -->
-        <div id="dashboard-favorites" class="dashboard-favorites hidden"></div>
         <div class="dashboard-nav-grid">
           <div class="dashboard-nav-card" data-tab="agenda" data-accent="primary">
             <div class="dnc-icon">📅</div>
@@ -195,6 +195,36 @@
               <div class="dnc-label">Studyflow</div>
               <div class="dnc-desc">Cursos, tests, PDFs, contenido de estudio</div>
             </div>
+          </div>
+          <a class="dashboard-nav-card" id="dashboard-nav-guide" href="/landing/">
+            <div class="dnc-icon">📘</div>
+            <div class="dnc-text">
+              <div class="dnc-label">Guía y tutoriales</div>
+              <div class="dnc-desc">Cómo instalar la app (PWA) y videotutoriales por sección</div>
+            </div>
+          </a>
+        </div>
+        <!-- Issue #12: favourites row on the dashboard (v2 fase 72 F2).
+             Populated by courses-dashboard.js; hidden when empty so the
+             home does not grow a dead heading for users with no stars. -->
+        <div id="dashboard-favorites" class="dashboard-favorites hidden"></div>
+
+        <!-- Widgets row (v2 parity): habit heatmap (last 21 days) +
+             read-only agenda side panel. Rendered by App.Dashboard on
+             showHome(); the agenda panel reuses App.Agenda.buildAgendaSidePanel
+             with readOnly + compact opts. -->
+        <div class="dashboard-widgets-row">
+          <div class="dashboard-habit-grid" id="dashboard-habit-grid">
+            <div class="dhg-header">
+              <span>📊 Hábitos — últimos 21 días</span>
+              <a href="#" class="dhg-link" id="dhg-view-all">Ir a Hábitos →</a>
+            </div>
+            <div class="dhg-body" id="dhg-body">
+              <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">Cargando hábitos…</div>
+            </div>
+          </div>
+          <div class="dashboard-agenda-panel" id="dashboard-agenda-panel">
+            <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">Cargando agenda…</div>
           </div>
         </div>
       </div>
@@ -424,10 +454,72 @@
           </div>
           <div id="cal-import-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></div>
         </div>
-        <div id="cal-status" style="margin-top:8px;font-size:10px;color:var(--text-muted);"></div>
+<div id="cal-status" style="margin-top:8px;font-size:10px;color:var(--text-muted);"></div>
+        </div>
       </div>
     </div>
   </div>
+
+<!-- ============================== BACKUP SELECTOR ============================== -->
+<!-- Modal de selección para el backup selectivo. La estimación en vivo
+     viene de GET /api/backup/mine/options; el tri-state del árbol replica
+     la closure del backend (padres viajan con hijos). -->
+<div class="overlay hidden" id="backup-selector-overlay" role="dialog" aria-modal="true" aria-label="Selector de backup">
+  <div class="omodal" style="max-width:760px;max-height:86vh;display:flex;flex-direction:column;">
+    <div class="omodal-head">
+      <h3>📦 Backup personal — qué incluyo</h3>
+      <button id="bksel-close" class="bk-log-x" title="Cerrar">×</button>
+    </div>
+    <div class="omodal-body" style="overflow-y:auto;flex:1;padding:12px 16px;">
+      <div id="bksel-error" class="bk-banner err hidden"></div>
+      <div id="bksel-loading" class="bk-banner">Cargando opciones…</div>
+
+      <div id="bksel-content" class="hidden">
+
+        <!-- Estimación en vivo -->
+        <div class="bk-estimate" id="bksel-estimate"></div>
+
+        <div class="bk-sel-row">
+          <button id="bksel-all" class="bk-btn" type="button">☑️ Todo</button>
+          <button id="bksel-db" class="bk-btn" type="button">🗄️ Solo base de datos</button>
+          <button id="bksel-none" class="bk-btn" type="button">☐ Nada</button>
+        </div>
+
+        <!-- Árbol de asignaturas -->
+        <div class="bk-section-title">📚 Asignaturas, temas y bloques</div>
+        <div id="bksel-tree" class="bk-tree"></div>
+
+        <!-- Agenda -->
+        <div class="bk-section-title">📅 Agenda <span class="bk-hint">semanas → días → sesiones</span></div>
+        <div id="bksel-agenda" class="bk-tree"></div>
+
+        <!-- Otros sistemas -->
+        <div class="bk-section-title">🧩 Otros sistemas</div>
+        <div id="bksel-scopes" class="bk-scopes"></div>
+
+        <!-- Media -->
+        <div class="bk-section-title">🎵 Media generada <span class="bk-hint">el grueso del peso</span></div>
+        <div id="bksel-media" class="bk-scopes"></div>
+      </div>
+    </div>
+    <div class="bksel-foot">
+      <div class="bk-meta" id="bksel-summary"></div>
+      <button id="bksel-go" class="bk-btn primary" type="button">⬇️ Generar backup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== BACKUP LOG ============================== -->
+<!-- Visible proof that a long backup is alive. The server sends no bytes for
+     the first ~80s while it builds the archive, so without this the button
+     just sits on "Generando…" and looks frozen. -->
+<div id="backup-log" class="bk-log hidden" role="log" aria-live="polite" aria-label="Registro del backup">
+  <div class="bk-log-head">
+    <span>📦 Registro de backup</span>
+    <button id="backup-log-close" class="bk-log-x" title="Cerrar">×</button>
+  </div>
+  <div id="backup-log-body" class="bk-log-body"></div>
+</div>
 
   <!-- Scripts -->
   <script src="/shared/ui-common.js"></script>
@@ -461,6 +553,9 @@
   <script src="/features/quiz/quiz-center.js"></script>
   <!-- Issue #10: quiz por bloque (exercise) — embeds the block's test
        after the panel paints (patrón PdfViewer). -->
+  <!-- R5: the JSON question editor (App.QuizJsonEditor). Loads before
+       quiz-embed.js, which hands it the "Gestionar preguntas" disclosure. -->
+  <script src="/features/studyflow/quiz-json-editor.js"></script>
   <script src="/features/studyflow/quiz-embed.js"></script>
   <!-- Issue #12: courses-dnd.js must load BEFORE courses-sidebar.js, which
        calls CoursesDND.attach() when it wires the sidebar events. -->
@@ -481,6 +576,9 @@
        popover the moment a pdf-ref block is created. -->
   <script src="/features/studyflow/pdf-import-stream.js"></script>
   <script src="/features/studyflow/pdf-import.js"></script>
+  <!-- R4: image upload (App.ImageUpload). Loads before courses-blocks.js so
+       the 🖼 chip handler can reach pickAndUpload when a block is created. -->
+  <script src="/features/studyflow/image-upload.js"></script>
   <script src="/features/studyflow/courses-blocks.js"></script>
   <script src="/features/studyflow/courses.js"></script>
   <!-- S7b-B — floating study menu (⋯ FAB) + SCORM/Moodle credentials
@@ -512,12 +610,14 @@
        ai.js because its click wiring opens these overlays. -->
   <script src="/features/studyflow/ai-config-modal.js"></script>
   <script src="/features/studyflow/ai-modals.js"></script>
-  <!-- Phase 38/61 addons — knowledge-pipeline.js (Gen. Contenido modal +
-       polling, NotebookLM provider) and english-grammar.js (English
-       Exercises config overlay + interactive block insert). MUST load
+  <!-- Phase 38/61/70 addons — knowledge-pipeline.js (Gen. Contenido modal +
+       polling, NotebookLM provider), english-grammar.js (English
+       Exercises config overlay + interactive block insert) and
+       vocabulary.js (Vocabulary Suite config overlay + insert). MUST load
        before ai.js because its click wiring opens these addons. -->
   <script src="/features/studyflow/knowledge-pipeline.js"></script>
   <script src="/features/studyflow/english-grammar.js"></script>
+  <script src="/features/studyflow/vocabulary.js"></script>
   <script src="/features/studyflow/ai.js"></script>
   <!-- Phase 8 — YouTubeZen: PiP markdown embed card + floating queue panel.
        youtube-queue.js reads window.App.AI._onContentSuccess, so it MUST come
@@ -555,6 +655,10 @@
   <script src="/features/agenda/agenda.js"></script>
   <script src="/features/agenda/agenda-handlers.js"></script>
   <script src="/app.js"></script>
+  <!-- Backup selector modal (issue #23, v2 parity). Owns window.BackupSelector
+       and calls window.downloadBackup(body), which app.js above defines —
+       same ordering as the hub (app.js then backup-selector.js). -->
+  <script src="/backup-selector.js?v=1"></script>
   <script src="/shared/backup-restore.js"></script>
   <script src="/shared/v2-restore-modal.js"></script>
   <script src="/shared/server-status.js"></script>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vocabulary Suite — Phase 70 (self-contained)</title>
+<style>
+/* ── Phase 70 — Vocabulary Suite (prototype + relay TTS) ──
+   4 sections: ① Study table · ② Flashcards · ③ Match · ④ Report
+   Single injection seam (var VOCAB_DATA line is replaced by backend).
+   No fetch / no app globals beyond window.parent postMessage. */
+*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f5f5f5;margin:0;padding:16px;color:#111}
+.app{max-width:980px;margin:0 auto}
+h1{text-align:center;font-size:1.3rem;margin:0 0 2px}.sub{text-align:center;color:#6b7280;font-size:.8rem;margin-bottom:14px}
+.sec{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:16px;overflow:hidden}
+.sec-h{padding:11px 18px;font-weight:700;font-size:.92rem;color:#374151;border-bottom:1px solid #eee;display:flex;align-items:center;gap:8px}
+.sec-h .chip{margin-left:auto;font-size:.65rem;background:#eef2ff;color:#4338ca;padding:3px 9px;border-radius:999px;font-weight:600}
+.ctrls{display:flex;gap:7px;padding:10px 18px;flex-wrap:wrap;align-items:center}
+.btn{border:none;padding:7px 13px;border-radius:9px;font-size:.78rem;cursor:pointer;font-weight:600;background:#e5e7eb;color:#374151}
+.btn.pri{background:#b91c1c;color:#fff}.btn.dark{background:#1a1a2e;color:#fff}.btn.on{background:#059669;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-not-allowed}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+td{padding:8px 10px;border-bottom:1px solid #f1f1f1;vertical-align:middle;line-height:1.4}
+.phrase{color:#2e7d32;font-weight:600}.meaning{color:#1e88e5}.translate{color:#d32f2f}
+.word{color:#111;font-weight:700}
+.row-num{color:#999;font-size:11px;width:22px;text-align:center}
+.pc{display:flex;gap:6px}.pg{display:flex;flex-direction:column;align-items:center;gap:2px}
+.pb{width:27px;height:27px;border-radius:50%;border:none;cursor:pointer;font-size:11px}
+.pb.g{background:#e8f5e9;color:#2e7d32}.pb.b{background:#e3f2fd;color:#1e88e5}
+.pb.speaking{animation:pulse .8s infinite}.pb.loading{opacity:.55;animation:blink .9s infinite}
+@keyframes pulse{50%{opacity:.5}}@keyframes blink{50%{opacity:.2}}
+.pl{font-size:7.5px;color:#888;text-transform:uppercase}
+#warm{font-size:.68rem;color:#888;margin-left:auto}
+.fc-row{display:flex;gap:12px;padding:14px 18px;flex-wrap:wrap}
+.fc{width:240px;min-height:130px;border-radius:12px;padding:26px 14px 36px;font-size:.8rem;line-height:1.45;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;text-align:center;box-shadow:0 3px 8px rgba(0,0,0,.12);user-select:none;transition:transform .15s}
+.fc:active{transform:scale(.97)}
+.fc.front{background:linear-gradient(135deg,#1a1a2e,#33335c);color:#fff}
+.fc.back{background:linear-gradient(135deg,#e8f5e9,#fff);color:#1b5e20;border:1px solid #c8e6c9}
+.fc .mini{position:absolute;bottom:9px;right:10px;width:25px;height:25px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+.fc.back .mini{background:#c8e6c9;color:#1b5e20}
+.fc .exp{position:absolute;top:8px;right:10px;font-size:.8rem;opacity:.7;background:none;border:none;cursor:pointer;color:inherit}
+.fc .tag{position:absolute;top:10px;left:12px;font-size:.55rem;letter-spacing:.5px;text-transform:uppercase;opacity:.55}
+.stage{position:fixed;inset:0;height:100dvh;background:rgba(10,10,25,.94);z-index:2000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px}
+.stage.show{display:flex}
+.stage .card{width:min(92vw,520px);min-height:230px;max-height:70dvh;overflow:auto;border-radius:18px;padding:26px;font-size:1.05rem;line-height:1.6;color:#fff;background:linear-gradient(135deg,#1a1a2e,#33335c);position:relative;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;box-shadow:0 16px 60px rgba(0,0,0,.5)}
+.stage .card.b{background:linear-gradient(135deg,#14532d,#166534);color:#e7f6ea}
+.stage .nav{display:flex;gap:10px}.stage .nav .btn{background:#374151;color:#fff}
+.stage .x{position:absolute;top:18px;right:22px;font-size:1.2rem;color:#9ca3af;background:none;border:none;cursor:pointer}
+.stage .cnt{color:#9ca3af;font-size:.75rem}
+.cols{display:flex;gap:12px;padding:12px 18px;flex-wrap:wrap}
+.col{flex:1;min-width:220px;display:flex;flex-direction:column;gap:7px}
+.blk{padding:9px 11px;border-radius:9px;border:2px solid #e5e7eb;background:#fafafa;font-size:.76rem;cursor:pointer;line-height:1.35;transition:all .12s}
+.blk.selL,.blk.selR{border-color:#b91c1c;background:#fef2f2;transform:translateX(3px)}
+.blk.done{border-color:#059669;background:#ecfdf5;color:#065f46;cursor:default}
+.blk.bad{border-color:#dc2626;background:#fef2f2;color:#991b1b}
+.blk .pairnum{float:right;font-size:.6rem;color:#9ca3af;font-weight:700}
+.strip{display:flex;align-items:center;gap:11px;background:#111827;color:#fff;padding:9px 18px;font-size:.78rem}
+.strip .big{font-weight:800}.strip .bar{flex:1;height:7px;background:#374151;border-radius:5px;overflow:hidden}.strip .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#059669,#34d399);transition:width .5s}
+.rpt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:14px}
+.rpt-overlay.show{display:flex}
+.rpt-panel{background:#fff;border-radius:14px;padding:20px;max-width:640px;width:100%;max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.rpt-panel h2{margin:0;font-size:1rem;color:#374151}
+.rpt-md{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;font-size:.78rem;line-height:1.55;color:#111;max-height:52vh;overflow:auto}
+.rpt-md h1{font-size:1rem;margin:.4em 0 .3em;color:#111}
+.rpt-md h2{font-size:.9rem;margin:.6em 0 .3em;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:4px}
+.rpt-md p{margin:.3em 0}
+.rpt-md ul{margin:.2em 0 .5em;padding-left:1.3em}
+.rpt-md li{margin:.15em 0}
+.rpt-md table{border-collapse:collapse;width:100%;margin:.4em 0;font-size:.74rem}
+.rpt-md th,.rpt-md td{border:1px solid #d1d5db;padding:5px 8px;text-align:left}
+.rpt-md th{background:#eef2ff;color:#1e1b4b;font-weight:600}
+.rpt-md strong{color:#0f172a}
+.rpt-md em{color:#6b7280}
+.rpt-actions{display:flex;gap:8px}
+#clock{margin-left:auto;font-variant-numeric:tabular-nums;font-size:.75rem;color:#374151;cursor:pointer;padding:4px 9px;border:1px solid #d1d5db;border-radius:7px;background:#fff;user-select:none;display:inline-flex;align-items:center;gap:5px}
+#clock:hover{border-color:#9ca3af}
+#clock.running{background:#ecfdf5;border-color:#059669;color:#065f46}
+#clockIc{font-weight:700;color:#059669}
+#clock.running #clockIc{color:#b91c1c}
+.note{text-align:center;font-size:.66rem;color:#9ca3af;margin:4px 0 14px}
+#ttsWarmup{display:none;align-items:center;gap:8px;padding:6px 14px;font-size:.7rem;color:#6b7280;background:#f3f4f6;border-top:1px solid #e5e7eb}
+#ttsWarmup.show{display:flex}
+.spinner{width:12px;height:12px;border:2px solid #d1d5db;border-top-color:#374151;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body><div class="app">
+<h1 id="vsTitle">📚 Vocabulary Suite</h1>
+<div class="sub" id="vsSub">word · phrase (example) · meaning · translate · audio dual-engine (relay + fallback) · flashcards · match · report</div>
+
+<div class="sec"><div class="sec-h">① Studiar — tabla<span class="chip">TTS dual</span></div>
+<div class="ctrls"><button class="btn dark" id="pap">▶ Play All Phrases</button><button class="btn dark" id="pam">▶ Play All Meanings</button><button class="btn" id="stp">⏹ Stop</button><span id="warm">🎙️ toca cualquier ▶ para escuchar</span></div>
+<table><thead><tr><th>#</th><th>Word</th><th>Phrase</th><th>Meaning</th><th>Translate</th><th>Player</th></tr></thead><tbody id="tb"></tbody></table>
+<div id="ttsWarmup"><div class="spinner"></div><span>preparando audios de la ronda…</span></div></div>
+
+<div class="sec"><div class="sec-h">② Flashcards<span class="chip">click = flip · ⛶ = fullscreen</span></div>
+<div class="fc-row" id="fcs"></div>
+<div class="ctrls"><span style="font-size:.72rem;color:#666">Modo baraja: ← → mueven en pantalla completa · espacio voltea</span><button class="btn" id="reshuf">🔀 Shuffle</button></div></div>
+
+<div class="sec"><div class="sec-h">③ Practicar — Match<span class="chip">click left block → right block → fixed pair</span></div>
+<div class="ctrls"><span style="font-size:.76rem;color:#555">Por ronda:</span>
+<button class="btn sz" data-s="4">4</button><button class="btn sz on" data-s="6">6</button><button class="btn sz" data-s="10">10</button><button class="btn sz" data-s="all">All</button>
+<span id="clock" title="Click para iniciar/pausar el cronómetro"><span id="clockIc">▶</span><span id="clockT">⏱️ 0:00</span></span></div>
+<div class="cols"><div class="col" id="colL"></div><div class="col" id="colR"></div></div>
+<div class="strip" id="strip" style="display:none"><span class="big" id="sScore">–</span><span class="bar"><i id="sBar"></i></span><span id="sMsg"></span><button class="btn" id="rptBtn">📋 Report</button><button class="btn" id="newR" style="margin-left:auto">🎲 New round</button></div>
+<div class="ctrls"><button class="btn pri" id="chk">✅ Check Answers</button><button class="btn" id="retry" style="display:none">🔄 Retry Missed</button></div></div>
+<div class="note">Clicks: pick word (red) → meaning (red) → pair fixed (green, numbered). Click a fixed pair to undo. Click ⏱️ to start/pause the timer.</div>
+</div>
+
+<div class="stage" id="stage"><button class="x" id="stgX">✕</button><div class="card" id="stgC"></div><div class="nav"><button class="btn" id="stgP">← Previous</button><button class="btn" id="stgT">🔄 Flip</button><button class="btn" id="stgN">Next →</button></div><div class="cnt" id="stgN"></div></div>
+
+<div class="rpt-overlay" id="ov"><div class="rpt-panel"><h2 id="rptTitle">📋 Vocabulary Report</h2><div class="rpt-md" id="rptB"></div>
+<div class="rpt-actions"><button class="btn pri" id="cpy">📋 Copy</button><button class="btn" id="dwn">⬇️ Download .md</button><button class="btn" style="margin-left:auto" id="cls">✕ Close</button></div></div></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   VOCAB_TITLE — thematic title seam (replaced by backend with a short
+   title connecting ALL words of the batch). Fallback stays generic. */
+var VOCAB_TITLE="Vocabulary Suite";/*VOCAB_INJECT_TITLE*/
+var VOCAB_DATA=[];/*VOCAB_INJECT*/
+
+function $(x){return document.getElementById(x)}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+
+/* Themed header (Phase 70 polish): if the backend injected a real
+   VOCAB_TITLE, use it for the <h1> AND the document title so the
+   markdown report is themed too. Fallback stays generic. */
+if (VOCAB_TITLE && VOCAB_TITLE !== "Vocabulary Suite") {
+  $("vsTitle").textContent = "📚 " + VOCAB_TITLE;
+  document.title = VOCAB_TITLE + " — Vocabulary Suite";
+}
+
+/* Normalize: accept either [{id,word,phrase,meaning,translate}] or [[w,p,m,t]].
+   Always map to the {id,word,phrase,meaning,translate} shape used downstream.
+   Backward compat: if 'word' is missing/empty, fall back to 'phrase' (legacy 3-key
+   items). If 'phrase' is missing (older blocks), render an empty example. */
+var V=(Array.isArray(VOCAB_DATA)?VOCAB_DATA:[]).map(function(r,i){
+ var word="",phrase="",meaning="",translate="",id=i;
+ if(r&&typeof r==="object"&&!Array.isArray(r)){
+  if(typeof r.id==="number")id=r.id;
+  word=String(r.word||"");phrase=String(r.phrase||"");meaning=String(r.meaning||"");translate=String(r.translate||"");
+ }else{
+  var arr=Array.isArray(r)?r:[];
+  word=String(arr[0]||"");phrase=String(arr[1]||"");meaning=String(arr[2]||"");translate=String(arr[3]||"");
+ }
+ if(!word&&phrase)word=phrase; // legacy 3-key fallback
+ return{id:id,word:word,phrase:phrase,meaning:meaning,translate:translate};
+}).filter(function(r){return r.word||r.phrase||r.meaning||r.translate});
+// Fallback so the demo never opens blank if injection was skipped.
+if(!V.length)V=[{id:0,word:"(empty)",phrase:"",meaning:"no data injected",translate:"sin datos"},{id:1,word:"Try again",phrase:"",meaning:"please regenerate",translate:"inténtalo de nuevo"}];
+
+/* ════════════════════════════════════════════════════════════════
+   TTS — DUAL ENGINE (verbatim port from english-practice.html:345-465)
+   1) parent frame (vocab-tts-request) → edge-tts (Fenrir)
+   2) fallback local → Web Speech API (speechSynthesis, en-US voice)
+   Engine auto-detected: if no parent or no reply within ~3s,
+   falls back to local and downstream calls sound identical. */
+var TTS_VOICE="am_fenrir";
+var TTS_ENGINE="pending";            /* "pending" | "parent" | "local" */
+var parentProbed=false,parentAlive=false;
+var localVoices=[],localVoicesReady=false;
+var currentAudio=null,audioUrls={},pendingByKey={},requestMap={};
+function ttsKey(text){return TTS_VOICE+"|"+text;}
+function loadLocalVoices(){
+  if(!("speechSynthesis" in window))return;
+  var v=window.speechSynthesis.getVoices();
+  if(v&&v.length){localVoices=v;localVoicesReady=true;}
+}
+function stopAll(){if(currentAudio){currentAudio.pause();currentAudio=null;}if("speechSynthesis" in window){window.speechSynthesis.cancel();}document.querySelectorAll(".speaking,.loading,.pb.speaking,.pb.loading").forEach(function(b){b.classList.remove("speaking");b.classList.remove("loading");})}
+function requestTTS(text,btn){
+  var key=ttsKey(text);
+  if(audioUrls[key]){if(btn)playUrl(audioUrls[key],btn);return;}
+  if(TTS_ENGINE==="local"){localSpeak(text,btn);return;}
+  if(pendingByKey[key]){if(btn){pendingByKey[key].btns.push(btn);btn.classList.add("loading");}return;}
+  if(btn)btn.classList.add("loading");
+  var requestId=Date.now()+"_"+Math.random().toString(36).slice(2,8);
+  pendingByKey[key]={requestId:requestId,btns:btn?[btn]:[],done:false};
+  requestMap[requestId]=key;
+  setTimeout(function(){
+    var p=pendingByKey[key];
+    if(p&&!p.done){p.done=true;delete pendingByKey[key];delete requestMap[requestId];
+      p.btns.forEach(function(b){if(b)b.classList.remove("loading");});
+      if(TTS_ENGINE!=="local"){markEngineLocal();p.btns.forEach(function(b){if(b)localSpeak(text,b);});}
+    }
+  },8000);
+  if(window.parent&&window.parent!==window){
+    window.parent.postMessage({type:"vocab-tts-request",requestId:requestId,text:text,voice:TTS_VOICE},"*");
+    if(!parentProbed){parentProbed=true;setTimeout(function(){if(TTS_ENGINE==="pending"&&!parentAlive){markEngineLocal();flushPendingLocal();}},3000);}
+  }else{markEngineLocal();localSpeak(text,btn);}
+}
+function markEngineLocal(){
+  if(TTS_ENGINE==="local")return;
+  TTS_ENGINE="local";
+  var el=document.getElementById("ttsWarmup");if(el)el.classList.remove("show");
+  document.querySelectorAll(".pb.loading").forEach(function(b){b.classList.remove("loading");});
+}
+function flushPendingLocal(){
+  Object.keys(pendingByKey).forEach(function(key){
+    var p=pendingByKey[key];if(!p||p.done)return;
+    p.done=true;delete pendingByKey[key];
+    var text=key.split("|").slice(1).join("|");
+    p.btns.forEach(function(b){localSpeak(text,b);});
+  });
+}
+window.addEventListener("message",function(event){
+  var data=event.data;if(!data||data.type!=="vocab-tts-response")return;
+  parentAlive=true;
+  if(TTS_ENGINE==="pending")TTS_ENGINE="parent";
+  var key=requestMap[data.requestId];if(!key)return;
+  var p=pendingByKey[key];if(!p||p.done)return;
+  p.done=true;delete pendingByKey[key];delete requestMap[data.requestId];
+  if(data.error){console.error("[VOCAB-TTS] Parent error:",data.error);p.btns.forEach(function(b){if(b)b.classList.remove("loading");});return;}
+  var binary=atob(data.audioBase64);
+  var bytes=new Uint8Array(binary.length);
+  for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  var blob=new Blob([bytes],{type:data.mimetype||"audio/wav"});
+  audioUrls[key]=URL.createObjectURL(blob);
+  p.btns.forEach(function(b){if(b)playUrl(audioUrls[key],b);});
+});
+function pickLocalVoice(){
+  if(!localVoicesReady){loadLocalVoices();}
+  if(!localVoices.length)return null;
+  var en=localVoices.filter(function(v){return v.lang&&v.lang.toLowerCase().indexOf("en")===0;});
+  if(!en.length)return null;
+  var femaleRe=/(female|samantha|zira|aria|jenny|susan|karen|moira|tessa|hazel|libby|sonia|ava|allison|emma|joanna|kendra|kimberly|ivy|serena|michelle|alicia|victoria|lauren|Rebecca|Zuzana|Ting-Ting|Google US English)/i;
+  for(var i=0;i<en.length;i++){if(femaleRe.test(en[i].name))return en[i];}
+  return en[0];
+}
+function localSpeak(text,btn){
+  if(btn){stopAll();btn.classList.add("speaking");}
+  if(!("speechSynthesis" in window)){
+    console.warn("[VOCAB-TTS] speechSynthesis no disponible");
+    if(btn)btn.classList.remove("speaking","loading");return;
+  }
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=0.95;u.pitch=1;
+  var v=pickLocalVoice();if(v)u.voice=v;
+  u.onend=function(){if(btn)btn.classList.remove("speaking","loading");};
+  u.onerror=function(){if(btn)btn.classList.remove("speaking","loading");};
+  window.speechSynthesis.speak(u);
+}
+function playUrl(url,btn){
+  if(currentAudio){currentAudio.pause();currentAudio=null;}
+  var audio=new Audio(url);currentAudio=audio;
+  if(btn){btn.classList.add("speaking");}
+  audio.onended=function(){if(btn)btn.classList.remove("speaking","loading");currentAudio=null;};
+  audio.onerror=function(){if(btn)btn.classList.remove("speaking","loading");currentAudio=null;};
+  audio.play().catch(function(){if(btn)btn.classList.remove("speaking","loading");currentAudio=null;});
+}
+if("speechSynthesis" in window){speechSynthesis.onvoiceschanged=loadLocalVoices;loadLocalVoices();}
+
+/* ── ① Tabla ── */
+function renderTable(){var h="";V.forEach(function(r,i){h+="<tr><td class='row-num'>"+(i+1)+"</td><td class='word'>"+esc(r.word)+"</td><td class='phrase'>"+(r.phrase?esc(r.phrase):"<i style='color:#bbb'>(no example)</i>")+"</td><td class='meaning'>"+esc(r.meaning)+"</td><td class='translate'>"+esc(r.translate)+"</td><td class='pc'><div class='pg'><button class='pb g' data-w='"+i+"'>▶</button><span class='pl'>word</span></div>"+(r.phrase?"<div class='pg'><button class='pb g' data-p='"+i+"'>▶</button><span class='pl'>phrase</span></div>":"")+"<div class='pg'><button class='pb b' data-m='"+i+"'>▶</button><span class='pl'>meaning</span></div></td></tr>"});
+ $("tb").innerHTML=h;
+ $("tb").querySelectorAll("[data-w]").forEach(function(b){b.onclick=function(){requestTTS(V[b.dataset.w].word,b)}});
+ $("tb").querySelectorAll("[data-p]").forEach(function(b){b.onclick=function(){var p=V[b.dataset.p].phrase;if(p)requestTTS(p,b)}});
+ $("tb").querySelectorAll("[data-m]").forEach(function(b){b.onclick=function(){requestTTS(V[b.dataset.m].meaning,b)}})}
+var queue=[],playing=false;
+function playAll(key){stopAll();queue=shuffle(V.map(function(r){return r}));playing=true;(function next(){if(!playing||!queue.length){playing=false;return}var r=queue.shift();if(TTS_ENGINE==="local"){var u=new SpeechSynthesisUtterance(r[key]);u.lang="en-US";u.rate=0.95;var v=pickLocalVoice();if(v)u.voice=v;u.onend=next;u.onerror=next;speechSynthesis.speak(u)}else{var btn=document.createElement("button");requestTTS(r[key],null);next()}})()}
+$("pap").onclick=function(){playAll("phrase")};$("pam").onclick=function(){playAll("meaning")};
+$("stp").onclick=function(){playing=false;stopAll()};
+
+/* ── ② Flashcards ── */
+var fcOrder=shuffle(V.map(function(_,i){return i})),fcBack={};
+function renderFC(){var h="";fcOrder.forEach(function(i,pos){var r=V[i],back=fcBack[pos];
+ h+="<div class='fc "+(back?"back":"front")+"' data-pos='"+pos+"'><span class='tag'>"+(back?"back · meaning":"front · word")+"</span><span class='fc-text'>"+(back?esc(r.meaning)+"<br><i style='opacity:.65'>"+esc(r.translate)+"</i>":"<b style='font-size:1.15em'>"+esc(r.word)+"</b>"+(r.phrase?"<br><i style='opacity:.7;font-size:.72em'>&ldquo;"+esc(r.phrase)+"&rdquo;</i>":""))+"</span>"
+ +"<button class='exp' data-exp='"+pos+"'>⛶</button><button class='mini' data-spk='"+pos+"'>▶</button></div>"});
+ $("fcs").innerHTML=h;
+ $("fcs").querySelectorAll(".fc").forEach(function(c){c.onclick=function(e){if(e.target.classList.contains("exp")||e.target.classList.contains("mini"))return;var p=+c.dataset.pos;fcBack[p]=!fcBack[p];renderFC()}});
+ $("fcs").querySelectorAll("[data-spk]").forEach(function(b){b.onclick=function(e){e.stopPropagation();var r=V[fcOrder[+b.dataset.spk]];requestTTS(fcBack[+b.dataset.spk]?r.meaning:r.word,null)}});
+ $("fcs").querySelectorAll("[data-exp]").forEach(function(b){b.onclick=function(e){e.stopPropagation();openStage(+b.dataset.exp)}})}
+$("reshuf").onclick=function(){fcOrder=shuffle(fcOrder);fcBack={};renderFC()};
+var stgIdx=0,stgB=false;
+function _stageMsg(on){try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:"vocab-stage-fullscreen",on:on},"*")}catch(e){}}
+function openStage(pos){stgIdx=pos;stgB=!!fcBack[pos];paintStage();$("stage").classList.add("show");_stageMsg(true)}
+function closeStage(){$("stage").classList.remove("show");_stageMsg(false)}
+function paintStage(){var r=V[fcOrder[stgIdx]];var c=$("stgC");c.className="card"+(stgB?" b":"");c.innerHTML=stgB?esc(r.meaning)+"<br><i style='opacity:.7'>"+esc(r.translate)+"</i>":"<b style='font-size:1.4em'>"+esc(r.word)+"</b>"+(r.phrase?"<br><i style='opacity:.75;font-size:.78em'>&ldquo;"+esc(r.phrase)+"&rdquo;</i>":"");$("stgN").textContent=(stgIdx+1)+" / "+fcOrder.length}
+$("stgC").onclick=function(){stgB=!stgB;paintStage()};
+$("stgT").onclick=function(){stgB=!stgB;paintStage()};
+$("stgP").onclick=function(){stgIdx=(stgIdx-1+fcOrder.length)%fcOrder.length;stgB=false;paintStage()};
+$("stgN").onclick=function(){stgIdx=(stgIdx+1)%fcOrder.length;stgB=false;paintStage()};
+$("stgX").onclick=closeStage;
+document.addEventListener("keydown",function(e){if(!$("stage").classList.contains("show"))return;if(e.key==="Escape")closeStage();if(e.key==="ArrowLeft")$("stgP").click();if(e.key==="ArrowRight")$("stgN").click();if(e.key===" "){e.preventDefault();$("stgT").click()}});
+
+/* ── ③ Match por bloques ── */
+var size=6,round=[],pairs={},selL=null,selR=null,nr=0,log=[],secs=0,timer=null;
+function _w(r){return r.word||r.phrase}
+function newRound(items){round=shuffle(items||V);pairs={};selL=selR=null;nr++;$("strip").style.display="none";$("retry").style.display="none";
+ $("colL").innerHTML=round.map(function(r){return"<div class='blk' data-l='"+r.id+"'>"+esc(_w(r))+"</div>"}).join("");
+ $("colR").innerHTML=shuffle(round).map(function(r){return"<div class='blk' data-r='"+r.id+"'>"+esc(r.meaning)+"</div>"}).join("");
+ bindBlks();$("warm").textContent="🎯 Round "+nr+" · "+round.length+" items"}
+function bindBlks(){document.querySelectorAll("[data-l]").forEach(function(b){b.onclick=function(){if(pairs[b.dataset.l]&&pairs[b.dataset.l].locked)return;
+  if(selL===b.dataset.l){b.classList.remove("selL");selL=null;return}
+  if(selL){document.querySelector("[data-l='"+selL+"']").classList.remove("selL")}
+  selL=b.dataset.l;b.classList.add("selL");tryPair()}});
+ document.querySelectorAll("[data-r]").forEach(function(b){b.onclick=function(){
+  if(selR===b.dataset.r){b.classList.remove("selR");selR=null;return}
+  if(selR){document.querySelector("[data-r='"+selR+"']").classList.remove("selR")}
+  selR=b.dataset.r;b.classList.add("selR");tryPair()}})}
+function tryPair(){if(selL==null||selR==null)return;
+ var L=document.querySelector("[data-l='"+selL+"']"),R=document.querySelector("[data-r='"+selR+"']");
+ pairs[selL]={r:selR,correct:selL===selR};
+ L.classList.remove("selL");R.classList.remove("selR");
+ var n=Object.keys(pairs).length;L.classList.add("done");L.innerHTML=esc(_w(V[selL]))+"<span class='pairnum'>"+n+"</span>";R.classList.add("done");R.innerHTML=esc(V[selR].meaning)+"<span class='pairnum'>"+n+"</span>";
+ pairs[selL].L=L;pairs[selL].R=R;selL=selR=null;
+ Object.keys(pairs).forEach(function(k){var p=pairs[k];p.L.onclick=function(){delete pairs[k];p.L.classList.remove("done");p.R.classList.remove("done");p.L.innerHTML=esc(_w(V[k]));p.R.innerHTML=esc(V[p.r].meaning);bindBlks()};p.R.onclick=p.L.onclick})}
+$("chk").onclick=function(){if(!Object.keys(pairs).length)return;stopClock();
+ var ok=0,missed=[];
+ Object.keys(pairs).forEach(function(k){var p=pairs[k];if(p.correct)ok++;else{missed.push({word:_w(V[k]),your:V[p.r].meaning,correct:V[k].meaning});p.L.classList.remove("done");p.L.classList.add("bad");p.R.classList.remove("done");p.R.classList.add("bad")}});
+ var tot=round.length,pct=tot?Math.round(ok/tot*100):0;
+ log.push({n:nr,date:new Date().toISOString().slice(0,16).replace("T"," "),correct:ok,total:tot,missed:missed});
+ $("sScore").textContent=ok+"/"+tot+" · "+pct+"%";$("sBar").style.width=pct+"%";
+ $("sMsg").textContent=pct===100?"Perfect! 🎉":pct>=70?"Great — review your misses!":pct>=40?"Keep going — check the report.":"Survive & repeat 🙂";
+ $("strip").style.display="flex";if(missed.length)$("retry").style.display="";
+ if(pct===100)setTimeout(function(){requestTTS("Perfect! One hundred percent.",null)},300)};
+$("retry").onclick=function(){var last=log[log.length-1];var ids=last.missed.map(function(m){return V.filter(function(v){return _w(v)===m.word})[0].id});newRound(V.filter(function(v){return ids.indexOf(v.id)>=0}))};
+$("newR").onclick=function(){startRound()};
+document.querySelectorAll(".sz").forEach(function(b){b.onclick=function(){document.querySelectorAll(".sz").forEach(function(x){x.classList.remove("on")});b.classList.add("on");size=b.dataset.s;startRound()}});
+function paintClock(){var m=Math.floor(secs/60),s=secs%60;$("clockT").textContent="⏱️ "+m+":"+(s<10?"0":"")+s}
+function startClock(){if(timer)return;timer=setInterval(function(){secs++;paintClock()},1000);$("clock").classList.add("running");$("clockIc").textContent="⏸"}
+function stopClock(){if(timer){clearInterval(timer);timer=null}$("clock").classList.remove("running");$("clockIc").textContent="▶"}
+$("clock").onclick=function(){if(timer)stopClock();else startClock()};
+function startRound(){var items=size==="all"?V:shuffle(V).slice(0,+size);newRound(items);secs=0;stopClock();paintClock()}
+
+/* ── ④ Report (no CONFIG — title pulled from document title) ── */
+function buildMD(){if(!log.length)return"# 📋 Vocabulary Report\n_No rounds checked yet._";
+ var tk=0,tt=0,last=log[log.length-1];log.forEach(function(r){tk+=r.correct;tt+=r.total});var pct=tt?Math.round(tk/tt*100):0;
+ var topicTitle=VOCAB_TITLE||document.title||"Vocabulary";var md="# 📋 Vocabulary Report — "+esc(topicTitle)+" — "+last.date+"\n**Rounds:** "+log.length+" · **Accumulated:** "+tk+"/"+tt+" ("+pct+"%)\n\n| Round | Items | Correct | % |\n|---|---|---|---|\n";
+ log.forEach(function(r){md+="| "+r.n+" | "+r.total+" | "+r.correct+" | "+Math.round(r.correct/r.total*100)+"% |\n"});
+ md+="\n## Misses — Last round\n";
+ if(!last.missed.length)md+="_None. Clean round._ 🎉\n";else last.missed.forEach(function(m){md+="- \""+m.word+"\" → you said \""+m.your+"\" · ✅ \""+m.correct+"\"\n"});
+ var freq={};log.forEach(function(r){r.missed.forEach(function(m){freq[m.word]=(freq[m.word]||0)+1})});
+ var chronic=Object.keys(freq).filter(function(k){return freq[k]>=2});
+ md+="\n## Weak points (missed 2+ times)\n";if(!chronic.length)md+="No repeated misses. 🎯\n";else chronic.forEach(function(k){md+="- ⚠️ "+k+" ("+freq[k]+"x)\n"});
+ return md}
+/* Tiny safe markdown → HTML converter (no libs). Escapes first, then applies
+   headings, bold/italic, tables, bullet/numbered lists, paragraph breaks.
+   Keep tiny — it only needs to render buildMD() output. */
+function renderMD(md){var s=esc(md);var lines=s.split("\n"),out=[],i=0;
+ while(i<lines.length){var ln=lines[i];
+  if(/^### /.test(ln)){out.push("<h3>"+ln.slice(4)+"</h3>");i++;continue}
+  if(/^## /.test(ln)){out.push("<h2>"+ln.slice(3)+"</h2>");i++;continue}
+  if(/^# /.test(ln)){out.push("<h1>"+ln.slice(2)+"</h1>");i++;continue}
+  if(/^\|/.test(ln)){var block=[ln];i++;while(i<lines.length&&/^\|/.test(lines[i])){block.push(lines[i]);i++}
+   if(block.length>=2){var head=block[0].split("|").slice(1,-1);var rows=block.slice(2);
+    var t="<table><thead><tr>"+head.map(function(c){return"<th>"+c+"</th>"}).join("")+"</tr></thead><tbody>";
+    rows.forEach(function(r){var cells=r.split("|").slice(1,-1);t+="<tr>"+cells.map(function(c){return"<td>"+c+"</td>"}).join("")+"</tr>"});
+    out.push(t+"</tbody></table>");continue}}
+  if(/^- /.test(ln)){var items=[ln.slice(2)];i++;while(i<lines.length&&/^- /.test(lines[i])){items.push(lines[i].slice(2));i++}
+   out.push("<ul>"+items.map(function(it){return"<li>"+it+"</li>"}).join("")+"</ul>");continue}
+  if(/^\d+\. /.test(ln)){var items2=[ln.replace(/^\d+\. /,"")];i++;while(i<lines.length&&/^\d+\. /.test(lines[i])){items2.push(lines[i].replace(/^\d+\. /,""));i++}
+   out.push("<ol>"+items2.map(function(it){return"<li>"+it+"</li>"}).join("")+"</ol>");continue}
+  if(ln.trim()===""){out.push("");i++;continue}
+  var text=ln.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/_([^_]+)_/g,"<em>$1</em>");
+  out.push(text);i++}
+ var html=out.join("\n").replace(/\n{2,}/g,"</p><p>");html="<p>"+html+"</p>";
+ return html.replace(/<p>\s*<\/p>/g,"").replace(/<p>(<h\d>.*<\/h\d>)<\/p>/g,"$1").replace(/<p>(<(ul|ol|table)>.*<\/\2>)<\/p>/g,"$1");
+}
+$("rptBtn").onclick=function(){$("rptB").innerHTML=renderMD(buildMD());$("ov").classList.add("show")};
+$("cls").onclick=function(){$("ov").classList.remove("show")};
+$("ov").onclick=function(e){if(e.target===$("ov"))$("ov").classList.remove("show")};
+$("cpy").onclick=function(){var md=buildMD();function done(){var b=$("cpy");b.textContent="Copied ✅";setTimeout(function(){b.textContent="📋 Copy"},1500)}
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(md).then(done,function(){fb()});else fb();
+ function fb(){var ta=document.createElement("textarea");ta.value=md;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done()}catch(e){}document.body.removeChild(ta)}};
+$("dwn").onclick=function(){var b=new Blob([buildMD()],{type:"text/markdown"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="vocabulary-report-"+Date.now()+".md";document.body.appendChild(a);a.click();a.remove()};
+renderTable();renderFC();startRound();
+</script></body></html>

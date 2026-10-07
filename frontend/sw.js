@@ -49,7 +49,60 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // activating silently mid-session. v81/v82 never left this machine — they
 // were local iterations while diagnosing why the OpenZen fix had reached the
 // server but not the browser.
-const ASSET_CACHE = 'studyflow-assets-v84';
+// v85: propagates the noVNC login modal (notebooklm-settings.js +
+// study-scheduler.css) edited since v84. The NotebookLM active-profile root
+// fix itself is backend-only, but these precached assets only refresh on
+// install — the bump is what actually delivers them to installed PWAs.
+// v86: propagates the topic-level "➕ Añadir" bar (courses.js) and the removal
+// of the per-block add group + hidden add types (ai.js, courses-blocks.js).
+// v87: propagates R4 image blocks — image-upload.js is brand new and must be
+// precached (the 🖼 chip resolves App.ImageUpload at click time), plus the
+// courses-blocks.js image render branch and studyflow-blocks.css.
+// Editing a precached .js without this bump ships code that no installed PWA
+// can load — see tests/test_sw_asset_version.py.
+// v88: R5 — the JSON question editor (quiz-json-editor.js is new and must be
+// precached, since quiz-embed.js resolves App.QuizJsonEditor at open time),
+// plus the rewritten quiz-embed.js manager and the editor's CSS.
+// Editing a precached .js without this bump ships code that no installed PWA
+// can load — see tests/test_sw_asset_version.py.
+// v89: added backup-selector.js (the selective backup modal, loaded on
+// demand when #btn-backup is clicked).
+// v90: added the three addon modules that index.html loads with <script src>
+//      but that were missing here (knowledge-pipeline, english-grammar,
+//      vocabulary). Offline they silently failed to load, taking "Gen.
+//      Contenido", "English Exercises" and "Vocabulary Suite" with them.
+//      Bumping the name is what makes clients drop the stale v89 asset cache;
+//      the activate handler deletes every cache that is not ASSET_CACHE.
+// v91: the three assets v89/v90 added to the precache never got a digest pin
+// in sw_asset_pins.json, so test_asset_cache_version_tracks_a_content_digest
+// had been red since the bump to v90. This bump adds the pin and turns the
+// suite green. No precached asset changed.
+// v92: index.html changed, so it needed a new cache name. The dashboard's
+//      "Guia y tutoriales" card dropped target="_blank": /landing/ is inside
+//      the manifest scope, so the blank attribute sent the guide to a browser
+//      tab and out of the installed PWA. The <video controls> already offer
+//      fullscreen, which is why no allowfullscreen attribute was needed.
+// v93: the five fixes of the pre-release audit. index.html is precached, so
+//      changing it needs a new name whatever else ships.
+//      - courses-blocks painted a second 📝 on every markdown block; the
+//        icon now resolves through App.CoursesSidebar.getBlockIcon.
+//      - agenda-calendars.js no longer PUTs a list it cannot fully
+//        represent, which was silently deleting saved calendars.
+//      - openzen_retry_chunk's arguments were in the wrong order, so every
+//        "reiniciar sección" 500'd.
+//      - _coerce_ids(None) raised TypeError (500) instead of ValueError (400).
+//      - /quiz/answer now validates like /quiz/answers does.
+// v94: landing sin placeholders 03/13 + 4 videos regrabados con difuminado
+// v95: tutoriales regrabados con datos ficticios
+// v96: durata dels tutoriales sincronitzada
+// v97: session timers. _getTimerSeconds() took no prefix, so pause time was
+// saved as elapsed time and effective time read 0m; and the create path never
+// sent the timer fields at all.
+// v98: Courses.addBlock was imported but never re-exported, so "Añadir
+// markdown" / "Añadir PDF" / "Añadir separador" (5 sidebar buttons) threw
+// with no .catch(): menu closed, nothing happened. Now exported, and each
+// call surfaces failures instead of failing silently.
+const ASSET_CACHE = 'studyflow-assets-v98';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -59,6 +112,7 @@ const PRECACHE_ASSETS = [
   '/manifest.json',
   '/styles.css',
   '/app.js',
+  '/backup-selector.js',
   '/shared/ui-common.js',
   '/shared/load-partial.js',
   '/features/studyflow/content-blocks.js',
@@ -83,6 +137,10 @@ const PRECACHE_ASSETS = [
   '/features/studyflow/pdf-import.js',
   // S7b-A: SSE pseudo-terminal for the SCORM import
   '/features/studyflow/pdf-import-stream.js',
+  // R4: image block upload (picker + FormData + block creation)
+  '/features/studyflow/image-upload.js',
+  // R5: exercise questions as JSON (editor + preview; mounted by quiz-embed.js)
+  '/features/studyflow/quiz-json-editor.js',
   // S7b-B: floating study menu + SCORM credentials settings
   '/features/studyflow/study-scheduler.js',
   '/features/studyflow/study-scheduler.css',
@@ -118,9 +176,16 @@ const PRECACHE_ASSETS = [
   '/features/quiz/quiz-runner.js',
   '/features/quiz/quiz-pool.js',
   '/features/quiz/quiz-summary.js',
-  '/features/quiz/quiz-center.js',
-  '/features/quiz/quiz.css',
-];
+'/features/quiz/quiz-center.js',
+    '/features/quiz/quiz.css',
+    // v90: addon modules loaded via <script src> in index.html. They were
+    // absent from the precache, so an offline launch loaded the app but not
+    // these — the buttons were still rendered by ai.js and their handlers were
+    // undefined, i.e. a feature that looks present and does nothing.
+    '/features/studyflow/knowledge-pipeline.js',
+    '/features/studyflow/english-grammar.js',
+    '/features/studyflow/vocabulary.js',
+  ];
 
 // Maximum age for cached API responses (5 minutes)
 const API_CACHE_MAX_AGE = 5 * 60 * 1000;

@@ -120,6 +120,24 @@ addBlock, updateBlock, deleteBlock,
       || { icon: "📌", label: type || "Bloque", strip: "var(--border-light)" };
   }
 
+  // Icon for a concrete block, not for a type.
+  //
+  // `meta(type).icon` was used here and it put a second 📝 on every markdown
+  // block: the sidebar already suppresses it (a hand-written title is the
+  // point of a block), so the two views of the same block disagreed. Three
+  // of four blocks rendered with two icons. The rule now lives in one place
+  // — App.CoursesSidebar.getBlockIcon — and this delegates to it.
+  // courses-sidebar.js loads before this file (see index.html), but the
+  // lookup is still done lazily at render time so a future reorder of the
+  // script tags cannot silently reintroduce the duplicate.
+  function blockIcon(b, fallback) {
+    var sidebar = window.App && window.App.CoursesSidebar;
+    if (sidebar && typeof sidebar.getBlockIcon === "function") {
+      return sidebar.getBlockIcon(b);
+    }
+    return fallback;
+  }
+
   // ── _looksLikeHtml(str) → boolean ──────────────────────────────
   // Conservative heuristic: true when the string contains an opening or
   // closing tag (e.g. `<img`, `</p>`, `<audio`). Plain prose without tags
@@ -221,6 +239,19 @@ addBlock, updateBlock, deleteBlock,
       bodyHtml = url
         ? `<div class="sf-link-body">▶️ <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></div>`
         : `<div class="sf-empty">Sin URL</div>`;
+    } else if (type === "image") {
+      // R4 — the block carries no bytes: `image_id` points at the row in
+      // `images` and the pixels come from the uploads volume. A bare <img>
+      // works unauthenticated because token_required falls back to the local
+      // user when no Authorization header is sent.
+      // No image_id means the image row was deleted (ON DELETE SET NULL) or
+      // the upload never completed — report that instead of shipping a
+      // broken image icon into the topic.
+      const imageId = Number(b.image_id) || 0;
+      const alt = escHtml(b.title || "Imagen");
+      bodyHtml = imageId
+        ? `<div class="sf-image-body"><img src="/api/image/${imageId}/file" alt="${alt}" loading="lazy" decoding="async"></div>`
+        : `<div class="sf-empty">Imagen no disponible</div>`;
     } else if (type === "exercise") {
       // Issue #10 — quiz por bloque: the exercise stem renders as
       // markdown and the questions live in quiz_questions.block_id.
@@ -271,7 +302,7 @@ addBlock, updateBlock, deleteBlock,
     }" data-block-id="${b.id}" data-block-type="${escHtml(type)}"
        data-course-id="${courseId}">
       <div class="sf-td-block-head sf-td-block-head-inner">
-        <span class="sf-td-block-icon">${m.icon}</span>
+        <span class="sf-td-block-icon">${blockIcon(b, m.icon)}</span>
         <span class="sf-td-block-title">${title}</span>
       </div>
       ${aiToolbarHtml}
@@ -281,14 +312,21 @@ addBlock, updateBlock, deleteBlock,
   }
 
   // ── _renderAddBar(courseId, topicId) → HTML ──────────────────
-  // v2-style "+ Añadir bloque" bar. The toggle reveals a horizontal
-  // row of type-specific chips (markdown / content / pdf / youtube /
-  // image / exercise / interactive / separator). Each chip posts a
-  // new block via App.CoursesAPI.addBlock using the type's defaults
-  // (see TYPE_META.defaults) so the new block renders immediately.
-  // Block types hidden from the "Añadir bloque" menu. The type stays in
-  // TYPE_META so existing blocks (28 separators in the DB) keep rendering.
-  const HIDDEN_ADD_TYPES = new Set(["separator"]);
+  // Topic-level "+ Añadir bloque" bar, rendered by courses.js right under the
+  // topic title (so it shows on EVERY topic, empty or not). The toggle reveals
+  // a horizontal row of type-specific chips. Each chip posts a new block via
+  // App.CoursesAPI.addBlock using the type's defaults (see TYPE_META.defaults)
+  // so the new block renders immediately.
+  //
+  // Block types hidden from the menu. The type STAYS in TYPE_META and keeps its
+  // renderer: existing blocks must keep rendering, we only stop offering them.
+  //   content   — 128 blocks, and it is the type the AI results use
+  //               (📊 infographic / 🎵 audio), so it is NOT dead.
+  //   separator — purely decorative divider; nothing generates it.
+  //   youtube   — 0 blocks in the DB and nothing links to it.
+  // The AI feature "YouTube → Markdown" (NotebookLM) is a toolbar ACTION, not
+  // this block type, so hiding "youtube" here does not affect it.
+  const HIDDEN_ADD_TYPES = new Set(["content", "separator", "youtube"]);
 
   function _renderAddBar(courseId, topicId) {
     const topicAttr = topicId ? ` data-topic-id="${topicId}"` : "";
@@ -664,6 +702,27 @@ async function _embedPdfBlock(domCourse, domTopic, sourceBlockId, pdf, title) {
         }
         if (!cid) return;
         const type = chip.dataset.type;
+
+        // 🖼 Image is the one chip that cannot use the generic path below.
+        // That path creates the block FIRST from TYPE_META defaults, which for
+        // `image` means a block with no image_id — a permanent "Imagen no
+        // disponible". So the file has to be chosen and uploaded first, and
+        // only then does a block get created pointing at it. Cancelling the
+        // picker creates nothing at all.
+        if (type === "image") {
+          const picker = window.App.ImageUpload;
+          if (!picker || typeof picker.pickAndUpload !== "function") {
+            alert("❌ El módulo de imágenes no está cargado.");
+            return;
+          }
+          try {
+            await picker.pickAndUpload({ courseId: cid, topicId: tid });
+          } catch (err) {
+            alert("❌ Error al añadir la imagen: " + (err.message || err));
+          }
+          return;
+        }
+
         const meta = TYPE_META[type] || TYPE_META.markdown;
         const def = meta.defaults || { content: "", url: "", title: "" };
         try {
@@ -734,7 +793,7 @@ async function _embedPdfBlock(domCourse, domTopic, sourceBlockId, pdf, title) {
         <button class="sf-bc-collapse ht-btn-mini" title="Plegar / desplegar">${
           collapsed ? "▶" : "▼"
         }</button>
-        <span class="sf-bc-icon">${m.icon}</span>
+        <span class="sf-bc-icon">${blockIcon(b, m.icon)}</span>
         <span class="sf-bc-title">${title}</span>
         <span class="sf-bc-actions">
           <button class="sf-td-edit ht-btn-mini" title="Editar">✏️</button>

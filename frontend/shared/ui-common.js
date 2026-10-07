@@ -116,10 +116,15 @@ function formatTimer(seconds) {
     if (se) se.value = s ?? '';
   }
 
-function _getTimerSeconds() {
-  const h = parseInt(document.getElementById('so-te-h')?.value) || 0;
-  const m = parseInt(document.getElementById('so-te-m')?.value) || 0;
-  const s = parseInt(document.getElementById('so-te-s')?.value) || 0;
+// `prefix` selects which set of spinbuttons to read: "so-te" is effective time,
+// "so-tp" is paused time. It used to be hardcoded to so-te, so both callers
+// returned the same number and every session stored a pause duration equal to
+// its elapsed time -- which agenda-core.js then subtracts, making effective
+// time permanently zero and the "Efectivas" stat stuck at 0m.
+function _getTimerSeconds(prefix = "so-te") {
+  const h = parseInt(document.getElementById(prefix + "-h")?.value) || 0;
+  const m = parseInt(document.getElementById(prefix + "-m")?.value) || 0;
+  const s = parseInt(document.getElementById(prefix + "-s")?.value) || 0;
   return h * 3600 + m * 60 + s;
 }
 

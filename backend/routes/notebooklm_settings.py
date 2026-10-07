@@ -31,8 +31,8 @@ from ai.notebooklm.profiles import (
     resolve_profile_dir,
     discover_profiles,
     read_active_profile,
-    write_active_profile,
-    save_user_notebooklm_profile,
+    set_active_profile,
+    clear_active_profile,
     STORAGE_FILE,
     COOKIE_DIR,
 )
@@ -65,14 +65,14 @@ def _resolve_active(user_id: int, profiles: list[dict]) -> str | None:
 
     if user_profile is None and profiles:
         first_email = profiles[0]["email"]
-        save_user_notebooklm_profile(user_id, first_email)
+        set_active_profile(user_id, first_email)
         user_profile = first_email
 
     if user_profile and profiles:
         owned_emails = {p["email"] for p in profiles}
         if user_profile not in owned_emails:
             first_email = profiles[0]["email"]
-            save_user_notebooklm_profile(user_id, first_email)
+            set_active_profile(user_id, first_email)
             user_profile = first_email
 
     return user_profile
@@ -155,7 +155,7 @@ def upload(user_id: int):
     with open(dest, "wb") as f:
         f.write(raw)
 
-    write_active_profile(email)
+    set_active_profile(user_id, email)
     register_profile_owner(user_id, email)
 
     return jsonify({
@@ -207,8 +207,7 @@ def switch_profile(user_id: int):
             "message": f"No existe el perfil '{email}'",
         }), 404
 
-    write_active_profile(email)
-    save_user_notebooklm_profile(user_id, email)
+    set_active_profile(user_id, email)
     register_profile_owner(user_id, email)
 
     return jsonify({
@@ -234,7 +233,7 @@ def disconnect(user_id: int):
         if profile_dir and os.path.isdir(profile_dir):
             try:
                 shutil.rmtree(profile_dir)
-                write_active_profile(None)
+                clear_active_profile(user_id)
                 return jsonify({"success": True, "message": f"Perfil '{active_profile}' eliminado"})
             except OSError as e:
                 return jsonify({"success": False, "message": f"Error al eliminar: {e}"}), 500
@@ -276,7 +275,7 @@ def delete_profile(user_id: int, email: str):
 
     active = read_active_profile()
     if active and active == email:
-        write_active_profile(None)
+        clear_active_profile(user_id)
 
     return jsonify({
         "success": True,

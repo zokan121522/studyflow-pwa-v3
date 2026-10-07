@@ -128,7 +128,7 @@ def _apply_running(set_parts, params, session_id, user_id, now_str):
 
 def _apply_paused(set_parts, params, now_str):
     set_parts.append("timer_paused_at = %(now)s")
-    set_parts.append("timer_elapsed = GREATEST(0, " + _WALL_DELTA + ")")
+    set_parts.append("timer_elapsed = COALESCE(GREATEST(0, " + _WALL_DELTA + "), 0)")
     params["now"] = now_str
 
 
@@ -137,7 +137,7 @@ def _apply_stopped(set_parts, params, now_str):
         "timer_paused_duration = COALESCE(timer_paused_duration, 0) + "
         + _PAUSED_DELTA
     )
-    set_parts.append("timer_elapsed = GREATEST(0, " + _WALL_DELTA + ")")
+    set_parts.append("timer_elapsed = COALESCE(GREATEST(0, " + _WALL_DELTA + "), 0)")
     set_parts.append("timer_started_at = NULL")
     set_parts.append("timer_paused_at = NULL")
     params["now"] = now_str

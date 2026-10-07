@@ -290,9 +290,18 @@ def submit_answer(current_user_id: int):
     The paged runner grades a whole page through `/quiz/answers`; this
     single-answer route stays for one-off callers and now shares the same
     pool bookkeeping, so answering here feeds the failed pool too.
+
+    It also routes the single answer through `_parse_answer_batch` as a
+    batch of one. Without it a body like {"selected_answer": "B"} went
+    straight to Postgres and came back as a 500 with
+    `InvalidTextRepresentation`; the batch route has returned 400 for that
+    payload since S5. Same input, same 400, whichever endpoint gets it.
     """
-    data = request.get_json() or {}
-    graded, unknown = _record_page(current_user_id, [data])
+    attempts, errors = _parse_answer_batch({'answers': [request.get_json() or {}]})
+    if not attempts:
+        return jsonify({'error': 'no valid answer', 'invalid': errors}), 400
+
+    graded, unknown = _record_page(current_user_id, attempts)
     if unknown:
         return jsonify({'error': 'Question not found'}), 404
     q, picked = graded[0]

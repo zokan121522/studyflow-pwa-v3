@@ -101,10 +101,25 @@ window.App.AgendaCalendars = (function () {
   // Real URLs live in `_real_url`; the masked form from GET is shown to the
   // user but discarded on PUT (we'd never want to round-trip a stripped URL
   // back to the server).
+  //
+  // That used to be a data-loss trap. GET never returns the real url, so a
+  // calendar loaded from the server has no `_real_url`; the payload then went
+  // out with an empty url, the filter dropped it, and PUT replaced the whole
+  // list with what was left. Open the agenda, add a calendar, and every
+  // calendar you already had was gone. Now we refuse to send a list we
+  // cannot fully represent, and say which ones need their url re-entered.
   async function _saveCurrent() {
+    var sinUrl = _calendars.filter(function (c) { return !c._real_url; });
+    if (sinUrl.length) {
+      var nombres = sinUrl.map(function (c) { return c.name || c.id; }).join(", ");
+      throw new Error(
+        "Para no borrar lo que ya está guardado necesito la URL completa de: " +
+        nombres + ". Vuelve a añadirla antes de guardar."
+      );
+    }
     var payload = { calendars: _calendars.map(function (c) {
-      return { id: c.id, name: c.name, url: c._real_url || "" };
-    }).filter(function (c) { return c.url; }) };
+      return { id: c.id, name: c.name, url: c._real_url };
+    }) };
     try {
       var resp = await API.put("/calendar/calendars", payload);
       _calendars = (resp && resp.calendars) || [];

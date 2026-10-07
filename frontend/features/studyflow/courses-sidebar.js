@@ -220,12 +220,14 @@ window.App.CoursesSidebar = (function () {
       + `<div class="topic-menu-item" onclick="event.stopPropagation();`
       + `this.closest('.topic-menu').classList.remove('open');`
       + `window.App.Courses.addBlock('${c.id}', {type:'markdown',title:'Nuevo Markdown',content:''})`
-      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">`
+      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})`
+      + `.catch(e=>alert('❌ No se pudo añadir: '+(e.message||e)))">`
       + `📝 Añadir markdown</div>`
       + `<div class="topic-menu-item" onclick="event.stopPropagation();`
       + `this.closest('.topic-menu').classList.remove('open');`
       + `window.App.Courses.addBlock('${c.id}', {type:'pdf-ref',title:'Nuevo PDF',url:''})`
-      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">`
+      + `.then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})`
+      + `.catch(e=>alert('❌ No se pudo añadir el PDF: '+(e.message||e)))">`
       + `📕 Añadir PDF</div>`
       + `<div class="topic-menu-sep"></div>`
       + `<div class="topic-menu-item danger" onclick="event.stopPropagation();`
@@ -281,9 +283,9 @@ window.App.CoursesSidebar = (function () {
             <div class="topic-menu">
               <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.promptRenameTopic('${courseId}','${t.id}')">✏️ Renombrar</div>
               <div class="topic-menu-sep"></div>
-              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'markdown',title:'Nuevo Markdown',content:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">📝 Añadir markdown</div>
-              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'pdf-ref',title:'Nuevo PDF',url:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()})">📕 Añadir PDF</div>
-              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'separator',title:'',content:'',topic_id:${t.id}}).then(async id=>{await window.App.Courses.renderStudyflow();window.App.Courses._inlineRenameBlockTitle('${courseId}',id)})">➖ Añadir separador</div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'markdown',title:'Nuevo Markdown',content:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()}).catch(e=>alert('❌ No se pudo añadir: '+(e.message||e)))">📝 Añadir markdown</div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'pdf-ref',title:'Nuevo PDF',url:'',topic_id:${t.id}}).then(id=>{window.App.Courses._enterEditMode(id);window.App.Courses.renderStudyflow()}).catch(e=>alert('❌ No se pudo añadir el PDF: '+(e.message||e)))">📕 Añadir PDF</div>
+              <div class="topic-menu-item" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.addBlock('${courseId}',{type:'separator',title:'',content:'',topic_id:${t.id}}).then(async id=>{await window.App.Courses.renderStudyflow();window.App.Courses._inlineRenameBlockTitle('${courseId}',id)}).catch(e=>alert('❌ No se pudo añadir: '+(e.message||e)))">➖ Añadir separador</div>
               <div class="topic-menu-sep"></div>
               <div class="topic-menu-item danger" onclick="event.stopPropagation();this.closest('.topic-menu').classList.remove('open');window.App.Courses.promptDeleteTopic('${courseId}','${t.id}','${safeTitle}')">🗑️ Borrar tema</div>
             </div>
@@ -525,6 +527,10 @@ window.App.CoursesSidebar = (function () {
     attachSidebarEvents,
     updateSelection,
     setTopicExpanded,
+    // Exported so courses-blocks.js resolves icons with the same rule
+    // instead of its own TYPE_META lookup, which painted a second 📝 on
+    // every markdown block and made the two views disagree.
+    getBlockIcon,
   };
 })();
 

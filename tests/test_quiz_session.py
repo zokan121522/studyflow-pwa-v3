@@ -516,12 +516,23 @@ def test_embed_delegates_to_the_runner_instead_of_a_flat_list():
     assert "_submitAnswer" not in src
 
 
-def test_embed_keeps_the_owner_crud():
+def test_owner_editing_lives_in_the_json_editor():
+    """R5 replaced the per-question CRUD with the JSON editor.
+
+    What has to survive the change: the owner still has a route into the
+    questions, and the answer key is still only reachable through the owner's
+    route. What is gone is the four-prompt()-dialogs flow — with it, a block's
+    rows had exactly one writer.
+    """
     src = _src(EMBED_JS)
     assert "Gestionar preguntas" in src
-    assert "questionsForManage" in src
-    for verb in ("/quiz/questions/${qid}", "POST"):
-        assert verb in src, verb
+    assert "App.QuizJsonEditor" in src
+    editor = (ROOT / "frontend" / "features" / "studyflow"
+              / "quiz-json-editor.js").read_text()
+    # The owner route is what carries correct_answer, so the editor has to read
+    # its questions from /manage, not from the study route that strips it.
+    assert "questionsForManage" in editor
+    assert "questionsForBlock" not in editor
 
 
 def test_runner_and_manager_read_from_different_endpoints():
@@ -541,8 +552,11 @@ def test_manager_loads_the_answer_key_lazily():
     assert "questionsForManage" not in manager
     assert 'data-loaded="0"' in manager
     toggle = src.split('det.addEventListener("toggle"')[1].split("// ── public API")[0]
-    assert "questionsForManage" in toggle
     assert 'if (!det.open) return' in toggle
+    # Opening the section is what mounts the editor, and mounting it is what
+    # fetches the answer key. Nothing may fetch it at render time.
+    assert "editor.mount" in toggle
+    assert 'host.dataset.loaded === "1"' in toggle
 
 
 def test_manager_stays_open_after_saving():

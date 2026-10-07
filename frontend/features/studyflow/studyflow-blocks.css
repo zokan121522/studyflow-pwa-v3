@@ -104,6 +104,139 @@
   background: var(--border);
   margin: 8px 0;
 }
+/* R4 — image blocks. The image is content, so it fills the block width and
+   scales down rather than overflowing, while never being scaled *up* past
+   its natural size (a 200px diagram blown to 800px looks broken). */
+.sf-image-body {
+  margin-top: 8px;
+  text-align: center;
+}
+.sf-image-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+/* R5 — the JSON question editor. Two panes: the JSON on the left, a
+   read-only preview on the right. Side by side above 900px, stacked below,
+   because a half-width textarea on a phone is unusable for JSON. */
+.sf-qje {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.sf-qje-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sf-qje-count { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.sf-qje-panes { display: flex; gap: 0; align-items: stretch; }
+.sf-qje-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.sf-qje-pane + .sf-qje-pane { border-left: 1px solid var(--border); }
+.sf-qje-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.sf-qje-hint { text-transform: none; letter-spacing: 0; font-size: 11px; }
+.sf-qje-json {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sf-qje-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.sf-qje-status { font-size: 12px; color: var(--text-muted); }
+.sf-qje-status.bad { color: var(--danger, #e5534b); }
+.sf-qje-preview { overflow-y: auto; max-height: 420px; padding-right: 2px; }
+.sf-qje-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+.sf-qje-n {
+  display: inline-block;
+  min-width: 20px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.sf-qje-q { font-weight: 600; margin-bottom: 6px; white-space: pre-wrap; }
+.sf-qje-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.sf-qje-opt.correct { background: rgba(64, 160, 96, 0.16); font-weight: 600; }
+.sf-qje-letter { font-weight: 700; color: var(--text-muted); min-width: 12px; }
+.sf-qje-key {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--success, #40a060);
+}
+.sf-qje-exp {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.sf-qje-errors {
+  border: 1px solid var(--danger, #e5534b);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--danger, #e5534b);
+}
+.sf-qje-errors ul { margin: 6px 0 0; padding-left: 18px; }
+.sf-qje-error { color: var(--danger, #e5534b); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .sf-qje-panes { flex-direction: column; }
+  .sf-qje-pane + .sf-qje-pane {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+  .sf-qje-json { min-height: 200px; }
+}
+
 .sf-empty {
   color: var(--text-muted);
   font-style: italic;

@@ -173,7 +173,12 @@ def _clean_calendar_item(idx, item):
     if not name:
         return None, f"item {idx} missing name"
     if not url:
-        return None, None  # silently drop entries without url
+        # Used to be "silently drop entries without url". That turned a
+        # truncated PUT into a deletion: this route replaces the whole
+        # stored list, so any item the client failed to send was destroyed
+        # and the caller still got 200 OK. A missing url is now a 400 —
+        # the request is refused, and the saved calendars are untouched.
+        return None, f"item {idx} missing url"
     err = _validate_url(url)
     if err:
         return None, f"item {idx} invalid url ({err})"

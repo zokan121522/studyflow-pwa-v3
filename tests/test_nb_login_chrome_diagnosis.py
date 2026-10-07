@@ -113,3 +113,62 @@ def test_stderr_is_not_swallowed_silently():
     assert "stderr=subprocess.DEVNULL" not in popen, (
         "capturar stderr a un pipe/log: es lo que escondía el error real"
     )
+
+
+# ── Windows-local port (2026-10-06) ──────────────────────────────────────
+
+def _login_module():
+    import importlib
+    with pytest.MonkeyPatch.context() as mp:
+        sys.path.insert(0, str(ROOT / "backend"))
+        return importlib.import_module("routes.notebooklm_login")
+
+
+def test_windows_chrome_found_in_program_files(monkeypatch):
+    """Chrome on Windows lives in Program Files, not on PATH.
+
+    The whole login button died on this: shutil.which() answered None, so the
+    guard claimed "Falta Google Chrome" while the browser was installed under
+    C:\Program Files\Google\Chrome (Playwright's channel='chrome' resolves it
+    fine through the registry — only our probe was blind to it).
+    """
+    login = _login_module()
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setenv("PROGRAMFILES", "C:/PROGRA~1")
+    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/x/AppData/Local")
+    monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+    monkeypatch.setattr(
+        "os.path.isfile",
+        lambda p: p.endswith("chrome.exe") and "PROGRA~1" in p.replace("\\", "/"),
+    )
+    assert login._missing_desktop_chrome() is False
+
+
+def test_windows_chrome_still_reported_missing_when_absent(monkeypatch):
+    """The guard must still bite when Chrome really is gone."""
+    login = _login_module()
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setenv("PROGRAMFILES", "C:/PROGRA~1")
+    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/x/AppData/Local")
+    monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+    monkeypatch.setattr("os.path.isfile", lambda p: False)
+    assert login._missing_desktop_chrome() is True
+
+
+def test_state_file_is_not_a_hardcoded_posix_tmp():
+    """Windows has no /tmp: the hardcoded path would 500 on every state write.
+
+    ``/tmp/notebooklm_login.json`` resolves to C:\tmp\... on Windows, which
+    does not exist, so _write_state() raised FileNotFoundError after the login
+    already launched — user saw Chrome open and a 500 at the same time.
+    """
+    import tempfile
+    login = _login_module()
+    tmp = tempfile.gettempdir()
+    assert tmp in login.STATE_FILE, (
+        f"STATE_FILE debe estar en el tempdir del sistema (Windows no tiene "
+        f"/tmp): {login.STATE_FILE}"
+    )
+    assert not login.STATE_FILE.startswith("/tmp/"), (
+        "ruta POSIX heredada: la app la escribía fuera de Windows"
+    )

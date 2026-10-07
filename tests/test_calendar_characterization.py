@@ -260,6 +260,39 @@ def test_calendar_list_requires_name_and_url():
     assert err is not None
 
 
+def test_calendar_list_refuses_an_item_that_is_only_missing_its_url():
+    """A named item with no url is refused, not dropped.
+
+    This is the data-loss bug behind the Digitech incident. PUT replaces the
+    whole stored list, so an item the client failed to send was silently
+    discarded and the caller got 200 OK — the calendar was deleted with no
+    error anywhere. GET never returns the real url, so the agenda's PUT of the
+    full list could never include a calendar it had loaded, and one add wiped
+    every saved one. A refusal now means the stored list is left untouched.
+    """
+    cleaned, ids, err = _normalise_calendar_list([
+        {"id": "keep", "name": "Digitech", "url": ""},
+    ])
+    assert err is not None, "an item without a url must be refused, never dropped"
+    assert cleaned == []
+
+
+def test_calendar_list_is_all_or_nothing():
+    """One bad item rejects the whole list.
+
+    Partially applying a list would leave the store in a state neither the
+    client's copy nor the server's matches, and the next PUT would be
+    computed against that mismatch.
+    """
+    cleaned, ids, err = _normalise_calendar_list([
+        {"id": "a", "name": "ok", "url": "https://x.test/a.ics"},
+        {"id": "b", "name": "no url", "url": ""},
+        {"id": "c", "name": "ok too", "url": "https://x.test/c.ics"},
+    ])
+    assert err is not None
+    assert cleaned == [], "the valid items must not be kept when one is invalid"
+
+
 def test_calendar_list_refuses_duplicate_ids():
     cleaned, ids, err = _normalise_calendar_list([
         {"id": "dup", "name": "a", "url": "https://x.test/a.ics"},

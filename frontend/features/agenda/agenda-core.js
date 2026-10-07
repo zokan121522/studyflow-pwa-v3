@@ -122,14 +122,23 @@ function getViewMode() { return _viewMode; }
     var playDisabled  = (settled || ts === "running") ? "disabled" : "";
     var pauseDisabled = (settled || ts !== "running") ? "disabled" : "";
     var stopDisabled  = (settled || (ts !== "running" && ts !== "paused")) ? "disabled" : "";
-    var moveDelDisabled = (ts === "running" || ts === "paused") ? "disabled" : "";
-    return statusTag +
-      '<button class="btn-play" data-sid="' + s.id + '" title="Iniciar" draggable="false" ' + playDisabled + '>▶️</button>' +
-      '<button class="btn-pause" data-sid="' + s.id + '" title="Pausar" draggable="false" ' + pauseDisabled + '>⏸</button>' +
-      '<button class="btn-stop" data-sid="' + s.id + '" title="Detener" draggable="false" ' + stopDisabled + '>⏹</button>' +
-      '<button class="btn-del" data-sid="' + s.id + '" data-scat="' + (s.category || "") +
-      '" data-stitle="' + _escAttr(s.title) + '" title="Borrar sesión" draggable="false" ' + moveDelDisabled + '>🗑️</button>' +
-      '<button class="btn-move" data-sid="' + s.id + '" title="Mover a otro día" draggable="false" ' + moveDelDisabled + '>📅</button>' +
+var moveDisabled = (ts === "running" || ts === "paused") ? "disabled" : "";
+  // Delete is gated only on a *running* clock, unlike move. A paused session
+  // is not mid-measurement: the accumulated time is already banked in
+  // timer_elapsed, so deleting it loses nothing and the user is left with a
+  // button that will not respond. This is exactly what was reported after the
+  // pause silently failed -- the session stayed "running" forever and the bin
+  // looked broken. Running still blocks it, because there the time really is
+  // being accumulated and a delete would throw it away.
+  var delDisabled = (ts === "running") ? "disabled" : "";
+  return statusTag +
+    '<button class="btn-play" data-sid="' + s.id + '" title="Iniciar" draggable="false" ' + playDisabled + '>▶️</button>' +
+    '<button class="btn-pause" data-sid="' + s.id + '" title="Pausar" draggable="false" ' + pauseDisabled + '>⏸</button>' +
+    '<button class="btn-stop" data-sid="' + s.id + '" title="Detener" draggable="false" ' + stopDisabled + '>⏹</button>' +
+    '<button class="btn-del" data-sid="' + s.id + '" data-scat="' + (s.category || "") +
+    '" data-stitle="' + _escAttr(s.title) + '" title="Borrar sesión" draggable="false" ' + delDisabled + '>🗑️</button>' +
+    '<button class="btn-move" data-sid="' + s.id + '" title="Mover a otro día" draggable="false" ' + moveDisabled + '>📅</button>' +
+
       '<button class="btn-copy" data-sid="' + s.id + '" title="Duplicar sesión" draggable="false">📋</button>';
   }
 

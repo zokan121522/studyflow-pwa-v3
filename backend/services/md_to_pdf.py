@@ -26,7 +26,24 @@ import subprocess
 import unicodedata
 from pathlib import Path
 
-from weasyprint import HTML
+try:
+    from weasyprint import HTML
+except ImportError:  # pragma: no cover - depends on the local install
+    # WeasyPrint is an optional heavy native dependency: it pulls in pango and
+    # cairo, and on some desktops the install fails on the native side even
+    # when pip reports success. Importing it at module scope meant one missing
+    # optional library took down the whole import chain, so ``import server``
+    # raised and the app refused to start -- over a single button.
+    #
+    # Degrade instead: the app boots, and only this one feature reports itself
+    # unavailable. markdown_to_pdf() turns this into a clear error at call time.
+    HTML = None
+
+#: Explains the failure to the API layer and the log, in one place.
+WEASYPRINT_UNAVAILABLE = (
+    "WeasyPrint is not installed, so markdown-to-PDF is unavailable. "
+    "Install the optional dependency: pip install weasyprint"
+)
 
 # ── Paths ────────────────────────────────────────────────────────
 _REPO_ROOT = Path(__file__).resolve().parents[2]          # repo root
@@ -89,11 +106,16 @@ def render_markdown_to_html(markdown: str) -> str:
         )
     except subprocess.TimeoutExpired as exc:
         raise MdRenderError("markdown rendering timed out") from exc
+    except OSError as exc:
+        # Node missing from PATH, no permission to exec it, or /tmp unwritable:
+        # report the real reason instead of letting it become a generic 500.
+        raise MdRenderError(f"could not run the markdown renderer: {exc}") from exc
     finally:
         md_file.unlink(missing_ok=True)
 
     if proc.returncode != 0:
-        raise MdRenderError(f"markdown renderer failed: {proc.stderr[:400]}")
+        reason = (proc.stderr or proc.stdout or "").strip()
+        raise MdRenderError(f"markdown renderer failed: {reason[:400] or 'unknown error'}")
     return proc.stdout.strip()
 
 
@@ -149,6 +171,9 @@ def markdown_to_pdf(
     markdown cannot be rendered, so the caller can answer with a 4xx instead of
     a 500 and the user learns what went wrong.
     """
+    if HTML is None:
+        raise MdRenderError(WEASYPRINT_UNAVAILABLE)
+
     fragment = render_markdown_to_html(markdown)
     if not fragment.strip():
         raise MdRenderError("the note is empty")
@@ -165,8 +190,15 @@ def markdown_to_pdf(
 
     # raise_for_errors=False: a malformed image link should not lose the whole
     # document. WeasyPrint reports what it skipped and WeasyPrint warns.
-    document = HTML(string=html).render(fail_if_major_issues=False)
-    document.write_pdf(str(out))
+    try:
+        document = HTML(string=html).render(fail_if_major_issues=False)
+        document.write_pdf(str(out))
+    except Exception as exc:
+        # WeasyPrint's native layer surfaces a wide range of failures (missing
+        # fontconfig, bad CSS, unwritable output...). Re-raise as MdRenderError
+        # so the route answers 400 with the real reason instead of a blank 500.
+        reason = str(exc).strip() or type(exc).__name__
+        raise MdRenderError(f"PDF render failed: {reason[:300]}") from exc
 
     try:
         # pymupdf is the current name; the old `fitz` alias warns on import.

@@ -38,7 +38,7 @@
   z-index: 899;             /* below the FAB so it stays clickable */
   min-width: 230px;
   max-width: 280px;
-  background: var(--surface-2, #fff);
+  background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
@@ -90,7 +90,7 @@
   padding: 16px;
 }
 .ss-settings-modal {
-  background: var(--surface-1, #fff);
+  background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -145,7 +145,7 @@
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid var(--border, #d1d5db);
-  background: var(--surface-2, #f3f4f6);
+  background: var(--surface-hover, #f3f4f6);
   color: var(--text, #1f2937);
   font-size: 13px;
   font-weight: 600;
@@ -219,7 +219,7 @@
 .nb-chrome-command {
   display: block;
   padding: 10px 12px;
-  background: var(--surface-2, #f3f4f6);
+  background: var(--surface-hover, #f3f4f6);
   border: 1px solid var(--border, #d1d5db);
   border-radius: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -233,3 +233,39 @@
 .nb-login-info { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
 .nb-login-ok { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
 .nb-login-err { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+/* noVNC embedded login — full-screen modal (Chromium streamed via /novnc) */
+.nb-vnc-modal {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+.nb-vnc-panel {
+  width: 92vw; height: 92vh; max-width: 1500px;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.nb-vnc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 20px;
+  border-bottom: 1px solid var(--border); background: var(--surface-hover);
+}
+.nb-vnc-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.nb-vnc-head-actions { display: flex; gap: 8px; align-items: center; }
+.nb-vnc-hint { font-size: 11px; color: var(--text-muted); }
+.nb-vnc-done {
+  padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #fff;
+  background: linear-gradient(135deg, #1a73e8, #0d47a1);
+}
+.nb-vnc-cancel {
+  padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px;
+  background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px;
+}
+.nb-vnc-body { position: relative; flex: 1; display: flex; }
+.nb-vnc-frame-full { width: 100%; height: 100%; border: none; background: #000; }
+.nb-vnc-loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--text-muted); font-size: 14px;
+}

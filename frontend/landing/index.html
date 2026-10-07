@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyFlow PWA - Guía y Tutoriales</title>
+  <meta name="theme-color" content="#16213e">
+  <link rel="manifest" href="/manifest.json">
+  <!-- Self-contained styles. Deliberately NOT /styles.css: that sheet locks
+       body{overflow:hidden;height:100vh} for the SPA shell, which would make
+       this standalone page unscrollable. landing.css carries its own palette
+       (same tokens as the app) and only the pieces this page needs. -->
+  <link rel="stylesheet" href="/landing/css/landing.css">
+  <!-- Honour the app's dark/light choice (same localStorage key). -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("sf-theme") === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <div class="logo">
+        <span class="logo-dot"></span>
+        <span>StudyFlow PWA</span>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#inicio">Inicio</a></li>
+        <li><a href="#instalacion">Instalación</a></li>
+        <li><a href="#tutoriales">Tutoriales</a></li>
+        <li><a href="#actualizaciones">Actualizaciones</a></li>
+        <li><a href="/" class="btn btn-primary">Abrir App</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section id="inicio" class="hero">
+      <span class="badge">PWA Instalabe • Multiplataforma • Autoactualizable</span>
+      <h1>StudyFlow PWA</h1>
+      <p>Organiza tu estudio, agenda, hábitos y cursos. Instálala como app nativa en cualquier dispositivo y recibe actualizaciones automáticamente.</p>
+      <div class="hero-actions">
+        <a href="/" class="btn btn-primary">Abrir StudyFlow</a>
+        <a href="#instalacion" class="btn">Cómo instalar</a>
+        <a href="#tutoriales" class="btn">Ver tutoriales</a>
+      </div>
+    </section>
+    <section id="instalacion" class="section">
+      <h2>Cómo instalar StudyFlow PWA</h2>
+      <p class="section-subtitle">Instálala en pocos pasos según tu sistema operativo.</p>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>Android (Chrome/Edge)</h3>
+          <ol style="margin-top:1rem; padding-left:1.5rem; display:flex; flex-direction:column; gap:.75rem; color:var(--text-secondary)">
+            <li>Abre <a href="/" style="color:var(--accent)">StudyFlow</a> en Chrome o Edge</li>
+            <li>Toca el menú (⋯) → <strong>Instalar app</strong> o <strong>Añadir a pantalla de inicio</strong></li>
+            <li>Confirma → aparece el icono</li>
+            <li>Ábrela desde el icono (modo standalone)</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>iOS (Safari)</h3>
+          <ol style="margin-top:1rem; padding-left:1.5rem; display:flex; flex-direction:column; gap:.75rem; color:var(--text-secondary)">
+            <li>Abre <a href="/" style="color:var(--accent)">StudyFlow</a> en Safari</li>
+            <li>Toca el botón Compartir (□↑)</li>
+            <li>Selecciona <strong>Añadir a pantalla de inicio</strong></li>
+            <li>Guarda → icono en pantalla de inicio</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Windows (Chrome/Edge)</h3>
+          <ol style="margin-top:1rem; padding-left:1.5rem; display:flex; flex-direction:column; gap:.75rem; color:var(--text-secondary)">
+            <li>Abre <a href="/" style="color:var(--accent)">StudyFlow</a> en Chrome/Edge</li>
+            <li>Pulsa <strong>Instalar</strong> en barra o menú (⋯) → <strong>Instalar aplicación</strong></li>
+            <li>Acepta → ventana independiente</li>
+            <li>Acceso desde menú Inicio/Escritorio</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>macOS (Chrome/Edge/Safari)</h3>
+          <ol style="margin-top:1rem; padding-left:1.5rem; display:flex; flex-direction:column; gap:.75rem; color:var(--text-secondary)">
+            <li>Abre <a href="/" style="color:var(--accent)">StudyFlow</a></li>
+            <li>Chrome/Edge: menú → <strong>Instalar aplicación</strong></li>
+            <li>Safari: Compartir → Añadir a Dock/Pantalla inicio</li>
+            <li>Abre como app standalone</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Linux (Chrome/Edge)</h3>
+          <ol style="margin-top:1rem; padding-left:1.5rem; display:flex; flex-direction:column; gap:.75rem; color:var(--text-secondary)">
+            <li>Abre <a href="/" style="color:var(--accent)">StudyFlow</a> en Chrome/Edge</li>
+            <li>Menú (⋯) → <strong>Instalar aplicación</strong></li>
+            <li>Confirma → aparece en lanzador</li>
+            <li>Ábrela desde lanzador</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+    <section id="tutoriales" class="section">
+      <h2>Tutoriales</h2>
+      <p class="section-subtitle">16 vídeos cortos, prácticos y autoalojados.</p>
+      <div class="grid grid-3">
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/01-que-es.mp4"></video><div class="video-info"><div class="video-title">01. ¿Qué es StudyFlow PWA?</div><div class="video-meta"><span>1:01</span><span>Intro</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/02-instalar.mp4"></video><div class="video-info"><div class="video-title">02. Instalar la PWA</div><div class="video-meta"><span>1:20</span><span>Instalación</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/04-dashboard.mp4"></video><div class="video-info"><div class="video-title">04. Vista general y navegación</div><div class="video-meta"><span>0:49</span><span>Dashboard</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/05-agenda.mp4"></video><div class="video-info"><div class="video-title">05. Agenda: crear sesiones</div><div class="video-meta"><span>1:20</span><span>Agenda</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/06-calendarios.mp4"></video><div class="video-info"><div class="video-title">06. Agenda: importar calendarios</div><div class="video-meta"><span>1:02</span><span>Agenda</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/07-cursos.mp4"></video><div class="video-info"><div class="video-title">07. Studyflow: cómo navegar</div><div class="video-meta"><span>1:25</span><span>Studyflow</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/08-bloques.mp4"></video><div class="video-info"><div class="video-title">08. Añadir y editar bloques</div><div class="video-meta"><span>1:13</span><span>Studyflow</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/09-notebooklm.mp4"></video><div class="video-info"><div class="video-title">09. NotebookLM</div><div class="video-meta"><span>1:12</span><span>IA</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/10-openzen.mp4"></video><div class="video-info"><div class="video-title">10. OpenZen</div><div class="video-meta"><span>1:03</span><span>IA</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/11-pdfs.mp4"></video><div class="video-info"><div class="video-title">11. PDFs</div><div class="video-meta"><span>1:05</span><span>PDFs</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/12-quiz.mp4"></video><div class="video-info"><div class="video-title">12. Quiz</div><div class="video-meta"><span>0:55</span><span>Quiz</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/14-audio.mp4"></video><div class="video-info"><div class="video-title">14. Audio e IA</div><div class="video-meta"><span>1:01</span><span>Audio</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/15-fab.mp4"></video><div class="video-info"><div class="video-title">15. El botón flotante (⚙️ · Digitech)</div><div class="video-meta"><span>0:54</span><span>Config</span></div></div></div>
+        <div class="video-card"><video class="video-player" controls preload="metadata" playsinline src="/landing/videos/16-recorrido.mp4"></video><div class="video-info"><div class="video-title">16. Recorrido rápido</div><div class="video-meta"><span>0:41</span><span>Resumen</span></div></div></div>
+      </div>
+    </section>
+    <section id="actualizaciones" class="section">
+      <h2>Actualizaciones PWA</h2>
+      <p class="section-subtitle">Controladas, no forzadas.</p>
+      <div class="card" style="max-width:800px;margin:0 auto">
+        <ol style="padding-left:1.5rem;display:flex;flex-direction:column;gap:.75rem;color:var(--text-secondary)">
+          <li>El Service Worker detecta nueva versión → queda en <strong>waiting</strong></li>
+          <li>Aparece <strong>banner "Nueva versión disponible – Actualizar"</strong> a todos con app instalada</li>
+          <li><strong>Cada uno acepta cuando quiera</strong></li>
+          <li>Al pulsar Actualizar, recarga con nueva versión</li>
+          <li>Multiplataforma (Linux/Win/macOS/iOS/Android)</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">
+    <p>StudyFlow PWA • Guía de instalación y tutoriales</p>
+  </footer>
+  <script src="/landing/js/landing.js"></script>
+</body>
+</html>

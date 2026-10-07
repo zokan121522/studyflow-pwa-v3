@@ -175,17 +175,16 @@ window.App.NotebookLmSettings = (function () {
     const emailInput = _el("input", { type: "email", placeholder: "tu.email@gmail.com" });
     if (_status && _status.active_profile) emailInput.value = _status.active_profile;
     const status = _text("div", "nb-login-status", "");
-    const startBtn = _btn("🌐 Abrir Chrome", "", () => _startLogin(emailInput, startBtn, status, bodyEl, statusEl));
+    const startBtn = _btn("🌐 Iniciar sesión", "", () => _startLogin(emailInput, startBtn, status, bodyEl, statusEl));
     const hideBtn = _btn("↩ Cerrar", "", () => {
       _stopLoginPoll();
       area.style.display = "none"; area.innerHTML = "";
     });
-
     area.innerHTML = "";
     area.appendChild(_text("h4", "", "🌐 Iniciar sesión en Google"));
     area.appendChild(_text("p", "ss-settings-hint",
-      "Se abre una ventana real de Google Chrome. Completa el login con tu cuenta "
-      + "y vuelve aquí: la app detecta las cookies automáticamente."));
+      "Se abrirá una ventana de Google a pantalla completa (Chromium + noVNC). "
+      + "Completa el login ahí y la app detectará las cookies sola."));
     area.appendChild(_text("label", "ss-settings-field", "Email de la cuenta:"));
     area.appendChild(emailInput);
     area.appendChild(_el("div", { class: "nb-inline-actions" }, [startBtn, hideBtn]));
@@ -196,27 +195,28 @@ window.App.NotebookLmSettings = (function () {
     const account = emailInput.value.trim();
     if (!account) { status.textContent = "⚠️ Introduce el email de la cuenta primero"; return; }
     startBtn.disabled = true;
-    startBtn.textContent = "⏳ Abriendo…";
-    status.textContent = "Abriendo ventana de Google Chrome…";
+    startBtn.textContent = "⏳ Iniciando…";
+    status.textContent = "Arrancando el navegador embebido…";
     status.className = "nb-login-status nb-login-info";
     _stopLoginPoll();
     try {
       const resp = await API.post("/settings/notebooklm/login-start", { account });
       if (resp && resp.success) {
-        status.textContent = "✅ " + (resp.message || "Ventana abierta. Completa el login en Chrome.");
+        status.textContent = "✅ " + (resp.message || "Completa el login en la pantalla embebida.");
         status.className = "nb-login-status nb-login-ok";
+        if (resp.vnc_url) _showVncModal(resp.vnc_url, bodyEl, statusEl);
         _pollLogin(status, bodyEl, statusEl);
       } else {
         status.textContent = "❌ " + ((resp && resp.message) || "Error al abrir el login");
         status.className = "nb-login-status nb-login-err";
         startBtn.disabled = false;
-        startBtn.textContent = "🌐 Abrir Chrome";
+        startBtn.textContent = "🌐 Iniciar sesión";
       }
     } catch (err) {
       status.textContent = "❌ " + err.message;
       status.className = "nb-login-status nb-login-err";
       startBtn.disabled = false;
-      startBtn.textContent = "🌐 Abrir Chrome";
+      startBtn.textContent = "🌐 Iniciar sesión";
     }
   }
 
@@ -226,8 +226,9 @@ window.App.NotebookLmSettings = (function () {
       try {
         const st = await API.get("/settings/notebooklm/login-status");
         if (st.storage_created) {
-          // Cookies landed — stop polling, refresh list
+          // Cookies landed — stop polling, close the modal, refresh the list
           _stopLoginPoll();
+          _closeVncModal();
           status.textContent = "✅ Cookies guardadas. Perfil actualizado.";
           status.className = "nb-login-status nb-login-ok";
           _refresh(bodyEl);
@@ -242,6 +243,56 @@ window.App.NotebookLmSettings = (function () {
         // transient — keep polling
       }
     }, 2000);
+  }
+
+  // Full-screen modal with the streamed Chromium (noVNC), as in v2.
+  function _showVncModal(vncUrl, bodyEl, statusEl) {
+    _closeVncModal();
+    const modal = _el("div", { id: "nb-vnc-modal", class: "nb-vnc-modal" });
+    modal.innerHTML =
+      '<div class="nb-vnc-panel">'
+      + '<div class="nb-vnc-head">'
+      + '<span class="nb-vnc-title">🌐 Login NotebookLM — Navegador embebido</span>'
+      + '<div class="nb-vnc-head-actions">'
+      + '<span class="nb-vnc-hint">Inicia sesión en Google y pulsa «Hecho»</span>'
+      + '<button id="nb-vnc-done-btn" class="nb-vnc-done">✅ Hecho — ya inicié sesión</button>'
+      + '<button id="nb-vnc-cancel-btn" class="nb-vnc-cancel">✕ Cancelar</button>'
+      + '</div></div>'
+      + '<div class="nb-vnc-body">'
+      + '<iframe id="nb-vnc-iframe" class="nb-vnc-frame-full" src="' + vncUrl + '"'
+      + ' allow="clipboard-read; clipboard-write"></iframe>'
+      + '<div id="nb-vnc-loading" class="nb-vnc-loading">⏳ Conectando con el navegador…</div>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+
+    const done = modal.querySelector("#nb-vnc-done-btn");
+    const cancel = modal.querySelector("#nb-vnc-cancel-btn");
+    if (done) done.addEventListener("click", () => _finishVnc(bodyEl, statusEl, true));
+    if (cancel) cancel.addEventListener("click", () => _finishVnc(bodyEl, statusEl, false));
+    const iframe = modal.querySelector("#nb-vnc-iframe");
+    if (iframe) iframe.addEventListener("load", () => {
+      const l = modal.querySelector("#nb-vnc-loading");
+      if (l) l.style.display = "none";
+    });
+  }
+
+  function _closeVncModal() {
+    const m = document.getElementById("nb-vnc-modal");
+    if (m) m.remove();
+  }
+
+  async function _finishVnc(bodyEl, statusEl, checkCookies) {
+    _closeVncModal();
+    _stopLoginPoll();
+    try {
+      const res = await API.post("/settings/notebooklm/login-stop", {});
+      if (checkCookies && res && res.connected) {
+        _refresh(bodyEl);
+        _setStatus(statusEl, "✅ Login completado. Cookies guardadas.", "ok");
+      }
+    } catch (err) {
+      // session already gone — nothing to do
+    }
   }
 
   function _showChromeExport(bodyEl, statusEl) {

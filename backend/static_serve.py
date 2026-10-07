@@ -41,6 +41,15 @@ def _index() -> str:
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
+def _landing() -> str:
+    """Landing / guide page (install + tutorials), a sibling of the SPA.
+
+    Lives at /landing/ instead of being a route of the SPA: the guide has its
+    own hero + nav and is meant to be shareable/linkable on its own.
+    """
+    return send_from_directory(FRONTEND_DIR, "landing/index.html")
+
+
 def _asset(path: str):
     full = safe_join(FRONTEND_DIR, path)
     if full is None or not os.path.isfile(full):
@@ -57,6 +66,13 @@ def init_static(app) -> None:
     @app.get("/")
     def _root():
         return _index()
+
+    # Explicit so "/landing/" (trailing slash, directory) does not fall
+    # through to the catch-all, which would serve the SPA index instead.
+    @app.get("/landing")
+    @app.get("/landing/")
+    def _landing_page():
+        return _landing()
 
     @app.get("/<path:subpath>")
     def _files(subpath: str):

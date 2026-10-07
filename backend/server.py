@@ -30,6 +30,7 @@ from routes.courses_aliases import bp as courses_aliases_bp
 from routes.blocks import bp as blocks_bp
 from routes.pdf import bp as pdf_bp
 from routes.pdf_md2pdf import bp as pdf_md2pdf_bp
+from routes.image import bp as image_bp
 from routes.quiz import bp as quiz_bp
 from routes.addons import bp as addons_bp
 from routes.todos import bp as todos_bp
@@ -43,6 +44,17 @@ from routes.ai import bp as ai_bp
 from routes.notebooklm_content import bp as notebooklm_content_bp
 from routes.yt_meta import bp as yt_meta_bp
 from routes.backup import bp as backup_bp
+from backup_user import bp as backup_user_bp
+from backup_options import bp as backup_options_bp
+from backup_user_restore import bp as backup_user_restore_bp
+
+# noVNC bridge for the interactive NotebookLM login. Registered WITHOUT the
+# /api prefix because its routes are absolute (/novnc/...). Guarded so the app
+# still boots on hosts without gevent (e.g. native macOS dev).
+try:
+    from routes.novnc_proxy import bp as novnc_proxy_bp
+except Exception:  # pragma: no cover - optional dependency
+    novnc_proxy_bp = None
 
 
 def create_app() -> Flask:
@@ -76,14 +88,19 @@ def _register_blueprints(app: Flask) -> None:
         agenda_state_bp, agenda_categories_bp,
         quick_notes_bp, calendar_bp, calendar_import_bp,
         habits_bp, courses_bp, courses_aliases_bp, blocks_bp,
-        pdf_bp, pdf_md2pdf_bp, quiz_bp, addons_bp,
+        pdf_bp, pdf_md2pdf_bp, image_bp, quiz_bp, addons_bp,
         todos_bp, audio_bp, tts_bp, settings_bp,
         notebooklm_settings_bp, notebooklm_login_bp,
         ai_bp, notebooklm_content_bp, backup_bp,
+        backup_user_bp, backup_options_bp, backup_user_restore_bp,
         yt_meta_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp, url_prefix='/api')
+
+    # noVNC uses absolute paths (/novnc/...), so it must NOT get the /api prefix.
+    if novnc_proxy_bp is not None:
+        app.register_blueprint(novnc_proxy_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

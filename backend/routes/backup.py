@@ -11,8 +11,10 @@
                               so the UI can preview before committing
   POST /api/backup/v2/import→ multipart v2 backup → full migration
 
-Two backup formats are accepted on the v2 endpoints: the v3 `backup.json`
-and the v2 `user_data.sql` COPY dump. `detect_format` tells them apart.
+Each format has its own endpoint; they are not interchangeable. `/backup/import`
+  opens `backup.json` (v3), and the v2 endpoints open `user_data.sql` (v2
+  PostgreSQL COPY dump). `detect_format` tells them apart. An earlier version of
+  this docstring claimed both endpoints took both formats, which they do not.
 
 Logic lives in backup_core.py / v2_import.py; this module wires routes.
 """

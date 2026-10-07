@@ -46,6 +46,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # nodejs para la CLI de edge-tts (no está en slim)
         nodejs \
         npm \
+        # Display virtual + servidor VNC + WM para el login embebido de
+        # NotebookLM (routes/notebooklm_login.py, modo VNC). x11vnc expone el
+        # display por RFB y fluxbox da un gestor de ventanas para que el
+        # Chromium headed tenga dónde dibujar. xauth lo pide Xvfb.
+        xvfb \
+        x11vnc \
+        fluxbox \
+        xauth \
         # Chromium necesita estas librerías en Debian
         libnss3 \
         libnspr4 \
@@ -72,6 +80,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Playwright: descarga el Chromium en la ruta que fijamos arriba.
 RUN playwright install --with-deps chromium
+
+# noVNC: los estáticos (HTML/JS) que sirve routes/novnc_proxy.py. Sólo los
+# ficheros; el bridge WebSocket ↔ RFB lo hace el propio Flask con gevent, así
+# que NO instalamos websockify ni el script novnc_proxy del sistema (a
+# diferencia de v2, donde corrían como proceso aparte en el puerto 6080).
+ARG NOVNC_VERSION=1.5.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+        | tar xz -C /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && ln -sf /opt/novnc/vnc.html /opt/novnc/index.html
 
 # Playwright: Chrome de escritorio, para el login de NotebookLM.
 #
@@ -113,11 +131,19 @@ EXPOSE 8080
 
 # gunicorn en vez de app.run(debug=True): el reloader de Flask con el
 # bind-mount ./backend:/app provocaría un bucle de reinicios en Docker.
+#
+# Worker gevent (GeventWebSocketWorker) con UN solo worker: es lo que permite
+# el upgrade WebSocket del bridge noVNC (/novnc/ws). El worker gevent hace
+# monkey-patch y atiende concurrencia con greenlets, así que 1 worker basta.
+# `--timeout 0` desactiva el timeout del worker: si no, gunicorn mataría el
+# worker por «inactividad» mientras el WebSocket de noVNC está abierto
+# esperando a que el usuario complete el login de Google.
 CMD ["gunicorn", \
      "--chdir", "/srv/backend", \
      "--bind", "0.0.0.0:8080", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--timeout", "120", \
+     "--worker-class", "gevent_ws_worker.GeventWebSocketWorker", \
+     "--workers", "1", \
+     "--timeout", "0", \
+     "--graceful-timeout", "30", \
      "--access-logfile", "-", \
      "server:app"]

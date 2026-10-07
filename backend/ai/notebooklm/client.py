@@ -27,8 +27,34 @@ import os
 import re
 import time as _time  # noqa: F401  (kept for parity with v2 history)
 
-from notebooklm import NotebookLMClient
-from notebooklm.exceptions import ChatResponseParseError
+# notebooklm-py is an optional, heavy dependency (it pulls Playwright and its
+# browsers). It used to be imported at module level, and because
+# routes/notebooklm_settings.py imports this module, the whole app refused to
+# boot on any machine without the SDK installed. That made the local-first
+# install impossible on a clean machine — and pointless on Windows, where the
+# Playwright browser download is a large extra step.
+#
+# Same treatment as psycopg2 (Postgres-only) and gevent (noVNC-only): resolve
+# it on first use, so only the NotebookLM feature pays for it.
+try:  # pragma: no cover - depends on whether the SDK is installed
+    from notebooklm import NotebookLMClient
+    from notebooklm.exceptions import ChatResponseParseError
+
+    _HAVE_NOTEBOOKLM = True
+except ImportError:  # pragma: no cover
+    NotebookLMClient = None
+    ChatResponseParseError = None
+    _HAVE_NOTEBOOKLM = False
+
+
+def _require_notebooklm():
+    """Raise a clear error only when the NotebookLM feature is actually used."""
+    if not _HAVE_NOTEBOOKLM:
+        raise RuntimeError(
+            "NotebookLM support is not installed. Run: "
+            "pip install notebooklm-py==0.8.4"
+        )
+    return NotebookLMClient
 
 from ai.notebooklm.prompts import (
     PDF_TO_MARKDOWN_PROMPT,
@@ -124,7 +150,7 @@ async def _add_file_and_ask(pdf_path: str, prompt: str) -> str:
     """
     profile = _get_active_profile()
     kwargs = {"profile": profile} if profile else {}
-    async with NotebookLMClient.from_storage(**kwargs) as client:
+    async with _require_notebooklm().from_storage(**kwargs) as client:
         # 1. Create temporary notebook
         nb = await client.notebooks.create(_NOTEBOOK_NAME)
 
@@ -184,7 +210,7 @@ async def _chat_general(system_prompt: str,
     """
     profile = _get_active_profile()
     kwargs = {"profile": profile} if profile else {}
-    async with NotebookLMClient.from_storage(**kwargs) as client:
+    async with _require_notebooklm().from_storage(**kwargs) as client:
 
         async def _do_ask() -> str:
             """Create notebook → ask → return answer text."""

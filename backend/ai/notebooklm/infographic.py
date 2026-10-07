@@ -25,11 +25,46 @@ import threading
 import time
 from pathlib import Path
 
-from notebooklm.types import (
-    InfographicOrientation,
-    InfographicDetail,
-    InfographicStyle,
-)
+try:  # pragma: no cover - optional, heavy SDK
+    from notebooklm.types import (
+        InfographicOrientation,
+        InfographicDetail,
+        InfographicStyle,
+    )
+except ImportError:  # pragma: no cover
+    # These maps below are built at import time, so a plain "None" would crash
+    # the app on a clean install. The SDK enums are string-valued, so these
+    # stand-ins keep the maps valid; nothing here is ever sent to NotebookLM
+    # without the SDK installed, because the calling route fails first.
+    class _StrEnum:
+        def __init__(self, name: str, value: str):
+            self.name, self.value = name, value
+
+        def __repr__(self):
+            return f"<{type(self).__name__}.{self.name}: {self.value!r}>"
+
+    class InfographicOrientation:
+        LANDSCAPE = _StrEnum("LANDSCAPE", "landscape")
+        PORTRAIT = _StrEnum("PORTRAIT", "portrait")
+        SQUARE = _StrEnum("SQUARE", "square")
+
+    class InfographicDetail:
+        CONCISE = _StrEnum("CONCISE", "concise")
+        STANDARD = _StrEnum("STANDARD", "standard")
+        DETAILED = _StrEnum("DETAILED", "detailed")
+
+    class InfographicStyle:
+        AUTO_SELECT = _StrEnum("AUTO_SELECT", "auto_select")
+        SKETCH_NOTE = _StrEnum("SKETCH_NOTE", "sketch_note")
+        PROFESSIONAL = _StrEnum("PROFESSIONAL", "professional")
+        BENTO_GRID = _StrEnum("BENTO_GRID", "bento_grid")
+        EDITORIAL = _StrEnum("EDITORIAL", "editorial")
+        INSTRUCTIONAL = _StrEnum("INSTRUCTIONAL", "instructional")
+        BRICKS = _StrEnum("BRICKS", "bricks")
+        CLAY = _StrEnum("CLAY", "clay")
+        ANIME = _StrEnum("ANIME", "anime")
+        KAWAII = _StrEnum("KAWAII", "kawaii")
+        SCIENTIFIC = _StrEnum("SCIENTIFIC", "scientific")
 
 from database import execute, execute_returning
 

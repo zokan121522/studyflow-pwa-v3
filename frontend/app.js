@@ -317,6 +317,99 @@ App.registerModule('Agenda', window.AgendaModule || null);
 App.registerModule('Courses', window.CoursesModule || null);
 
 
+// ══════════════════════════════════════════════════════════════════
+// Dashboard: Habit Grid (21-day mini heatmap) — v2 parity
+// ══════════════════════════════════════════════════════════════════
+// Port of v2's `window.App.Dashboard` (studyflow-hub frontend/app.js). The
+// dashboard home shows the same widgets as v2: this habit heatmap + the
+// read-only agenda side panel (mounted by renderDashboard below). Kept in
+// app.js because v2 keeps it here too and it is ~60 lines of DOM string.
+App.Dashboard = (function () {
+  "use strict";
+
+  function _isWeekend(dateStr) {
+    const d = new Date(dateStr + "T12:00:00");
+    const day = d.getDay();
+    return day === 0 || day === 6;
+  }
+
+  /** Fetch habits data and render the 21-day grid into #dhg-body. */
+  async function renderHabitGrid() {
+    const body = document.getElementById("dhg-body");
+    if (!body) return;
+
+    try {
+      const resp = await API.get("/habits/grid?days=21");
+      const { columns, grid } = resp || {};
+      if (!columns || !columns.length) {
+        body.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px;">
+          Sin hábitos aún. <a href="#" id="dhg-empty-link" style="color:var(--primary);">Crear hábitos</a>
+        </div>`;
+        document.getElementById("dhg-empty-link")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          const agendaBtn = document.querySelector('.tab-btn[data-tab="agenda"]');
+          if (agendaBtn) agendaBtn.click();
+        });
+        return;
+      }
+
+      let html = "";
+
+      // Header row with day-of-month labels
+      html += `<div class="dhg-row dhg-header-row">`;
+      html += `<div class="dhg-label-col" title="Hábitos"></div>`;
+      for (const day of grid) {
+        const d = String(day.date).slice(8, 10); // DD
+        const isWeekend = _isWeekend(day.date);
+        html += `<div class="dhg-cell dhg-day-label ${isWeekend ? "dhg-weekend" : ""}" title="${day.date}">${d}</div>`;
+      }
+      html += `<div class="dhg-progress-col" title="% completado">%</div>`;
+      html += `</div>`;
+
+      // One row per habit column
+      for (const col of columns) {
+        html += `<div class="dhg-row">`;
+        html += `<div class="dhg-label-col" title="${col.label}">${String(col.label).slice(0, 4)}</div>`;
+        let checkedCount = 0;
+        for (const day of grid) {
+          const val = day.habits ? day.habits[col.key] : false;
+          const checked = val === true || val === "true";
+          if (checked) checkedCount++;
+          const cls = checked ? "dhg-cell dhg-on" : "dhg-cell dhg-off";
+          html += `<div class="${cls}" title="${day.date}: ${col.label} = ${checked ? "✅" : "❌"}"></div>`;
+        }
+        const pct = Math.round((checkedCount / grid.length) * 100);
+        html += `<div class="dhg-progress-col" title="${pct}% de días">${pct > 0 ? pct + "%" : ""}</div>`;
+        html += `</div>`;
+      }
+
+      // Overall progress row
+      html += `<div class="dhg-row dhg-overall-row">`;
+      html += `<div class="dhg-label-col" title="Global" style="font-weight:600;">✨</div>`;
+      for (const day of grid) {
+        const p = day.progress || 0;
+        let cls = "dhg-cell";
+        if (p >= 80) cls += " dhg-on";
+        else if (p >= 40) cls += " dhg-mid";
+        else if (p > 0) cls += " dhg-low";
+        else cls += " dhg-off";
+        html += `<div class="${cls}" title="${day.date}: ${p}%"></div>`;
+      }
+      html += `<div class="dhg-progress-col"></div>`;
+      html += `</div>`;
+
+      body.innerHTML = html;
+    } catch (e) {
+      body.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px;">
+        Error al cargar hábitos: ${e.message}
+      </div>`;
+    }
+  }
+
+  return { renderHabitGrid };
+})();
+
+
 // ─── Auth Event Listener ────────────────────────────────────────────
 window.addEventListener('auth:unauthorized', () => {
   console.log('[Auth] Token expired or invalid, redirecting to login');
@@ -331,6 +424,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const viewPanels = document.querySelectorAll('.view-panel');
   const mainEl = document.querySelector('.main');
 
+  // Header buttons: 📦 opens the selective backup modal, ⬆️ picks a ZIP.
+  // Wiring lives here (function is hoisted, defined further down).
+  initBackupRestore();
+
   // ─── Sync main grid visibility ────────────────────────────────
   // The dashboard lives OUTSIDE .main (v2 parity). Both are flex:1
   // children of #app, so when the dashboard is shown the main grid must
@@ -339,7 +436,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!mainEl) return;
     const dashShown = !document.getElementById('view-dashboard')?.classList.contains('hidden');
     mainEl.classList.toggle('hidden', dashShown);
+    // Option A: with the dashboard visible the WHOLE PAGE scrolls (not the
+    // .dashboard-container block). The CSS keys off this body class.
+    document.body.classList.toggle('dashboard-view', dashShown);
   };
+
+  // ─── Render the dashboard home (v2 parity) ────────────────────
+  // The home is more than static markup: v2 fills it with the 21-day habit
+  // heatmap and the read-only agenda side panel. We (re)render both every
+  // time the dashboard comes into view so they are never stale.
+  const renderDashboard = () => {
+    if (App.Dashboard && App.Dashboard.renderHabitGrid) {
+      App.Dashboard.renderHabitGrid();
+    }
+    const panelEl = document.getElementById('dashboard-agenda-panel');
+    if (panelEl && window.App?.Agenda?.buildAgendaSidePanel) {
+      window.App.Agenda.buildAgendaSidePanel(panelEl, {
+        readOnly: true,
+        compact: true,
+        idPrefix: 'dash-',
+      });
+    }
+    if (window.App?.CoursesDashboard?.renderFavoritesRow) {
+      window.App.CoursesDashboard.renderFavoritesRow();
+    }
+  };
+
+  // "Ir a Hábitos →" on the dashboard jumps to the Agenda tab.
+  document.getElementById('dhg-view-all')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const agendaBtn = document.querySelector('.tab-btn[data-tab="agenda"]');
+    if (agendaBtn) agendaBtn.click();
+  });
   
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -381,6 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('view-dashboard')?.classList.remove('hidden');
     App.state.activeTab = 'dashboard';
     syncMainWithDashboard();
+    renderDashboard();
   });
 
   // ─── Theme toggle (dual dark/light, v2 palette) ────────────────
@@ -522,6 +651,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderActiveTab();
   updateOnlineStatus();
   syncMainWithDashboard();
+  // The home is the default view on boot — paint its widgets now.
+  renderDashboard();
 
   const loading = document.getElementById('loading-screen');
   if (loading) loading.classList.add('hidden');
@@ -530,6 +661,240 @@ document.addEventListener('DOMContentLoaded', async () => {
   const app = document.getElementById('app');
   if (app) app.classList.remove('hidden');
 });
+
+
+// ─── Backup / Restore (v2 parity — issue #23) ───────────────────────
+// Ported from studyflow-hub/luna frontend/app.js (BACKUP / RESTORE
+// section + the btn-backup/btn-restore listeners in its DOMContentLoaded).
+// Endpoints: POST /api/backup/mine (ZIP), POST /api/backup/mine/restore
+// (additive). backup-selector.js (loaded right after this file) owns the
+// modal and calls window.downloadBackup(body).
+//
+// The backup is a single synchronous POST that can return well over a GB.
+// The server builds the entire archive before it sends the first byte, so
+// the browser sees a dead connection for the first ~80s. Two clocks race us
+// meanwhile: any reverse-proxy origin timeout and the worker's own timeout.
+// A plain `await fetch()` with no AbortController turns any hiccup into a
+// button stuck on "Preparando…" forever, with no error and no way out.
+const BACKUP_TIMEOUT_MS = 20 * 60 * 1000;
+const BACKUP_SERVER_PREP_S = 80;
+const BACKUP_LOG_MAX_LINES = 200;
+const BACKUP_LOG_STEP_BYTES = 64 * 1024 * 1024;
+
+function _fmtBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function _fmtClock(seconds) {
+  const m = Math.floor(seconds / 60);
+  return `${m}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+}
+
+function backupLog(message, level = '') {
+  const panel = document.getElementById('backup-log');
+  const body = document.getElementById('backup-log-body');
+  if (!panel || !body) return;
+  panel.classList.remove('hidden');
+  const line = document.createElement('div');
+  line.className = `bk-log-line${level ? ' bk-' + level : ''}`;
+  const ts = new Date().toLocaleTimeString('es-ES', { hour12: false });
+  line.textContent = `[${ts}] ${message}`;
+  body.appendChild(line);
+  while (body.childElementCount > BACKUP_LOG_MAX_LINES) body.removeChild(body.firstChild);
+  body.scrollTop = body.scrollHeight;
+}
+
+// v3's Auth.getHeaders() ALWAYS injects `Content-Type: application/json`,
+// which kills multipart parsing on the restore upload (the browser has to
+// set the boundary itself). Lift only the Authorization out of it — same
+// rule the old shared/backup-restore.js followed in _uploadHeaders().
+function _bkAuthHeaders(withJson) {
+  const headers = {};
+  const auth = window.Auth?.getHeaders?.() || {};
+  if (auth.Authorization) headers.Authorization = auth.Authorization;
+  if (withJson) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
+async function downloadBackup(selectionBody) {
+  const btn = document.getElementById('btn-backup');
+  const originalText = btn.textContent;
+  const controller = new AbortController();
+  const t0 = performance.now();
+  // Shared with the ticker so it can switch from "preparing" to "receiving"
+  // the moment the first byte lands.
+  const seen = { bytes: 0, total: 0, streaming: false };
+
+  const isPartial = !!(selectionBody && Object.keys(selectionBody).length);
+  backupLog(isPartial
+    ? '▶ Backup personal SELECTIVO — solo lo marcado en el selector'
+    : '▶ Backup personal — todo tu usuario: asignaturas, temas, contenido, tests, flashcards y agenda', 'head');
+  backupLog(`⏳ El servidor tarda ~${BACKUP_SERVER_PREP_S}s en preparar el archivo y no envía nada hasta entonces. El contador de tiempo sigue corriendo: no está colgado.`, 'warn');
+
+  const ticker = setInterval(() => {
+    const elapsed = (performance.now() - t0) / 1000;
+    btn.textContent = seen.streaming
+      ? `⏳ ${_fmtBytes(seen.bytes)}${seen.total ? ' / ' + _fmtBytes(seen.total) : ''} · ${_fmtClock(elapsed)}`
+      : `⏳ Preparando… ${_fmtClock(elapsed)}`;
+  }, 1000);
+  btn.textContent = '⏳ Preparando… 0:00';
+  btn.disabled = true;
+
+  const killTimer = setTimeout(() => controller.abort(new Error('timeout')), BACKUP_TIMEOUT_MS);
+  let objectUrl = null;
+
+  try {
+    const resp = await fetch(`${window.API_URL}/backup/mine`, {
+      method: 'POST',
+      headers: _bkAuthHeaders(!!selectionBody),
+      credentials: 'include',
+      body: selectionBody ? JSON.stringify(selectionBody) : undefined,
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      backupLog(`✗ HTTP ${resp.status}: ${err.error || 'desconocido'}`, 'err');
+      alert('❌ Error al generar backup: ' + (err.error || 'desconocido'));
+      return;
+    }
+
+    const total = Number(resp.headers.get('Content-Length')) || 0;
+    const prepS = (performance.now() - t0) / 1000;
+    seen.total = total;
+    backupLog(`✓ El servidor respondió en ${_fmtClock(prepS)} — ${_fmtBytes(total)}`, 'ok');
+    backupLog('↓ Descargando…');
+
+    // Read the body as a stream so progress is real, measured bytes — not a
+    // spinner that could be lying to us for another five minutes.
+    const chunks = [];
+    let received = 0;
+    let nextLogAt = BACKUP_LOG_STEP_BYTES;
+    seen.streaming = true;
+    const reader = resp.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      seen.bytes = received;
+      if (received >= nextLogAt) {
+        nextLogAt += BACKUP_LOG_STEP_BYTES;
+        backupLog(`↓ ${_fmtBytes(received)}${total ? ' / ' + _fmtBytes(total) : ''}`);
+      }
+    }
+
+    const blob = new Blob(chunks, { type: 'application/zip' });
+    objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `studyflow_backup_${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    backupLog(`✅ Descargado: ${_fmtBytes(blob.size)} en ${_fmtClock((performance.now() - t0) / 1000)}`, 'ok');
+  } catch (e) {
+    if (controller.signal.aborted) {
+      const mins = Math.round(BACKUP_TIMEOUT_MS / 60000);
+      backupLog(`✗ Cancelado tras ${mins} min sin completarse`, 'err');
+      alert(
+        `❌ El backup no terminó en ${mins} minutos y se canceló.\n\n` +
+        `La causa más probable es que Cloudflare corta la respuesta del origen ` +
+        `a los ~100 s, y este backup genera todo el archivo antes de enviar el ` +
+        `primer byte. Es un límite conocido de este diseño, no un fallo suyo.`
+      );
+    } else {
+      backupLog(`✗ ${e.message}`, 'err');
+      alert('❌ Error al generar backup: ' + e.message);
+    }
+  } finally {
+    clearInterval(ticker);
+    clearTimeout(killTimer);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// The backup selector modal (backup-selector.js) calls this with the user's
+// selection; without one, backup behaves exactly as before.
+window.downloadBackup = downloadBackup;
+
+async function uploadRestore(file) {
+  // Additive, not destructive: rows that already exist are left alone and
+  // the database is never dropped. The old confirmations are gone because
+  // they described a risk this endpoint does not have.
+  if (!confirm(
+    'ℹ️ Se restaurará TU backup: tus asignaturas, contenido, tests y agenda.\n\n' +
+    'No se borra nada de lo que ya existe — lo que ya esté se queda, y lo que falte se añade.\n\n' +
+    '¿Continuar?'
+  )) return;
+
+  const btn = document.getElementById('btn-restore');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Restaurando...';
+  btn.disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch(`${window.API_URL}/backup/mine/restore`, {
+      method: 'POST',
+      // Content-Type omitted — the browser sets multipart + boundary.
+      headers: _bkAuthHeaders(false),
+      credentials: 'include',
+      body: formData,
+    });
+    const result = await resp.json();
+    if (resp.ok) {
+      const rows = Object.values(result.rows_inserted || {}).reduce((a, b) => a + b, 0);
+      const partialWarn = result.partial
+        ? '\n\n⚠️ Este backup era PARCIAL — solo contenía lo que marcaste\n' +
+          'en el selector (asignaturas, agenda, media…). No reprodujo tu cuenta\n' +
+          'completa, solo añadió lo que faltaba de esa parte.'
+        : '';
+      alert(
+        `✅ Restauración completada.\n\n` +
+        `· ${rows} registros añadidos\n` +
+        `· ${result.files_written} ficheros escritos${partialWarn}\n\n` +
+        `Recargando la aplicación...`
+      );
+      window.location.reload();
+    } else {
+      alert('❌ Error al restaurar: ' + (result.error || 'desconocido'));
+    }
+  } catch (e) {
+    alert('❌ Error al restaurar: ' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Click wiring for the header buttons. With the selector loaded, Backup opens
+// the selective modal; without it (older caches) it falls back to a full
+// backup — same degradation path as the hub.
+function initBackupRestore() {
+  document.getElementById('btn-backup')?.addEventListener('click', (e) => {
+    if (window.BackupSelector) {
+      e.preventDefault();
+      window.BackupSelector.open();
+    } else {
+      downloadBackup();
+    }
+  });
+  document.getElementById('backup-log-close')?.addEventListener('click', () => {
+    document.getElementById('backup-log')?.classList.add('hidden');
+  });
+  document.getElementById('btn-restore')?.addEventListener('click', () => {
+    document.getElementById('restore-input')?.click();
+  });
+  document.getElementById('restore-input')?.addEventListener('change', (e) => {
+    if (e.target.files?.length) uploadRestore(e.target.files[0]);
+    e.target.value = ''; // reset so the same file can be picked again
+  });
+}
 
 
 // ─── Render Active Tab ──────────────────────────────────────────────
