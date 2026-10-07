@@ -52,6 +52,7 @@ yt-dlp>=2025.6.30
 # Dockerfile ya instala via apt. Se importaba sin declararse: al recrear
 # el contenedor la app no arrancaba (ModuleNotFoundError).
 weasyprint==62.3
+pydyf==0.10.0  # must match weasyprint 62.3
 
 # ── Login interactivo de NotebookLM (noVNC) ──
 # gevent + gevent-websocket son el MOTOR del bridge WebSocket ↔ RFB de
