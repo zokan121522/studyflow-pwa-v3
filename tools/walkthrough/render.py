@@ -4,6 +4,28 @@
 Sincronización determinista: la voz se genera PRIMERO y se mide; el vídeo se
 conduce en tiempo real anclando cada acción a la palabra exacta (WordBoundary).
 El montaje coloca cada audio en su offset y lo mezcla con el vídeo.
+
+redact_text (storyboard field): lista de regex (case-insensitive) que difuminan
+el texto dinámico que un selector no puede cubrir. Se valida TODO al inicio
+(fail-fast) y se aplica antes del primer frame grabado.
+
+redact_dynamic (storyboard field): lista de fuentes cuya respuesta se consulta
+al arranque para registrar SUS valores como patrones redact_text extra
+(re.escape'd y case-insensitive). "courses" lee /api/courses y /api/auth/me:
+cada título de curso/tema + nombre/email expuestos se añade a los patrones,
+de forma que un título real que se cuele por un endpoint sin mock no salga
+legible en el vídeo. Fail-soft: si un endpoint falla, se avisa y se sigue.
+
+Modo de autotesteo: `python3 render.py --selftest-redact` abre la app, inyecta
+el patrón /dashboard/i con la misma lógica de blur, guarda
+/tmp/redact_selftest.png, imprime el nº de elementos difuminados y cierra.
+No genera TTS ni vídeo — sirve para verificar redact_text en segundos.
+
+Tokens en modo real (--real): los storyboards no llevan ids hardcodeados sino
+${COURSE_ID}, ${TOPIC_ID}, ${BLOCK_MD_ID} (alias ${BLOCK_ID}) y ${PDF_COURSE_ID},
+${PDF_TOPIC_ID}, ${PDF_BLOCK_ID} (alias ${PDF_BLOCK2_ID}). resolve_real_ids()
+los traduce contra el primer curso/tema/bloque real de /api/courses justo antes
+de grabar; si falla, los selectores se dejan intactos (fail-soft).
 """
 import asyncio, json, os, re, shutil, subprocess, sys, time, unicodedata
 
@@ -11,7 +33,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fixtures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STORY = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "storyboards", "agenda.json")
+_SELFTEST_REDACT = "--selftest-redact" in sys.argv[1:]
+STORY = next((a for a in sys.argv[1:] if not a.startswith("--")),
+             os.path.join(HERE, "storyboards", "agenda.json"))
 _SLUG = os.path.splitext(os.path.basename(STORY))[0]
 OUT = os.path.join(HERE, "pilot", _SLUG)
 FRAMES = os.path.join(OUT, "audio")
@@ -101,7 +125,8 @@ def build_timeline(story, frames):
     gap = story["gap"]
     for fr in frames:
         fr["start"] = cur
-        fr["seg"] = fr["dur"] + gap
+        # gap por cue (opcional): da aire tras un clic que dispara carga lenta
+        fr["seg"] = fr["dur"] + fr["cue"].get("gap", gap)
         fr["anchor_t"] = cur + fr["anchor"]
         cur += fr["seg"]
     total = cur + story["tail"]
@@ -153,6 +178,7 @@ INJECT_CSS = f"""
 @keyframes sfRip{{from{{opacity:.95;transform:scale(.35)}}to{{opacity:0;transform:scale(3.2)}}}}
 .sf-focus{{outline:3px solid #4f8cff!important;outline-offset:3px!important;border-radius:9px;
   box-shadow:0 0 0 7px rgba(79,140,255,.22)!important;transition:box-shadow .2s;}}
+.sf-rt-blur{{filter:blur(7px)!important;-webkit-filter:blur(7px)!important;}}
 """
 
 INJECT_JS = """(() => {
@@ -164,18 +190,243 @@ window.__sf = {
     r.style.left=x+'px';r.style.top=y+'px';document.body.appendChild(r);setTimeout(()=>r.remove(),720);},
   focus(el){document.querySelectorAll('.sf-focus').forEach(e=>e.classList.remove('sf-focus'));
     if(!el)return;
-    // Scroll only when the target is off-screen. `nearest` is a no-op for an
-    // element already in view, which is every cue in the dashboard videos, so
-    // this leaves those framings untouched. Without it a landing-page story
-    // highlights a card nobody can see: the class lands, the viewport stays
-    // at the top, and the narration describes something absent from the frame.
     el.scrollIntoView({block:'nearest',inline:'nearest'});
     el.classList.add('sf-focus');},
   focusSel(sel){this.focus(document.querySelector(sel));},
   center(sel){const e=document.querySelector(sel); if(!e)return null;
-    const r=e.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2};}
+    const r=e.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2};},
+  applyRedactText:function(patterns){
+    // loop guard: el MutationObserver puede reentrar mientras se pulsa el DOM
+    if(this._rtBusy){ return this._rtCount||0; }
+    this._rtBusy=true;
+    try {
+      if(!patterns||patterns.length===0){ this._rtCount=this._rtTotal(); return this._rtCount; }
+      let focusEl=null;
+      const ff=document.querySelector('.sf-focus');
+      if(ff) focusEl=ff;
+      const activeSel=this._lastActiveSelector||null;
+      if(!focusEl&&activeSel){ try{focusEl=document.querySelector(activeSel);}catch(e){} }
+      const rxList=[];
+      let invalid=0;
+      for(let i=0;i<patterns.length;i++){ try{rxList.push(new RegExp(patterns[i],'i'));}catch(e){invalid++;} }
+      if(invalid){ this._rtCount=0; return 0; }
+      const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:(n)=>{const v=n.nodeValue||''; if(v.trim().length===0)return NodeFilter.FILTER_SKIP; return NodeFilter.FILTER_ACCEPT;}});
+      const nodes=[];
+      while(walker.nextNode()){ nodes.push(walker.currentNode); }
+      for(let j=0;j<nodes.length;j++){
+        const n=nodes[j];
+        let matched=false;
+        for(let k=0;k<rxList.length;k++){ if(rxList[k].test(n.nodeValue)){matched=true;break;} }
+        if(!matched) continue;
+        let target=null;
+        let cur=n.parentElement;
+        while(cur&&cur.tagName!=='HTML'&&cur.tagName!=='BODY'){
+          let hasElem=false;
+          for(let c=0;c<cur.childNodes.length;c++){ if(cur.childNodes[c].nodeType===Node.ELEMENT_NODE){hasElem=true;break;} }
+          if(!hasElem){ target=cur; break; }
+          cur=cur.parentElement;
+        }
+        if(!target) target=n.parentElement;
+        if(!target||target.tagName==='BODY'||target.tagName==='HTML') continue;
+        // nunca difuminar el subárbol del focus / selector activo del cue
+        if(focusEl&&(target===focusEl||target.contains(focusEl))) continue;
+        target.classList.add('sf-rt-blur');
+      }
+      this._rtCount=this._rtTotal(); return this._rtCount;
+    }catch(e){ this._rtCount=0; return 0; }
+    finally{ this._rtBusy=false; }
+  },
+  _rtTotal(){ return document.querySelectorAll('.sf-rt-blur').length; }
 };
+
+window.__sf._rtPatterns = [];
+window.__sf.setRtPatterns = function(list){ window.__sf._rtPatterns = list||[]; };
+window.__sf.setLastActiveSelector = function(s){ window.__sf._lastActiveSelector=s; };
+try { const mo=new MutationObserver(()=>{window.__sf.applyRedactText(window.__sf._rtPatterns);}); mo.observe(document.documentElement||document.body,{childList:true,subtree:true,characterData:true}); window.__sf._rtObserver=mo; } catch(e){}
+
 })();"""
+
+
+def compile_rt_patterns(story):
+    """Valida TODOS los patrones de `redact_text` con re.I — fail-fast.
+
+    Se llama al inicio de main() (antes del pre-pass TTS) para que un guion
+    mal escrito muera en segundos, no tras minutos de locución.
+
+    Acepta tanto `dashboard` como la notación literal `/dashboard/i` (como se
+    escribe en un test): los delimitadores y flags se descartan — siempre se
+    compila con IGNORECASE, que es lo que exige la especificación.
+    """
+    pats = []
+    for pat in (story.get("redact_text") or []):
+        src = pat
+        m = re.fullmatch(r"/(.+)/[a-z]*", pat)
+        if m:
+            src = m.group(1)
+        try:
+            re.compile(src, re.IGNORECASE)
+        except re.error as e:
+            raise RuntimeError(f"invalid redact_text pattern '{pat}': {e}")
+        pats.append(src)
+    return pats
+
+
+# ------------------------------------------------------------------- dynamic
+# Fuentes para `redact_dynamic`: cada entrada es (ruta, claves) y todas las
+# cadenas encontradas bajo esas claves (recursivo) se registran como patrones
+# redact_text. "courses" también lee /api/auth/me para capturar nombre/email
+# del usuario si algún endpoint sin mock los expusiera en pantalla.
+_DYNAMIC_SOURCES = {
+    "courses": [
+        ("/api/courses", ("title", "name", "email")),
+        ("/api/auth/me", ("name", "email")),
+    ],
+}
+
+
+def _walk_strings(obj, keys, acc):
+    """Recoge en acc los strings del JSON bajo claves de interés (recursivo)."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in keys and isinstance(v, str):
+                acc.add(v.strip())
+            _walk_strings(v, keys, acc)
+    elif isinstance(obj, list):
+        for item in obj:
+            _walk_strings(item, keys, acc)
+
+
+def collect_dynamic_redact(story):
+    """Registra los valores reales de las fuentes `redact_dynamic` como
+    patrones redact_text (re.escape + IGNORECASE, deduplicados contra los
+    estáticos). Fail-soft: un endpoint caído nunca aborta la grabación.
+
+    Se llama al inicio de main(), antes del fail-fast de compile_rt_patterns:
+    los patrones dinámicos ya van escapados por re.escape, así que la
+    validación los admite igual que los estáticos.
+    """
+    import urllib.request
+    base = story["base_url"].rstrip("/")
+    for src in (story.get("redact_dynamic") or []):
+        specs = _DYNAMIC_SOURCES.get(src)
+        if not specs:
+            print(f"  ! redact_dynamic: fuente desconocida '{src}', se ignora")
+            continue
+        for path, keys in specs:
+            try:
+                body = json.load(urllib.request.urlopen(
+                    f"{base}{path}", timeout=10))
+            except Exception as e:
+                print(f"  ! redact_dynamic: aviso al leer {path}: {e}")
+                continue
+            found = set()
+            _walk_strings(body, keys, found)
+            static = set(story.get("redact_text") or [])
+            added = 0
+            for s in sorted(found):
+                if len(s) < 3:
+                    continue
+                pat = re.escape(s)
+                if pat not in static:
+                    story.setdefault("redact_text", []).append(pat)
+                    static.add(pat)
+                    added += 1
+            print(f"  [redact_dynamic] {src} ({path}): "
+                  f"{added} patrón(es) nuevo(s)")
+
+
+# ------------------------------------------------------------------- ids reales
+# En modo real los storyboards escriben ${TOKENS} en vez de ids de mentira.
+# resolve_real_ids() traduce los tokens contra /api/courses y guarda el mapa
+# en story["_idmap"]; _sub_ids() lo aplica a cada cue justo antes de ejecutarse.
+_MD_TYPES = ("markdown", "text")
+_PDF_TYPES = ("pdf", "pdf-ref")
+
+
+def _first_block(topic, types=()):
+    for b in (topic.get("blocks") or []):
+        if not types or (b.get("type") or "").lower() in types:
+            return b
+    return None
+
+
+def resolve_real_ids(story):
+    """Tokens reales: primer curso, primer tema con bloques, primer pdf.
+
+    Fail-soft: si /api/courses falla o no hay datos utilizables, se avisa y
+    los selectores se graban con los tokens sin sustituir (fallarán al hacer
+    click, pero el render no aborta por culpa del resolver).
+    """
+    if not story.get("real_mode"):
+        return
+    import urllib.request
+    base = story["base_url"].rstrip("/")
+    try:
+        data = json.load(urllib.request.urlopen(f"{base}/api/courses", timeout=30))
+        courses = data.get("courses") or []
+    except Exception as e:
+        print(f"  ! [ids] no pude leer {base}/api/courses ({e}); "
+              "selectores sin sustituir")
+        return
+
+    def has_blocks(t):
+        return any(b for b in (t.get("blocks") or []))
+
+    pair = None
+    for c in courses:
+        for t in (c.get("topics") or []):
+            if has_blocks(t):
+                pair = (c, t)
+                break
+        if pair:
+            break
+    if not pair:
+        print("  ! [ids] /api/courses no trae cursos con temas con bloques; "
+              "selectores sin sustituir")
+        return
+    course, topic = pair
+    bm = _first_block(topic, _MD_TYPES) or _first_block(topic)
+    ids = {
+        "${COURSE_ID}": str(course["id"]),
+        "${TOPIC_ID}": str(topic["id"]),
+        "${BLOCK_MD_ID}": str(bm["id"]),
+        "${BLOCK_ID}": str(bm["id"]),
+    }
+    pdf_pair = next(((c, t) for c in courses for t in (c.get("topics") or [])
+                     if _first_block(t, _PDF_TYPES)), None)
+    if pdf_pair:
+        pc, pt = pdf_pair
+        pb = _first_block(pt, _PDF_TYPES)
+        others = [b for b in (pt.get("blocks") or []) if b["id"] != pb["id"]]
+        pb2 = next((b for b in others if (b.get("type") or "").lower() in _PDF_TYPES),
+                   None) or (others[0] if others else None) or pb
+        ids.update({
+            "${PDF_COURSE_ID}": str(pc["id"]),
+            "${PDF_TOPIC_ID}": str(pt["id"]),
+            "${PDF_BLOCK_ID}": str(pb["id"]),
+            "${PDF_BLOCK2_ID}": str(pb2["id"]),
+        })
+    else:
+        print("  ! [ids] no hay bloques pdf en /api/courses; ${PDF_*} sin sustituir")
+    story["_idmap"] = ids
+    print("  [ids] " + " ".join(
+        f"{k.strip('${}')}={v}" for k, v in ids.items()))
+
+
+def _sub_ids(node, idmap):
+    """Sustituye ${TOKENS} en cualquier string del cue (selectores, focus…)."""
+    if not idmap:
+        return node
+    if isinstance(node, str):
+        out = node
+        for k, v in idmap.items():
+            out = out.replace(k, v)
+        return out
+    if isinstance(node, list):
+        return [_sub_ids(x, idmap) for x in node]
+    if isinstance(node, dict):
+        return {k: _sub_ids(v, idmap) for k, v in node.items()}
+    return node
 
 
 def do_action(pg, cue, anchor_t, click_lead):
@@ -231,6 +482,26 @@ def record(story, frames, total):
     w, h = story["viewport"]
     with sync_playwright() as p:
         b = p.chromium.launch(channel="chrome", headless=True)
+        # ¿El guion documenta el dashboard o la landing? Se calcula aquí porque
+        # lo comparten el warmup opcional y la espera de la grabación.
+        is_dashboard = story["base_url"].rstrip("/") in ("", "http://127.0.0.1:8081")
+        # warmup (opcional, solo si el storyboard lo pide): una carga previa en
+        # una página desechable del mismo navegador ANTES de crear el contexto
+        # con record_video_dir. La primera carga (red, API, parseo) queda fuera
+        # del vídeo grabado, así el arranque no sale con spinner ni muerte.
+        if story.get("warmup"):
+            t_w = time.time()
+            wp = b.new_page()
+            try:
+                wp.goto(story["base_url"], wait_until="domcontentloaded")
+                wp.wait_for_load_state("networkidle", timeout=15000)
+                wp.wait_for_selector(
+                    ".dashboard-nav-grid" if is_dashboard else "body",
+                    state="visible", timeout=15000 if is_dashboard else 5000)
+            except Exception:
+                pass
+            wp.close()
+            print(f"  [warmup] preload {int((time.time() - t_w) * 1000)}ms")
         ctx = b.new_context(viewport={"width": w, "height": h},
                             record_video_dir=VIDDIR,
                             record_video_size={"width": w, "height": h},
@@ -260,13 +531,16 @@ def record(story, frames, total):
                 route.fulfill(status=200, content_type="application/json",
                               body=json.dumps(falso, ensure_ascii=False))
 
-        pg.route("**/api/**", _interceptar)
+        # --real: passthrough total al backend real, sin interceptor (ni los
+        # casos especiales del PDF). Solo se registra en modo fixtures.
+        if not story.get("real_mode"):
+            pg.route("**/api/**", _interceptar)
         pg.goto(story["base_url"], wait_until="domcontentloaded")
         # The dashboard grid is the app's ready signal, but a storyboard that
         # documents the landing page never renders it: waiting the full 15s
         # there is dead time that lands as 15s of silence at the head of the
         # finished video. Anything not rooted at the app waits on <body>.
-        is_dashboard = story["base_url"].rstrip("/") in ("", "http://127.0.0.1:8081")
+        # (is_dashboard se calcula al inicio de record(), con el warmup.)
         try:
             pg.wait_for_selector(
                 ".dashboard-nav-grid" if is_dashboard else "body",
@@ -275,7 +549,13 @@ def record(story, frames, total):
             pass
         pg.wait_for_timeout(400)
         pg.add_style_tag(content=INJECT_CSS)
-        redact = dict.fromkeys(GLOBAL_REDACT + (story.get("redact") or []))
+        # Blurring es opcional: si el storyboard no define ninguna clave
+        # redact, NO se inyecta el CSS GLOBAL_REDACT ni se aplica nada.
+        redaction_on = bool(story.get("redact") or story.get("redact_text")
+                            or story.get("redact_dynamic")
+                            or story.get("redact_blur_px"))
+        redact = (dict.fromkeys(GLOBAL_REDACT + (story.get("redact") or []))
+                  if redaction_on else {})
         if redact:
             # Radius per storyboard. 7px is enough for the short strings the
             # first two videos redact (an email in an input box). It is not
@@ -288,16 +568,61 @@ def record(story, frames, total):
                 for s in redact
             )
             pg.add_style_tag(content=blur)
-        pg.evaluate(INJECT_JS)
+        # redact_text — patrones ya validados en main() (fail-fast)
+        rt_patterns = compile_rt_patterns(story)
+        pg.evaluate(INJECT_JS)   # motor del cursor/focus (siempre)
+        if redaction_on:
+            pg.evaluate("patterns => { try { window.__sf.setRtPatterns(patterns); } catch(e){} }", rt_patterns)
+            # apply redact_text after preroll, BEFORE the first recorded frame
+            try:
+                rt_cnt = pg.evaluate("() => { const c = window.__sf.applyRedactText(window.__sf._rtPatterns); return window.__sf._rtCount !== undefined ? window.__sf._rtCount : c; }")
+                print(f"  [redact_text] cue pre: {rt_cnt} elements blurred")
+            except Exception as e:
+                print(f"  [redact_text] pre apply error: {e}")
         T0 = time.time()                       # grabación arranca aquí
-        for fr in frames:
-            cue = fr["cue"]
+        for i, fr in enumerate(frames):
+            cue = _sub_ids(fr["cue"], story.get("_idmap"))
             sleep_until(fr["start"])
             if not cue["action"] and cue.get("focus"):
                 pg.evaluate("s => window.__sf.focusSel(s)", cue["focus"])
+                # track active selector for redact guard
+                try: pg.evaluate("s => window.__sf.setLastActiveSelector(s)", cue["focus"])
+                except Exception: pass
+                if redaction_on:
+                    try:
+                        rt_cnt = pg.evaluate("() => { const c = window.__sf.applyRedactText(window.__sf._rtPatterns); return window.__sf._rtCount !== undefined ? window.__sf._rtCount : c; }")
+                        print(f"  [redact_text] cue {fr['i']:02d} (focus-only): {rt_cnt} elements blurred")
+                    except Exception as e:
+                        print(f"  [redact_text] cue {fr['i']:02d} apply error: {e}")
             if cue["action"]:
                 # esperar al inicio de la secuencia (mover cursor) ya dentro de do_action
+                act_sel = cue["action"].get("selector") if cue["action"] else None
+                f_sel = cue.get("focus") or act_sel
+                if f_sel:
+                    try: pg.evaluate("s => window.__sf.setLastActiveSelector(s)", f_sel)
+                    except Exception: pass
                 do_action(pg, cue, fr["anchor_t"], story["click_lead"])
+                # La voz ya habla del RESULTADO del click: esperar a que el
+                # selector del cue sea visible (máx. 5s) para que la narración
+                # no se adelante a la pantalla (listas, bloques, canvas...).
+                # Acotado al inicio del cue siguiente para que un selector que
+                # nunca aparezca no retrase a los demás storyboards.
+                if cue.get("focus"):
+                    nxt = frames[i + 1]["start"] if i + 1 < len(frames) else total
+                    budget = min(5.0, nxt - (time.time() - T0) - 0.2)
+                    if budget > 0:
+                        try:
+                            pg.wait_for_selector(cue["focus"], state="visible",
+                                                 timeout=max(50, int(budget * 1000)))
+                        except Exception:
+                            print(f"  ! [focus] «{cue['focus']}» no visible "
+                                  f"en {budget:.2f}s; sigo")
+                if redaction_on:
+                    try:
+                        rt_cnt = pg.evaluate("() => { const c = window.__sf.applyRedactText(window.__sf._rtPatterns); return window.__sf._rtCount !== undefined ? window.__sf._rtCount : c; }")
+                        print(f"  [redact_text] cue {fr['i']:02d} (post-action): {rt_cnt} elements blurred")
+                    except Exception as e:
+                        print(f"  [redact_text] cue {fr['i']:02d} apply error: {e}")
         sleep_until(total)
         wall = time.time() - T0
         ctx.close()                            # vídeo se finaliza aquí
@@ -314,8 +639,20 @@ def assemble(story, frames, wall):
     shift = vdur - wall
     print(f"  vídeo={os.path.basename(webm)} dur={vdur:.2f}s  wall={wall:.2f}s  shift={shift:+.2f}s")
 
+    # trim_lead (opcional, solo si el storyboard lo pide): el arranque del
+    # webm incluye la carga previa a T0; se corta ese tramo del inicio para
+    # que el vídeo empiece cuando arranca el reloj de las pistas. Guard: con
+    # shift <= 0.2s no merece la pena tocar nada.
+    cut = 0.0
+    if story.get("trim_lead"):
+        if shift > 0.2:
+            cut = shift
+            print(f"  [trim_lead] cortado {shift:.2f}s del inicio")
+        else:
+            print(f"  [trim_lead] sin corte (shift={shift:+.2f}s)")
+
     # 1) silencio inicial ajustado
-    lead = max(0.05, story["leadin"] + shift)
+    lead = max(0.05, story["leadin"] + (0.0 if cut else shift))
     leadwav = os.path.join(FRAMES, "_lead.wav")
     run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
          "anullsrc=r=24000:cl=mono", "-t", f"{lead:.3f}", "-c:a", "pcm_s16le", leadwav])
@@ -339,7 +676,8 @@ def assemble(story, frames, wall):
 
     # 4) mux
     final = os.path.join(OUT, f"{story['id']}.mp4")
-    run(["ffmpeg", "-y", "-loglevel", "error", "-i", webm, "-i", narr,
+    trim_in = ["-ss", f"{cut:.3f}"] if cut else []
+    run(["ffmpeg", "-y", "-loglevel", "error", *trim_in, "-i", webm, "-i", narr,
          "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", final])
     return final, vdur
@@ -408,12 +746,74 @@ def cleanup(story, run_start):
         print("  (cleanup: nada que borrar)")
 
 
+def selftest_redact(pattern="/dashboard/i"):
+    """Verificación rápida de redact_text SIN TTS ni vídeo.
+
+    Abre la app, inyecta el patrón de muestra con la misma lógica de blur
+    que usa la grabación real, captura /tmp/redact_selftest.png y imprime el
+    nº de elementos difuminados. Termina en segundos.
+    """
+    from playwright.sync_api import sync_playwright
+    pats = compile_rt_patterns({"redact_text": [pattern]})
+    with sync_playwright() as p:
+        b = p.chromium.launch(channel="chrome", headless=True)
+        # service_workers="block" igual que en record(): la SW en caché puede
+        # recargar la página a mitad de evaluate y destruir el contexto.
+        ctx = b.new_context(viewport={"width": 1280, "height": 720},
+                            service_workers="block")
+        pg = ctx.new_page()
+        # La app puede navegar sola al arrancar (live reload): reintenta la
+        # inyección en lugar de abortar por "context destroyed".
+        for attempt in range(3):
+            pg.goto("http://127.0.0.1:8081/", wait_until="domcontentloaded")
+            try:
+                pg.wait_for_selector(".dashboard-nav-grid", state="visible", timeout=8000)
+            except Exception:
+                pass
+            pg.wait_for_timeout(500)
+            try:
+                pg.add_style_tag(content=INJECT_CSS)
+                pg.evaluate(INJECT_JS)
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                print(f"[selftest-redact] retry {attempt + 1}: {e}")
+        pg.evaluate("p => window.__sf.setRtPatterns(p)", pats)
+        cnt = pg.evaluate("() => window.__sf.applyRedactText(window.__sf._rtPatterns)")
+        pg.screenshot(path="/tmp/redact_selftest.png")
+        # observer: muta el DOM y relee en la MISMA evaluación — si el live-
+        # reload recargara la página entre evaluate y evaluate, __sf sería
+        # undefined y el test mentiría con un falso negativo.
+        cnt2 = pg.evaluate("""async () => {
+            document.body.appendChild(document.createElement('div'));
+            await new Promise(r => setTimeout(r, 150));
+            return window.__sf ? window.__sf._rtCount : -1;
+        }""")
+        try:
+            ctx.close()
+            b.close()
+        except Exception:
+            pass
+    print(f"[selftest-redact] patrón={pattern} difuminados={cnt} "
+          f"tras-mutación={cnt2} -> /tmp/redact_selftest.png")
+    if not cnt or cnt2 < 0:
+        raise SystemExit("selftest FAILED: sin elementos difuminados o __sf perdido")
+    print("[selftest-redact] OK")
+
+
 def main():
     run_start = time.time()
     story = json.load(open(STORY))
     # Default is the dashboard; a storyboard that documents the landing
     # page (the install guide lives there) names its own URL.
     story["base_url"] = story.get("base_url") or "http://127.0.0.1:8081/"
+    real_mode = "--real" in sys.argv[1:]
+    story["real_mode"] = real_mode
+    print(f"[mode] {'REAL DATA (mocking disabled)' if real_mode else 'FIXTURES (mocked API)'}")
+    resolve_real_ids(story)              # ${TOKENS} reales -> _idmap (fail-soft)
+    collect_dynamic_redact(story)       # títulos reales -> redact_text (fail-soft)
+    compile_rt_patterns(story)              # fail-fast ANTES del pre-pass TTS
     shutil.rmtree(VIDDIR, ignore_errors=True)   # solo el vídeo; el audio se cachea
     os.makedirs(FRAMES, exist_ok=True)
     os.makedirs(VIDDIR, exist_ok=True)
@@ -435,4 +835,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if _SELFTEST_REDACT:
+        selftest_redact()
+    else:
+        main()

@@ -102,7 +102,11 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // markdown" / "Añadir PDF" / "Añadir separador" (5 sidebar buttons) threw
 // with no .catch(): menu closed, nothing happened. Now exported, and each
 // call surfaces failures instead of failing silently.
-const ASSET_CACHE = 'studyflow-assets-v98';
+// v99: landing con 15 tutoriales (hueco 13 intacto) + duraciones sincronizadas.
+// v100: tutoriales regrabados en modo real (datos reales de la BD) y sin
+// difuminado: fuera redact/redact_text/redact_dynamic; ids reales resueltos
+// en tiempo de grabación (${COURSE_ID}/${TOPIC_ID}/${BLOCK_*_ID}).
+const ASSET_CACHE = 'studyflow-assets-v100';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
