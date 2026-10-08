@@ -822,11 +822,55 @@ async function downloadBackup(selectionBody) {
 // selection; without one, backup behaves exactly as before.
 window.downloadBackup = downloadBackup;
 
-async function uploadRestore(file) {
+// Read the zip's manifest and build the restore selector options BEFORE
+// writing anything. When the zip has no manifest (or the server cannot
+// build the options) we fall back to the blind full import — same endpoint,
+// no `selection` field — instead of failing.
+async function inspectRestore(file) {
+  backupLog('▶ Inspeccionando el backup para ofrecer restauración selectiva…', 'head');
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch(`${window.API_URL}/backup/mine/inspect`, {
+      method: 'POST',
+      // Content-Type omitted — the browser sets multipart + boundary.
+      headers: _bkAuthHeaders(false),
+      credentials: 'include',
+      body: formData,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      // Older server without /inspect, or a transport error: degrade.
+      backupLog(`⚠️ No se pudo inspeccionar (${data.error || resp.status}); ` +
+                `se ofrece la restauración completa.`, 'warn');
+      return uploadRestore(file);
+    }
+    const options = data.options;
+    if (data.has_manifest && options && options.tree &&
+        window.BackupSelector?.openReview) {
+      const opened = window.BackupSelector.openReview(
+        options, (selection) => uploadRestore(file, selection));
+      if (opened) return;
+    }
+    const why = !data.has_manifest
+      ? (data.manifest_error || 'sin manifest')
+      : (data.options_error || 'opciones no disponibles');
+    backupLog(`⚠️ Este backup no permite selección (${why}); ` +
+              `se restaura completo.`, 'warn');
+    return uploadRestore(file);
+  } catch (e) {
+    backupLog(`⚠️ Inspección fallida (${e.message}); se restaura completo.`, 'warn');
+    return uploadRestore(file);
+  }
+}
+
+async function uploadRestore(file, selection) {
   // Additive, not destructive: rows that already exist are left alone and
   // the database is never dropped. The old confirmations are gone because
   // they described a risk this endpoint does not have.
-  if (!confirm(
+  // A `selection` means the user already ticked the tree and pressed
+  // "Restaurar selección", so the modal itself was the confirmation.
+  if (!selection && !confirm(
     'ℹ️ Se restaurará TU backup: tus asignaturas, contenido, tests y agenda.\n\n' +
     'No se borra nada de lo que ya existe — lo que ya esté se queda, y lo que falte se añade.\n\n' +
     '¿Continuar?'
@@ -839,6 +883,7 @@ async function uploadRestore(file) {
   try {
     const formData = new FormData();
     formData.append('file', file);
+    if (selection) formData.append('selection', JSON.stringify(selection));
     const resp = await fetch(`${window.API_URL}/backup/mine/restore`, {
       method: 'POST',
       // Content-Type omitted — the browser sets multipart + boundary.
@@ -849,6 +894,7 @@ async function uploadRestore(file) {
     const result = await resp.json();
     if (resp.ok) {
       const rows = Object.values(result.rows_inserted || {}).reduce((a, b) => a + b, 0);
+      const skipped = Number(result.skipped) || 0;
       const partialWarn = result.partial
         ? '\n\n⚠️ Este backup era PARCIAL — solo contenía lo que marcaste\n' +
           'en el selector (asignaturas, agenda, media…). No reprodujo tu cuenta\n' +
@@ -857,6 +903,7 @@ async function uploadRestore(file) {
       alert(
         `✅ Restauración completada.\n\n` +
         `· ${rows} registros añadidos\n` +
+        (skipped ? `· ${skipped} filas ya existían (no se tocaron)\n` : '') +
         `· ${result.files_written} ficheros escritos${partialWarn}\n\n` +
         `Recargando la aplicación...`
       );
@@ -891,7 +938,7 @@ function initBackupRestore() {
     document.getElementById('restore-input')?.click();
   });
   document.getElementById('restore-input')?.addEventListener('change', (e) => {
-    if (e.target.files?.length) uploadRestore(e.target.files[0]);
+    if (e.target.files?.length) inspectRestore(e.target.files[0]);
     e.target.value = ''; // reset so the same file can be picked again
   });
 }

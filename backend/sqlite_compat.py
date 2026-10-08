@@ -316,6 +316,23 @@ def _rewrite_scalar_max_min(sql: str) -> str:
         pos = close + 1
 
 
+#: Postgres ``substring(x from 'regex')`` — no SQLite spelling exists, so
+#: it becomes the ``regexp_extract`` function registered alongside the
+#: other Postgres string functions.
+_SUBSTRING_FROM_RE = re.compile(
+    r"substring\s*\(\s*(?P<subject>[\w.\"]+)\s+from\s+"
+    r"(?P<pattern>'(?:[^']|'')*')\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_substring_from(sql: str) -> str:
+    return _SUBSTRING_FROM_RE.sub(
+        lambda m: f"regexp_extract({m.group('subject')}, {m.group('pattern')})",
+        sql,
+    )
+
+
 def translate_sql(sql: str) -> str:
     """Normalise Postgres DML for the sqlite3 driver.
 
@@ -328,6 +345,8 @@ def translate_sql(sql: str) -> str:
     for postgres_name, sqlite_name in _CATALOGUE_VIEW_MAP:
         if postgres_name in sql:
             sql = sql.replace(postgres_name, sqlite_name)
+    if "SUBSTRING" in sql.upper():
+        sql = _rewrite_substring_from(sql)
     # Casts run before the placeholder rewrite, while %(name)s is still
     # intact. Once it has become a bare ?, the expression group can no
     # longer tell it apart from any other marker.
@@ -512,37 +531,71 @@ _ANY_RE = re.compile(
     r"(?P<col>[\w.\"]+)\s*=\s*ANY\s*\(\s*%\s*s\s*\)",
     re.IGNORECASE,
 )
+#: The same clause, anchored at the END of the text before a ``%s`` —
+#: used to recognise that a given placeholder is an ANY() argument.
+_ANY_OPEN_RE = re.compile(r"(?P<col>[\w.\"]+)\s*=\s*ANY\s*\(\s*$",
+                          re.IGNORECASE)
+_PLACEHOLDER_RE = re.compile(r"%\s*s")
+_ANY_CLOSE_RE = re.compile(r"^\s*\)")
 
 
 def _expand_any(sql: str, params=None) -> tuple[str, Any]:
-    """Rewrite ``= ANY(%s)`` into ``IN (?, ?, ...)``.
+    """Rewrite ``= ANY(%s)`` into ``IN (?, ?, ...)`` — positionally.
 
-    One placeholder per element of the bound list -- not one per occurrence
-    of the clause: each occurrence is a separate membership test over the
-    same array. The list is spliced out and its elements returned in order,
-    to be spliced into the parameter list in place of the single bound
-    value, since sqlite3 cannot bind one value to several markers.
+    Each placeholder consumes its own parameter in order, so the common
+    shape ``user_id = %s AND id = ANY(%s)`` bound as ``(uid, ids)`` works:
+    the array sits at the ANY's position, not necessarily at ``params[0]``.
+    The array's elements are spliced into the parameter list in place of
+    the single bound value, since sqlite3 cannot bind one value to several
+    markers. Every occurrence of the clause expands over ITS argument —
+    ``(uid, courses, topics)`` expands two independent membership tests.
     """
-    matches = _ANY_RE.findall(sql)
-    if not matches:
+    if not _ANY_RE.search(sql):
         # Hand the params back untouched. Coercing to a tuple here would
         # turn a dict into its *keys* and drop every value before
         # translate_params gets a chance to map them by name.
         return sql, params
-    array = params[0] if params and isinstance(params[0], (list, tuple)) else None
-    rest = list(params[1:]) if params else []
-    if array is not None:
-        # The bound value IS the array: splice its elements in place of it.
-        sql = _ANY_RE.sub(
-            lambda m: f'{m.group("col")} IN ({", ".join("?" * len(array))})', sql
-        )
-        return sql, list(array) + rest
-    # No array bound (should not happen, but do not silently mis-bind):
-    # keep one marker per occurrence and drop nothing.
-    sql = _ANY_RE.sub(
-        lambda m: f'{m.group("col")} IN ({", ".join("?" * len(matches))})', sql
-    )
-    return sql, rest
+    if params is None or isinstance(params, dict):
+        # No positional values to splice (a dict keeps its named path —
+        # and an ANY over a named placeholder is not a query we write).
+        return sql, params
+    values = list(params)
+    placeholders = list(_PLACEHOLDER_RE.finditer(sql))
+    if len(values) < len(placeholders):
+        # Fewer values than markers would silently bind NULLs below;
+        # hand the statement back so it fails loudly at execute().
+        return sql, params
+
+    out: list[str] = []
+    bound: list[Any] = []
+    last = 0
+    index = 0
+    for ph in placeholders:
+        chunk = sql[last:ph.start()]
+        tail = sql[ph.end():]
+        value = values[index]
+        index += 1
+        closing = _ANY_CLOSE_RE.match(tail)
+        if closing and _ANY_OPEN_RE.search(chunk):
+            # This placeholder IS an ANY() argument: keep the column,
+            # drop only the `` = ANY(`` suffix, close the IN() here, and
+            # swallow the ``)`` that closed ANY() so it cannot stray.
+            chunk = re.sub(r"\s*=\s*ANY\s*\(\s*$", "", chunk)
+            if isinstance(value, (list, tuple)):
+                marks = ", ".join("?" * len(value))
+                bound.extend(value)
+            else:
+                # Not a list after all: one membership test over one value.
+                marks = "?"
+                bound.append(value)
+            out.append(f"{chunk} IN ({marks})")
+            last = ph.end() + closing.end()
+        else:
+            out.append(f"{chunk}%s")
+            bound.append(value)
+            last = ph.end()
+    out.append(sql[last:])
+    return "".join(out), bound
 
 
 def translate_params(sql: str, params: Optional[Sequence]) -> tuple:
@@ -631,6 +684,26 @@ def _register_functions(conn: sqlite3.Connection) -> None:
     conn.create_function("right", 2, _pg_right)
     conn.create_function("right", 1, _pg_right)
     conn.create_function("repeat", 2, _pg_repeat)
+
+    def _regexp_extract(subject, pattern):
+        """Postgres ``substring(x from 'pat')`` via _rewrite_substring_from.
+
+        First capturing group when the pattern has one — that is what PG
+        returns and what the pdf-ref url fragment relies on for its
+        digits — else the whole match; NULL when it does not match,
+        which is the "not an /api/pdf/<n> url" case.
+        """
+        if subject is None or pattern is None:
+            return None
+        try:
+            match = re.search(str(pattern), str(subject))
+        except re.error:
+            return None
+        if match is None:
+            return None
+        return match.group(1) if match.lastindex else match.group(0)
+
+    conn.create_function("regexp_extract", 2, _regexp_extract)
 
     # ── Advisory locks ────────────────────────────────────────────
     # Postgres uses these to serialise a job that must not run twice. The
@@ -919,7 +992,17 @@ _CAST_TYPE_ALT = (
     r"integer|smallint|boolean|bool|numeric|varchar|text|date|real|jsonb|"
     r"json|uuid|int"
 )
-_CAST_ATOM = r'CAST\((?:[^()]|\([^()]*\))*\)|"(?:[^"]|"")*"|\([^()]*\)|%\(\w+\)s|%s|[A-Za-z_][\w.$]*'
+#: An "atom" is one castable expression: a balanced parenthesised group, a
+#: function call, a quoted identifier, a dotted name, or a bare marker. The
+#: function-call form carries two levels of nesting, because the pdf
+#: predicate nests ``NULLIF(substring(url from '…'), '')`` and the url
+#: pattern itself carries parens — one level is not enough.
+_CAST_ATOM = r'CAST\((?:[^()]|\([^()]*\))*\)|"(?:[^"]|"")*"|\([^()]*\)|'
+_CAST_ATOM += (
+    r"[A-Za-z_][\w.$]*"
+    r"\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)"
+    r"|%\(\w+\)s|%s|[A-Za-z_][\w.$]*"
+)
 _POSTGRES_CAST_RE = re.compile(
     rf"(?P<atom>{_CAST_ATOM})"
     rf"(?P<suffix>(?:\s*::\s*(?:{_CAST_TYPE_ALT})(?![A-Za-z0-9_]))+)",
