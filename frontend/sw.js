@@ -106,7 +106,11 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v100: tutoriales regrabados en modo real (datos reales de la BD) y sin
 // difuminado: fuera redact/redact_text/redact_dynamic; ids reales resueltos
 // en tiempo de grabación (${COURSE_ID}/${TOPIC_ID}/${BLOCK_*_ID}).
-const ASSET_CACHE = 'studyflow-assets-v100';
+// v101: restauración selectiva — app.js inspecciona el zip (POST /inspect)
+// y reutiliza el modal de backup-selector.js en modo review para restaurar
+// solo lo marcado. Al cambiar app.js y backup-selector.js hay que refrescar
+// el precache, o las PWAs instaladas seguirían con el código viejo.
+const ASSET_CACHE = 'studyflow-assets-v101';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

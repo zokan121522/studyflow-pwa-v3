@@ -40,6 +40,10 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
   const el = (id) => document.getElementById(id);
 
   let options = null;           // payload de GET /mine/options
+  // Modo restauración: cuando no es null, el modal viene desde inspect y el
+  // botón GO entrega el body a este callback en vez de descargar un backup.
+  // El handler de GO lo COPIA antes de llamar a close(), que lo limpia.
+  let reviewConfirm = null;
   const treeSel = new Set();    // ids marcados del árbol (courses/topics/blocks)
   const weekSel = new Set();
   const daySel = new Set();
@@ -147,6 +151,7 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
     const total = fmt(e.bytes);
     const any = hasAnything();
     const mode = !any ? "sin selección" : isFullSelection() ? "completo" : "parcial";
+    const isReview = reviewConfirm !== null;
     el("bksel-estimate").innerHTML =
       `<div class="bk-est-item"><span class="bk-est-label">Total estimado</span><b>${total}</b></div>` +
       `<div class="bk-est-item"><span class="bk-est-label">Bloques</span>${e.blocks}</div>` +
@@ -159,8 +164,24 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
     go.disabled = !any;
     go.title = any ? "" : "Marca al menos un elemento (o usa ☑️ Todo)";
     el("bksel-summary").textContent = !any
-      ? "Nada seleccionado — el backup no se puede generar así"
-      : `Backup ${mode} · ${e.blocks} bloques · ${fmt(e.bytes)}`;
+      ? (isReview
+        ? "Nada seleccionado — no hay nada que restaurar"
+        : "Nada seleccionado — el backup no se puede generar así")
+      : isReview
+        ? `Restauración ${mode} · ${e.blocks} bloques · ${fmt(e.bytes)}`
+        : `Backup ${mode} · ${e.blocks} bloques · ${fmt(e.bytes)}`;
+  }
+
+  // El mismo modal sirve para exportar y para restaurar: solo cambian los
+  // textos. El h3 no tiene id, así que se localiza por estructura.
+  function setMode(mode) {
+    const isReview = mode === "restore";
+    const go = el("bksel-go");
+    if (go) go.textContent = isReview ? "♻️ Restaurar selección" : "⬇️ Generar backup";
+    const title = document.querySelector("#backup-selector-overlay .omodal-head h3");
+    if (title) title.textContent = isReview
+      ? "♻️ Restaurar backup — qué recupero"
+      : "📦 Backup personal — qué incluyo";
   }
 
   // ── tri-state helpers ─────────────────────────────────────────────
@@ -690,6 +711,8 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
   // ── open/close ────────────────────────────────────────────────────
 
   async function open() {
+    reviewConfirm = null;
+    setMode("export");
     el("bksel-error").classList.add("hidden");
     el("bksel-loading").classList.remove("hidden");
     el("bksel-content").classList.add("hidden");
@@ -718,7 +741,25 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
     }
   }
 
+  // Restore: the caller already has the options (built from the zip by
+  // /api/backup/mine/inspect). Default is "everything" — a full restore of
+  // whatever the archive holds, which is the historical behaviour.
+  function openReview(optionsPayload, onConfirm) {
+    if (!optionsPayload || !optionsPayload.tree) return false;
+    reviewConfirm = typeof onConfirm === "function" ? onConfirm : null;
+    setMode("restore");
+    el("bksel-error").classList.add("hidden");
+    el("bksel-loading").classList.add("hidden");
+    options = optionsPayload;
+    selectAll(); // renders and ticks everything inside the archive
+    el("bksel-content").classList.remove("hidden");
+    el("backup-selector-overlay").classList.remove("hidden");
+    return true;
+  }
+
   function close() {
+    reviewConfirm = null;
+    setMode("export");
     el("backup-selector-overlay").classList.add("hidden");
   }
 
@@ -733,15 +774,19 @@ La estimación en vivo suma bloques (content_bytes), filas de scopes
     el("bksel-go")?.addEventListener("click", () => {
       const body = buildBody();
       if (!body) return; // botón deshabilitado cuando no hay selección
+      // Capture the callback BEFORE close(): close() clears reviewConfirm.
+      const confirmFn = reviewConfirm;
       close();
-      if (typeof window.downloadBackup === "function") {
+      if (confirmFn) {
+        confirmFn(body);
+      } else if (typeof window.downloadBackup === "function") {
         window.downloadBackup(body);
       }
     });
   }
 
-  // Export
-  window.BackupSelector = { open, close };
+  // Export + restore share the same modal, so both entry points are exposed.
+  window.BackupSelector = { open, openReview, close };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", wire);
