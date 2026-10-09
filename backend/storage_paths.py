@@ -71,3 +71,30 @@ def category_dir(category: str) -> str:
     # scraped_pdfs: scorm_import.py's own fallback. /tmp is where the
     # scraper has always written on bare metal; Docker sets SCRAPED_DIR.
     return "/tmp/scraped_pdfs"
+
+
+def resolve_media(category: str, stored: str) -> str:
+    """Local path of a media file whose row persisted an absolute path.
+
+    Rows store whatever absolute path the WRITING machine had. A personal
+    backup restored on another OS therefore points at a directory that does
+    not exist here (``C:\\srv\\...`` on macOS), even though the export and
+    the restore place every file under THIS install's
+    ``category_dir(category)`` with the stored basename.
+
+    Prefer the stored path while it still resolves -- the same machine keeps
+    its layout -- and fall back to the local category dir, which is exactly
+    where the restore put the file. Backslashes are normalised first, so a
+    Windows path resolves on a POSIX install too. Only the basename survives
+    the fallback, so a row can never escape its own category dir. A falsy
+    ``stored`` comes back unchanged, so callers keep their own "no path"
+    branch.
+    """
+    if not stored:
+        return stored or ""
+    if os.path.exists(stored):
+        return stored
+    name = os.path.basename(stored.replace("\\", "/"))
+    if not name:
+        return stored
+    return os.path.join(category_dir(category), name)

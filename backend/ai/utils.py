@@ -4,8 +4,8 @@ Utility functions for AI content generation — v3 port.
 PDF path resolution adapted from v2 ``backend/ai/utils.py`` to the v3
 filesystem layout:
 
-- Uploaded PDFs live in the v3 uploads folder (``PDF_UPLOAD_FOLDER`` env
-  or ``<repo>/uploads/pdfs`` — same source as ``routes/pdf.py``).
+- Uploaded PDFs live wherever storage_paths puts the ``pdfs`` category
+  (the same resolver routes/pdf.py and the backup export use).
 - ``pdfsCurso`` curriculum PDFs live under the local StudyFlow app dir
   (``~/.studyflow-app/roadmap/pdfsCurso``).
 
@@ -17,15 +17,13 @@ belong to the OpenZEN (generation) family, deferred to its own sub-phase.
 import os
 from pathlib import Path
 
+from storage_paths import category_dir, resolve_media
+
 # ─── PDF store directories (v3 layout) ─────────────────────────────
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-
-# Uploaded PDFs (matches backend/routes/pdf.py UPLOAD_FOLDER resolution).
-PDF_DATA_DIR = os.environ.get(
-    "PDF_UPLOAD_FOLDER",
-    str(_REPO_ROOT / "uploads" / "pdfs"),
-)
+# Uploaded PDFs: one resolver shared with routes/pdf.py, the backup export
+# and the restore, so every consumer of a PDF agrees on its folder.
+PDF_DATA_DIR = category_dir("pdfs")
 
 # Curriculum PDFs (pdfsCurso) — local StudyFlow app dir.
 PDFSCURSO_DIR = os.environ.get(
@@ -60,8 +58,10 @@ def _resolve_pdf_path(pdf_path: str) -> str | None:
             row = query_one(
                 "SELECT storage_path FROM pdfs WHERE id = %s", (int(rest),)
             )
-            if row and row.get("storage_path") and os.path.isfile(row["storage_path"]):
-                return row["storage_path"]
+            if row and row.get("storage_path"):
+                local = resolve_media("pdfs", row["storage_path"])
+                if os.path.isfile(local):
+                    return local
             return None
         # v2 pattern: /api/pdf/serve/<filename>.pdf → uploads folder.
         uploaded = os.path.join(PDF_DATA_DIR, rest)

@@ -29,7 +29,7 @@ from werkzeug.utils import secure_filename
 from database import execute, execute_returning, fetchone
 from models import Image
 from routes.auth import token_required
-from storage_paths import category_dir
+from storage_paths import category_dir, resolve_media
 
 bp = Blueprint('image', __name__)
 
@@ -170,7 +170,7 @@ def delete_image_file(current_user_id: int, image_id: int) -> bool:
     if not row:
         return False
 
-    storage_path = row['storage_path']
+    storage_path = resolve_media('images', row['storage_path'])
     execute('DELETE FROM images WHERE id = %s AND user_id = %s', (image_id, current_user_id))
 
     # The row is gone; a leftover file on the volume is only litter.
@@ -229,7 +229,7 @@ def get_image_file(current_user_id: int, image_id: int):
     if not row:
         return jsonify({'error': 'Image not found'}), 404
 
-    storage_path = row['storage_path']
+    storage_path = resolve_media('images', row['storage_path'])
     if not storage_path or not os.path.exists(storage_path):
         return jsonify({'error': 'Image file missing on disk'}), 404
 
