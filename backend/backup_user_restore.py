@@ -809,7 +809,17 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
         # Parents before children so the maps are complete before any child
         # FK is rewritten, whatever order the archive shipped the sections.
         resolved.sort(key=lambda item: _TREE_ORDER.get(item[1], 99))
-        maps = {t: {} for t in _NATURAL_KEY_TABLES}
+        # One remap map per table the per-row path touches -- not just the
+        # natural-key tree. pdfs/images/quiz_* are also restored row by row
+        # (to rewrite their tree FKs through the SAME archive-id -> new-id
+        # map), so they need an entry too. Initialising only the tree made
+        # maps["pdfs"] miss, and the KeyError raised at the write site was
+        # swallowed by this loop's per-table savepoint: the table was
+        # reported "failed" while its rows -- and therefore the served
+        # media -- silently never came back. Deriving the keys from
+        # _PER_ROW_TABLES (the exact set the loop iterates) keeps them from
+        # drifting apart again.
+        maps = {t: {} for t in _PER_ROW_TABLES}
         for table, real, columns, data in resolved:
             cur.execute("SAVEPOINT one_table")
             try:
