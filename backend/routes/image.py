@@ -26,17 +26,18 @@ import uuid
 from flask import Blueprint, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
-from database import execute, fetchone
+from database import execute, execute_returning, fetchone
 from models import Image
 from routes.auth import token_required
+from storage_paths import category_dir
 
 bp = Blueprint('image', __name__)
 
-# In Docker the compose volume mounts here; the fallback keeps `flask run`
-# working from a checkout.
-UPLOAD_FOLDER = os.environ.get(
-    'IMAGE_UPLOAD_FOLDER', os.path.join(os.path.dirname(__file__), '..', 'uploads', 'images')
-)
+# One resolver for every media folder (storage_paths): IMAGE_UPLOAD_FOLDER
+# when the deploy sets it, else backend/uploads/images -- exactly what this
+# module resolved on its own before, now shared with the backup export and
+# restore so an image round-trips between them untouched.
+UPLOAD_FOLDER = category_dir('images')
 
 # 15 MB. Images in a study block are diagrams and screenshots; anything
 # larger is a file that belongs in the docs tab, not inline.
@@ -136,18 +137,18 @@ def _store_uploaded_image(
     storage_path = os.path.join(UPLOAD_FOLDER, storage_filename)
     file_storage.save(storage_path)
 
-    execute(
+    # RETURNING * identifies the row this INSERT produced. The previous
+    # `ORDER BY id DESC LIMIT 1` assumed ids are chronological, which a
+    # restored database breaks: a stale row with a higher id was returned
+    # instead, and the editor embedded a file_url that 404'd.
+    row = execute_returning(
         '''INSERT INTO images
              (user_id, course_id, topic_id, filename, original_name, mime,
               file_size, storage_path)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING *''',
         (current_user_id, course_id, topic_id, storage_filename,
          original_name, mime, file_size, storage_path),
-    )
-
-    row = fetchone(
-        'SELECT * FROM images WHERE user_id = %s ORDER BY id DESC LIMIT 1',
-        (current_user_id,),
     )
     if not row:
         raise RuntimeError('Image row not found after insert')
