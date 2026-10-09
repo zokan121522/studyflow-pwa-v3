@@ -1016,6 +1016,30 @@ _POST_INDEXES = [
 ]
 
 
+def _resolved_engine() -> str:
+    """The engine both connection paths branch on, resolved in one place.
+
+    ``get_db()`` and ``get_connection()`` have to agree even on a cold
+    import, before anything has called ``select_engine()`` (the first
+    ``/api/status`` poll races the app's own init). ``get_db()`` used to
+    keep its own "no engine, no DSN -> SQLite" fallback while
+    ``get_connection()`` only matched an explicit ``ENGINE_SQLITE``, so it
+    fell into the Postgres branch where the pool is still ``None`` and
+    raised ``AttributeError: 'NoneType' object has no attribute
+    'getconn'`` — surfacing as ``db: "disconnected"`` on that first poll
+    and a transient 500 on cold-start routes.
+
+    One helper, no second fallback to drift: when nothing is recorded yet
+    it defers to ``engine.select_engine()``, which applies exactly the
+    rules ``init_db()`` would apply (forced engine, then DSN presence) and
+    records the decision. Genuine connection errors below still raise.
+    """
+    active = engine_mod.active_engine()
+    if active is not None:
+        return active
+    return engine_mod.select_engine()
+
+
 @contextmanager
 def get_db():
     """Yield a database connection, whichever engine is active.
@@ -1027,9 +1051,9 @@ def get_db():
     use works unchanged on both — ``CompatCursor`` translates the dialect.
     """
     global _connection_pool
-    engine = engine_mod.active_engine()
+    engine = _resolved_engine()
 
-    if engine == ENGINE_SQLITE or (engine is None and not os.environ.get('DATABASE_URL')):
+    if engine == ENGINE_SQLITE:
         if not _SCHEMA_READY:
             _ensure_schema_ready()
         # The wrapper, not the raw handle. This is the whole point of the
@@ -1145,7 +1169,7 @@ def get_connection():
     error, which is what lets the importer's try/finally stay as it is.
     """
     global _connection_pool
-    if engine_mod.active_engine() == ENGINE_SQLITE:
+    if _resolved_engine() == ENGINE_SQLITE:
         if threading.get_ident() not in _SQLITE_CONNS:
             init_db()
         # borrow(), not wrap_connection(): the caller hands this back, and
