@@ -205,7 +205,34 @@ window.App.ImageUpload = (function () {
     }
   }
 
-  return { pickAndUpload, _validate, _pickFile, MAX_BYTES };
+  // ── pickAndUploadImage({ courseId, topicId }) → { id, file_url, title }|null ──
+  // Markdown-embed variant: picks + uploads an image but does NOT create a
+  // block. Returns the uploaded image so the caller can embed
+  // `![alt](file_url)` in markdown text. Null on cancel/failure (already reported).
+  async function pickAndUploadImage(opts) {
+    const o = opts || {};
+    const file = await _pickFile();
+    if (!file) return null;
+    const problem = _validate(file);
+    if (problem) { _toast(problem, true); return null; }
+    _toast(`📤 Subiendo ${file.name}…`);
+    let image;
+    try {
+      image = await _upload(file, o.courseId, o.topicId);
+    } catch (err) {
+      _toast(`❌ ${err.message}`, true);
+      return null;
+    }
+    const id = image && image.id;
+    if (!id) { _toast("❌ Respuesta inesperada del servidor", true); return null; }
+    return {
+      id: id,
+      file_url: image.file_url || ("/api/image/" + id + "/file"),
+      title: image.title || (file.name || ""),
+    };
+  }
+
+  return { pickAndUpload, pickAndUploadImage, _validate, _pickFile, MAX_BYTES };
 })();
 
 console.log("[Studyflow] image-upload.js loaded");
