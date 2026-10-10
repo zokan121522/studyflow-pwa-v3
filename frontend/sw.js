@@ -115,7 +115,8 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // (pickAndUploadImage) son assets precacheados: sin este bump las PWAs
 // instaladas seguirían sirviendo el renderer viejo y `![alt](url)` se vería en crudo.
 // v104: API button fix
-const ASSET_CACHE = 'studyflow-assets-v104';
+// v105: restore chunked upload (async)
+const ASSET_CACHE = 'studyflow-assets-v105';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
