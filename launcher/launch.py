@@ -181,12 +181,19 @@ def _port_is_free(port: int) -> bool:
 
 
 def pick_port() -> int:
-    for port in range(DEFAULT_PORT, DEFAULT_PORT + PORT_SCAN_RANGE):
-        if _port_is_free(port):
-            return port
-    raise SystemExit(
-        f"No free port in {DEFAULT_PORT}-{DEFAULT_PORT + PORT_SCAN_RANGE - 1}."
-    )
+    """The server always binds DEFAULT_PORT, or the launcher aborts.
+
+    No scan, no fallback: a busy port means another instance (or something
+    else) already holds it, and quietly moving to 8488 would leave the user
+    with a URL that no longer matches what they know.
+    """
+    if not _port_is_free(DEFAULT_PORT):
+        raise SystemExit(
+            f"[ERROR] El puerto {DEFAULT_PORT} ya está en uso. "
+            "Otra instancia de StudyFlow está en marcha. "
+            "Ciérrala (o cierra la ventana/terminal antigua) y vuelve a abrir."
+        )
+    return DEFAULT_PORT
 
 
 # ─── environment ───────────────────────────────────────────────────
@@ -554,8 +561,8 @@ def start(open_it: bool = True, windowed: bool = True) -> int:
 
     existing = running_port()
     if existing is not None:
-        # The whole point of the remembered port: a second double-click opens
-        # the app that is already running instead of starting a rival.
+        # A second double-click opens the app that is already running on the
+        # fixed port instead of starting a rival.
         print(f"StudyFlow ya está corriendo en http://127.0.0.1:{existing}/")
         if open_it:
             open_app(existing, windowed=windowed)

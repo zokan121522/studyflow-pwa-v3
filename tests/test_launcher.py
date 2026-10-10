@@ -98,6 +98,43 @@ def test_uploads_path_is_inside_the_data_dir(launch, tmp_path, monkeypatch):
     assert "/app/" not in env["PDF_UPLOAD_FOLDER"]
 
 
+# ─── fixed port, no drift ───────────────────────────────────────────
+#
+# The launcher used to scan 8477-8516 and remember whichever port it found. The
+# user ended up opening a URL nobody documented, and a stale launcher.json could
+# keep a second server alive on a drifted port. The port is now always 8477.
+
+
+def test_pick_port_always_returns_the_fixed_port(launch, monkeypatch):
+    """When the port is free, it is 8477 -- never the next in a scan."""
+    monkeypatch.setattr(launch, "_port_is_free", lambda port: True)
+
+    assert launch.pick_port() == launch.DEFAULT_PORT
+
+
+def test_pick_port_aborts_when_the_port_is_busy(launch, monkeypatch):
+    """A busy port aborts with a visible Spanish message, not a scan away."""
+    monkeypatch.setattr(launch, "_port_is_free", lambda port: False)
+
+    with pytest.raises(SystemExit) as exc:
+        launch.pick_port()
+
+    message = str(exc.value)
+    assert str(launch.DEFAULT_PORT) in message
+    assert "StudyFlow" in message
+
+
+def test_running_port_only_probes_the_fixed_port(launch, monkeypatch):
+    """Only the fixed port is probed; a drifted remembered port is ignored."""
+    probed: list[int] = []
+    monkeypatch.setattr(
+        launch, "_probe", lambda port, timeout=1.5: probed.append(port) or None
+    )
+
+    assert launch.running_port() is None
+    assert probed == [launch.DEFAULT_PORT], "must probe only the fixed port"
+
+
 # ─── behaviour against a real process ──────────────────────────────
 
 
@@ -191,11 +228,11 @@ def test_launcher_detects_a_second_instance_of_the_same_install(launch, tmp_path
             time.sleep(0.25)
         assert _healthy(port) is not None, "server never came up"
 
-        # Same data dir: the launcher must find the instance it already owns.
-        # The port is off the default range, so it can only be found by matching
-        # the database it reports.
+        # Same data dir: the launcher must find the instance it already owns on
+        # the fixed port. There is exactly one port to probe, so the module's
+        # DEFAULT_PORT is redirected at the test server's port.
         monkeypatch.setenv("STUDYFLOW_DATA_DIR", str(tmp_path / "a"))
-        (tmp_path / "a" / "launcher.json").write_text(json.dumps({"port": port}))
+        monkeypatch.setattr(launch, "DEFAULT_PORT", port)
         assert launch.running_port() == port
     finally:
         proc.terminate()
@@ -231,10 +268,10 @@ def test_launcher_does_not_adopt_another_install(launch, tmp_path, monkeypatch):
             time.sleep(0.25)
         assert _healthy(port) is not None
 
-        # Our own state file claims the port, but that server is serving
-        # somebody else's database.
+        # The only port is the fixed one, redirected at that foreign server:
+        # its database is not ours, so it must not be adopted.
         monkeypatch.setenv("STUDYFLOW_DATA_DIR", str(mine))
-        (mine / "launcher.json").write_text(json.dumps({"port": port}))
+        monkeypatch.setattr(launch, "DEFAULT_PORT", port)
         assert launch.running_port() is None, (
             "the launcher adopted an instance backed by a different database"
         )
