@@ -11,13 +11,9 @@ import io
 import json
 import os
 import re
-<<<<<<< HEAD
 import shutil
 import sys
 import threading
-=======
-import sys
->>>>>>> origin/main
 import time
 import uuid
 import zipfile
@@ -131,23 +127,14 @@ _COPY_ESCAPES = {"t": "\t", "n": "\n", "r": "\r", "b": "\b",
                  "f": "\f", "v": "\v", "\\": "\\"}
 
 
-<<<<<<< HEAD
 def _raw_selection():
     """The optional `selection` field as a plain dict, or None.
-=======
-def _selection_from_request():
-    """The optional `selection` field, or None for a full import.
->>>>>>> origin/main
 
     None means the caller asked for nothing in particular (old client,
     curl without the field) and also covers a present-but-unreadable
     value: a truncated upload or a hand-edited request must degrade to
-<<<<<<< HEAD
     the historical full restore, never to a 500. The chunked job store
     keeps this dict; only the request-facing wrapper wraps it later.
-=======
-    the historical full restore, never to a 500.
->>>>>>> origin/main
     """
     raw = request.form.get("selection")
     if raw is None:
@@ -160,7 +147,6 @@ def _selection_from_request():
     if not isinstance(parsed, dict):
         _log("  · selection no es un objeto, se importa el backup completo")
         return None
-<<<<<<< HEAD
     return parsed
 
 
@@ -168,9 +154,6 @@ def _selection_from_request():
     """The same field, wrapped for the routes that import right away."""
     parsed = _raw_selection()
     return None if parsed is None else Selection(parsed)
-=======
-    return Selection(parsed)
->>>>>>> origin/main
 
 
 def _key(value):
@@ -836,7 +819,6 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
         # Parents before children so the maps are complete before any child
         # FK is rewritten, whatever order the archive shipped the sections.
         resolved.sort(key=lambda item: _TREE_ORDER.get(item[1], 99))
-<<<<<<< HEAD
         # One remap map per table the per-row path touches -- not just the
         # natural-key tree. pdfs/images/quiz_* are also restored row by row
         # (to rewrite their tree FKs through the SAME archive-id -> new-id
@@ -848,9 +830,6 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
         # _PER_ROW_TABLES (the exact set the loop iterates) keeps them from
         # drifting apart again.
         maps = {t: {} for t in _PER_ROW_TABLES}
-=======
-        maps = {t: {} for t in _NATURAL_KEY_TABLES}
->>>>>>> origin/main
         for table, real, columns, data in resolved:
             cur.execute("SAVEPOINT one_table")
             try:
