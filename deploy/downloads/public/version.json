@@ -2,14 +2,14 @@
   "file": "StudyFlow-windows-latest.zip",
   "versioned": "StudyFlow-windows-3.1.1.zip",
   "version": "3.1.1",
-  "size": 54645019,
+  "size": 54645585,
   "date": "10/10/2026",
-  "sha256": "63d07390a3b5b5c8b7f3ec3f27f4fc486d61ef30481e437cf2e3a1c1647af271",
+  "sha256": "d11485d0aa8a9fe924b87d3a529b401dcdcaf95d3dee54fe70d7311230913e55",
   "app_url": "",
   "platforms": {
-    "windows": {"file": "StudyFlow-windows-3.1.1.zip", "size": 54645019, "sha256": "63d07390a3b5b5c8b7f3ec3f27f4fc486d61ef30481e437cf2e3a1c1647af271", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.1.zip"},
-    "macos": {"file": "StudyFlow-macos-3.1.1.zip", "size": 54644427, "sha256": "c45b55082c31b00f3264338e6d6f1bfc284127c55349eba6c02196dbee5ac2d1", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.1.zip"},
-    "linux": {"file": "StudyFlow-linux-3.1.1.zip", "size": 54643605, "sha256": "0d460fee890c2bf2e3ffc6376f726c6602b5816fe79cc6e31e5a31cd96c0221d", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.1.zip"}
+    "windows": {"file": "StudyFlow-windows-3.1.1.zip", "size": 54645585, "sha256": "d11485d0aa8a9fe924b87d3a529b401dcdcaf95d3dee54fe70d7311230913e55", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.1.zip"},
+    "macos": {"file": "StudyFlow-macos-3.1.1.zip", "size": 54644993, "sha256": "7374401361f310f0b08fe29e80421a7173898d4ab11883fbca83a94f82b2a432", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.1.zip"},
+    "linux": {"file": "StudyFlow-linux-3.1.1.zip", "size": 54644171, "sha256": "09dc47c75ac6cdbc1f9597d388283eb3fe56d29c25e2a84eca2dff5e46d673da", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.1.zip"}
   },
   "notes": [
     "Punto verde: el servidor está en marcha. Un clic te lo confirma.",
