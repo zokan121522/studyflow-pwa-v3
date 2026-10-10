@@ -17,9 +17,9 @@
     "channel": "beta",
     "date": "10/10/2026",
     "platforms": {
-      "macos": {"file": "StudyFlow-macos-3.1.1-beta.zip", "size": 54635627, "sha256": "1156656bbad0b47fd4b27b4a14288f0982f5b552d73e0bc789a14669c033fcc6"},
-      "windows": {"file": "StudyFlow-windows-3.1.1-beta.zip", "size": 54636215, "sha256": "ee4078e8e14d5a7ad5e2762cb1ff1c9ab2625017877edd664047c3c5aa124a13"},
-      "linux": {"file": "StudyFlow-linux-3.1.1-beta.zip", "size": 54634805, "sha256": "1b0dbcb1f937eaeab60d549711fe0663c7176e5664aa8d6a0983eac2a7e9e2f3"}
+      "macos": {"file": "StudyFlow-macos-3.1.1-beta.zip", "size": 54644057, "sha256": "51f1bfdc3e2b6c86563671c6989dbe2df5f163ee36106b400df71c3c70ce1b56"},
+      "windows": {"file": "StudyFlow-windows-3.1.1-beta.zip", "size": 54644649, "sha256": "1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66"},
+      "linux": {"file": "StudyFlow-linux-3.1.1-beta.zip", "size": 54643235, "sha256": "a34d1088a5705813d38c50026a7282a5a901232a6973e8a4d6367e316a89cdc7"}
     },
     "notes": [
       "Punto verde: el servidor está en marcha. Un clic te lo confirma.",
