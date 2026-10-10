@@ -16,8 +16,9 @@ A PWA cannot write to the user's disk, so SQLite needs a process next to the
 browser. That process must be invisible and require no configuration, because
 the person using it is a student opening StudyFlow to revise, not an operator
 starting a web server. Everything below exists to make that true: a fixed port
-with a scan, no DSN to fill in, no console window left on screen, and the data
-outside the repository so deleting or re-cloning the code cannot take it away.
+that never drifts, no DSN to fill in, no console window left on screen, and the
+data outside the repository so deleting or re-cloning the code cannot take it
+away.
 
 Three decisions worth knowing about
 -----------------------------------
@@ -26,11 +27,13 @@ code. ``engine.data_dir()`` already defaults to
 ``~/Library/Application Support/studyflow`` on macOS, so this launcher only has
 to not fight it.
 
-**The port is remembered, not rediscovered blindly.** If the instance is already
-up, the launcher opens the browser and exits instead of starting a second
-server on a different port. Two servers on two ports over one SQLite file is a
-story nobody wants to debug, and SQLite would serialise them while the app
-quietly showed stale data in one of the two windows.
+**The port is fixed and is never rediscovered.** The server always binds 8477.
+If the instance is already up, the launcher opens the browser and exits instead
+of starting a second server. If 8477 is taken by something else, the launcher
+aborts with a clear message rather than drifting to another port: a launcher
+that silently moves leaves the user opening a URL nobody documented, and two
+servers on two ports over one SQLite file would show stale data in one window
+with no way to tell why.
 
 **SECRET_KEY is generated once and kept with the data.** It is the key that
 encrypts stored SCORM credentials (``backend/secret_box.py``), so a fresh one on
@@ -55,10 +58,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-#: First port tried. 8477 is arbitrary and unprivileged; the scan below is what
-#: actually makes it reliable, since anything else on the machine may hold it.
+#: The one and only port the server binds. 8477 is arbitrary and unprivileged.
+#: There is deliberately no fallback range: a launcher that silently drifts to
+#: another port leaves the user opening a URL nobody documented. If this port
+#: is taken the launcher aborts instead.
 DEFAULT_PORT = 8477
-PORT_SCAN_RANGE = 40
 
 #: The resident control helper (launcher/control.py) listens here. It is a
 #: separate, fixed port: it must be findable by a web page without a scan, and
@@ -152,27 +156,17 @@ def _our_database() -> Path:
 
 
 def running_port() -> int | None:
-    """The port of a live instance *of this install*, or None."""
-    try:
-        recorded = json.loads(state_file().read_text()).get("port")
-    except (OSError, ValueError, json.JSONDecodeError):
-        recorded = None
+    """The port of a live instance *of this install*, or None.
 
-    # The state file is inside the data directory, so it already scopes the
-    # check to this install; try it before scanning.
-    if isinstance(recorded, int):
-        payload = _probe(recorded)
-        if payload and _owns(payload):
-            return recorded
-
-    # No usable state file. A server may still be ours -- started by hand, or
-    # the file lost while it ran -- so scan, but accept a port only if it
-    # serves our database. Anything else is a foreign instance and is left
-    # alone; pick_port() will step over it.
-    for port in range(DEFAULT_PORT, DEFAULT_PORT + PORT_SCAN_RANGE):
-        payload = _probe(port, timeout=0.3)
-        if payload and _owns(payload):
-            return port
+    There is exactly one port to look at, so a remembered port from a previous
+    run is deliberately ignored: honouring a drifted value is the bug this
+    launcher no longer has. The port is accepted only if it serves our own
+    database -- a foreign service on 8477 is not ours and is left alone, for
+    pick_port() to report as a conflict.
+    """
+    payload = _probe(DEFAULT_PORT)
+    if payload and _owns(payload):
+        return DEFAULT_PORT
     return None
 
 
