@@ -90,6 +90,8 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
+  /* Los destinos del índice no quedan ocultos bajo la cabecera. */
+  #galeria,#beta,#descarga,#historico,#detalles{scroll-margin-top:72px}
   body{margin:0;background:var(--bg);color:var(--text);
        font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
        display:flex;justify-content:center;padding:22px 18px 60px;
@@ -105,6 +107,25 @@
   .tag{font-family:var(--mono);font-size:12px;color:var(--ok);
        background:rgba(62,207,142,.12);border:1px solid rgba(62,207,142,.35);
        border-radius:99px;padding:3px 12px}
+
+  /* ── Índice de la página ────────────────────────────────────── */
+  .idx{display:flex;gap:8px;margin:0 2px 24px;padding:0 0 2px;
+       overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;
+       scrollbar-width:none}
+  .idx::-webkit-scrollbar{display:none}
+  .idx a{flex:none;font-size:13px;font-weight:700;color:var(--muted);
+       text-decoration:none;background:var(--surface);border:1px solid var(--border);
+       border-radius:99px;padding:8px 16px;transition:color .15s,border-color .15s,background .15s}
+  .idx a:hover{color:var(--accent);border-color:var(--accent)}
+  .idx a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── Insignia BETA (canal de prueba) ────────────────────────── */
+  .badge-beta{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.8px;
+       text-transform:uppercase;color:#fff;background:var(--accent);
+       border-radius:99px;padding:4px 12px;vertical-align:1px}
+  .beta-flag{margin:0 0 12px;font-size:13px;font-weight:650;color:var(--muted)}
+  .beta-dl{margin:20px 0 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+       color:var(--muted);font-size:14px;font-weight:650}
 
   /* ── Tarjetas y títulos ─────────────────────────────────────── */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;
@@ -185,6 +206,11 @@
   .novedades figcaption{font-size:13.5px;color:var(--muted);text-align:center;
         margin-top:10px}
   .novedades .nov-cta{margin:18px 0 0;color:var(--muted);font-size:14px}
+  .novedades .nov-audio audio{width:100%}
+  .novedades .nov-prev{margin:26px auto 0;max-width:760px;border-top:1px solid var(--border);
+        padding-top:16px}
+  .novedades .nov-prev summary{cursor:pointer;color:var(--muted);font-size:14px;
+        font-weight:650}
 
   /* ── Selector de versión de capturas (Auto · Claro · Oscuro) ── */
   .cap-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 2px 20px}
@@ -437,6 +463,15 @@
     <span class="tag" id="tag-version">3.1.0</span>
   </header>
 
+  <!-- ── Índice de la página ────────────────────────────────────── -->
+  <nav class="idx" aria-label="Índice de la página">
+    <a href="#galeria">Galería</a>
+    <a href="#beta">Novedades beta</a>
+    <a href="#descarga">Descargar</a>
+    <a href="#historico">Histórico</a>
+    <a href="#detalles">Detalles</a>
+  </nav>
+
   <!-- ── HERO (primero) ─────────────────────────────────────────── -->
   <section class="hero" aria-labelledby="hero-title">
     <h1 id="hero-title">Estudia mejor · sin nubes · sin líos</h1>
@@ -483,7 +518,7 @@
       <button type="button" id="captura-oscuro" class="cap-btn" data-cap="oscuro" aria-pressed="false">Oscuro</button>
     </div>
   </div>
-  <section class="card gal" aria-labelledby="galeria-title">
+  <section class="card gal" id="galeria" aria-labelledby="galeria-title">
     <figure class="shot">
       <button type="button" class="thumb"
               data-full="img/app-1-dashboard.jpg?v=2"
@@ -545,26 +580,46 @@
     </figure>
   </section>
 
-  <!-- ── Novedades de la versión ────────────────────────────────── -->
-  <section class="card novedades" id="novedades" aria-labelledby="novedades-title">
-    <h2 class="sec" id="novedades-title" style="margin-top:0">🆕 Novedades de la versión <span id="nov-version">3.1.0</span></h2>
-    <p class="lab">Qué hay de nuevo</p>
+  <!-- ── BETA 3.1.1 (versión de prueba, no la oficial) ──────────── -->
+  <section class="card novedades" id="beta" aria-labelledby="beta-title">
+    <p class="beta-flag"><span class="badge-beta">BETA</span> versión de prueba · todavía no es la oficial</p>
+    <h2 class="sec" id="beta-title" style="margin-top:0">🧪 3.1.1 beta — El botón del servidor, ahora de verdad</h2>
+    <p class="sub">StudyFlow 3.1.1 convierte el indicador del servidor en un botón de verdad.</p>
     <ul id="nov-list">
-      <li><strong>Imágenes dentro de tus apuntes:</strong> pega o sube una imagen y aparece dentro de la nota.</li>
-      <li><strong>Copias portables de verdad:</strong> una copia hecha en un ordenador se abre bien en otro (Windows, macOS o Linux).</li>
+      <li><strong>Punto verde:</strong> el servidor está en marcha. Un clic te lo confirma.</li>
+      <li><strong>Punto rojo:</strong> el servidor está apagado. Un clic lo arranca por ti, con el progreso a la vista.</li>
+      <li><strong>Si no logra arrancarlo,</strong> te lo dice claro y te indica dónde mirar el registro.</li>
+      <li><strong>Una sola base de datos:</strong> tu copia local es la única fuente de verdad.</li>
+      <li><strong>Arreglado</strong> el aviso de actualización de la app instalada.</li>
     </ul>
-    <figure>
-      <button type="button" class="thumb"
-              data-full="img/novedades-3.1.0.jpg"
-              data-caption="Novedades de la versión 3.1.0">
-        <img id="nov-img" src="img/novedades-3.1.0.jpg"
-             alt="Ejemplo de las novedades de StudyFlow 3.1.0: imágenes en los apuntes"
-             loading="lazy" decoding="async"
-             onerror="this.closest('figure').hidden = true">
-      </button>
-      <figcaption>Imágenes en tus apuntes y copias portables entre ordenadores.</figcaption>
+    <figure class="nov-audio">
+      <audio controls preload="metadata" src="audio/novedades-3.1.1.mp3">Tu navegador no soporta audio.</audio>
+      <figcaption>Escucha las novedades (voz de Álvaro)</figcaption>
     </figure>
-    <p class="nov-cta">¿Ya tienes StudyFlow instalado? La app te avisa sola cuando hay una versión nueva.</p>
+    <p class="beta-dl">Descargas de la beta:
+      <a class="btn btn-sm" href="StudyFlow-macos-3.1.1-beta.zip">⬇ macOS</a>
+      <a class="btn btn-sm" href="StudyFlow-windows-3.1.1-beta.zip">⬇ Windows</a>
+      <a class="btn btn-sm" href="StudyFlow-linux-3.1.1-beta.zip">⬇ Linux</a>
+    </p>
+    <p class="nov-cta">Versión de prueba, para los más intrépidos: descárgala desde aquí, pruébala como usuario en Mac, Windows y Linux, y con tu visto bueno pasa a oficial.</p>
+    <details class="nov-prev">
+      <summary>Novedades anteriores (3.1.0)</summary>
+      <figure>
+        <button type="button" class="thumb"
+                data-full="img/novedades-3.1.0.jpg"
+                data-full-light="img/novedades-3.1.0-light.jpg"
+                data-caption="Novedades de la versión 3.1.0">
+          <picture>
+            <source srcset="img/novedades-3.1.0-light.jpg" media="(prefers-color-scheme: light)">
+            <img id="nov-img-prev" src="img/novedades-3.1.0.jpg"
+                 alt="Ejemplo de las novedades de StudyFlow 3.1.0: imágenes en los apuntes"
+                 loading="lazy" decoding="async"
+                 onerror="this.closest('figure').hidden = true">
+          </picture>
+        </button>
+        <figcaption>Imágenes en tus apuntes y copias portables entre ordenadores.</figcaption>
+      </figure>
+    </details>
   </section>
 
   <!-- ── Descarga: tres tarjetas por sistema operativo ──────────── -->
@@ -650,7 +705,7 @@
 
   <!-- ── Histórico de versiones ─────────────────────────────────── -->
   <h2 class="sec">Histórico de versiones</h2>
-  <section class="card" style="padding:0;margin-bottom:22px">
+  <section class="card" id="historico" style="padding:0;margin-bottom:22px">
     <div class="rel-head">
       <div>Versión</div><div>Cambios</div><div>Estado</div><div>Descarga</div>
     </div>
@@ -676,7 +731,7 @@
   <h2 class="sec">Detalles técnicos</h2>
 
   <!-- Cabecera técnica: versión + tamaño + fecha + SHA -->
-  <section class="card">
+  <section class="card" id="detalles">
     <p class="lab">Cabecera técnica · versión y hash a la vista</p>
     <div class="tech">
       <dl class="tech-meta">
@@ -951,19 +1006,8 @@
         }
         if (v.date) el.date.textContent = v.date;
 
-        // Novedades: "notes" en version.json sustituye el fallback estático.
-        // Sin "notes" la lista queda como está (la sección nunca se oculta).
-        var novVersion = document.getElementById('nov-version');
-        var novList = document.getElementById('nov-list');
-        if (novVersion && v.version) novVersion.textContent = v.version;
-        if (novList && v.notes && v.notes.length) {
-          novList.innerHTML = '';
-          v.notes.forEach(function (n) {
-            var li = document.createElement('li');
-            li.textContent = n;
-            novList.appendChild(li);
-          });
-        }
+        // La sección beta 3.1.1 lleva su contenido fijo en el HTML: no la
+        // reescribimos con las "notes" de la versión estable (3.1.0).
 
         // Plataformas. Sin "platforms" pero con file top-level → sólo Windows.
         var plats = v.platforms;

@@ -1,0 +1,32 @@
+{
+  "file": "StudyFlow-windows-latest.zip",
+  "versioned": "StudyFlow-windows-3.1.0.zip",
+  "version": "3.1.0",
+  "size": 54627274,
+  "date": "09/10/2026",
+  "sha256": "99c0d49c7a715f26cc8a5ca2647f653f6238d883fa88853e8a97f4a82a86456f",
+  "app_url": "",
+  "platforms": {
+    "windows": {"file": "StudyFlow-windows-3.1.0.zip", "size": 54627274, "sha256": "99c0d49c7a715f26cc8a5ca2647f653f6238d883fa88853e8a97f4a82a86456f", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.0.zip"},
+    "macos": {"file": "StudyFlow-macos-3.1.0.zip", "size": 54626703, "sha256": "282b6d4e2660a4b415d02b18754d8989d4422d726becdd7abc27e9abd06b72a5", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.0.zip"},
+    "linux": {"file": "StudyFlow-linux-3.1.0.zip", "size": 54625881, "sha256": "6efe8f0058e8dd9b44698655ba3b11e78a2200e038de48e0576c7d146b0d105c", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.0.zip"}
+  },
+  "notes": ["Imágenes dentro de tus apuntes: pega o sube una imagen y aparece dentro de la nota.", "Copias portables de verdad: una copia hecha en un ordenador se abre bien en otro (Windows, macOS o Linux)."],
+  "beta": {
+    "version": "3.1.1",
+    "channel": "beta",
+    "date": "10/10/2026",
+    "platforms": {
+      "macos": {"file": "StudyFlow-macos-3.1.1-beta.zip", "size": 54635627, "sha256": "1156656bbad0b47fd4b27b4a14288f0982f5b552d73e0bc789a14669c033fcc6"},
+      "windows": {"file": "StudyFlow-windows-3.1.1-beta.zip", "size": 54636215, "sha256": "ee4078e8e14d5a7ad5e2762cb1ff1c9ab2625017877edd664047c3c5aa124a13"},
+      "linux": {"file": "StudyFlow-linux-3.1.1-beta.zip", "size": 54634805, "sha256": "1b0dbcb1f937eaeab60d549711fe0663c7176e5664aa8d6a0983eac2a7e9e2f3"}
+    },
+    "notes": [
+      "Punto verde: el servidor está en marcha. Un clic te lo confirma.",
+      "Punto rojo: el servidor está apagado. Un clic lo arranca por ti, con el progreso a la vista.",
+      "Si no logra arrancarlo, te lo dice claro y te indica dónde mirar el registro.",
+      "Una sola base de datos: tu copia local es la única fuente de verdad.",
+      "Arreglado el aviso de actualización de la app instalada."
+    ]
+  }
+}

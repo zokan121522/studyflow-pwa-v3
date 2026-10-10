@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería 5 — Votación · Modelos de descarga StudyFlow</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a22; --border:#262a35;
+    --text:#e8eaf0; --muted:#98a0b3; --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .topbar{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 20px;
+  }
+  .topbar h1{margin:0 0 8px; font-size:16px; font-weight:600;}
+  .nav{display:flex; flex-wrap:wrap; gap:8px;}
+  .nav a{
+    font-size:13px; color:var(--muted); background:var(--bg);
+    border:1px solid var(--border); border-radius:6px;
+    padding:5px 10px; text-decoration:none;
+  }
+  .nav a:hover{color:var(--text); border-color:var(--accent); text-decoration:none;}
+  .nav a.active{background:var(--accent); color:#0f1117; border-color:var(--accent); font-weight:600;}
+
+  main{padding:20px;}
+
+  .decision-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:10px; margin-bottom:16px;
+  }
+  .hint{color:var(--muted); font-size:12px; margin:0;}
+  #choice-line{font-size:14px; color:var(--text); margin:0;}
+  #choice-line strong{color:var(--accent);}
+  #choice-line.empty{color:var(--muted);}
+
+  .cards{
+    display:grid; grid-template-columns:repeat(2,1fr); gap:16px;
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; overflow:hidden; display:flex; flex-direction:column;
+    min-width:0;
+  }
+  .card.selected{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
+
+  .card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:10px 14px; border-bottom:1px solid var(--border);
+  }
+  .caption{font-size:14px; font-weight:600;}
+  .badge{
+    font-size:10px; font-weight:700; letter-spacing:.06em;
+    background:var(--accent); color:#0f1117;
+    border-radius:4px; padding:3px 6px; white-space:nowrap;
+  }
+
+  .preview-wrap{
+    position:relative; overflow:hidden;
+    height:230px; background:#fff; border-bottom:1px solid var(--border);
+  }
+  .preview-wrap iframe{
+    position:absolute; top:0; left:0;
+    width:312.5%;   /* 100 / 0.32 */
+    height:312.5%;
+    border:0; background:#fff;
+    transform:scale(0.32);
+    transform-origin:top left;
+    pointer-events:none;
+  }
+
+  .proscons{padding:14px; display:flex; flex-direction:column; gap:12px; flex:1;}
+  .proscons h3{
+    margin:0 0 6px; font-size:12px; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); font-weight:700;
+  }
+  .proscons ul{margin:0; padding-left:18px;}
+  .proscons li{font-size:13px; line-height:1.5; margin-bottom:4px; color:var(--text);}
+  .pros li::marker{color:#4ad17a;}
+  .cons li::marker{color:#ff7a7a;}
+
+  .choose-btn{
+    font-family:inherit; font-size:13px; font-weight:600;
+    margin-top:auto; cursor:pointer;
+    background:var(--bg); color:var(--accent);
+    border:1px solid var(--accent); border-radius:8px;
+    padding:10px 12px;
+  }
+  .choose-btn:hover{background:var(--accent); color:#0f1117;}
+  .card.selected .choose-btn{background:var(--accent); color:#0f1117;}
+
+  @media (max-width:820px){
+    .cards{grid-template-columns:1fr;}
+  }
+
+  footer{padding:16px 20px 28px; color:var(--muted); font-size:12px; text-align:center;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Galería de modelos — página de descarga StudyFlow</h1>
+  <nav class="nav">
+    <a href="g1-grid.html">1 · Cuadrícula</a>
+    <a href="g2-pestanas.html">2 · Pestañas</a>
+    <a href="g3-carrusel.html">3 · Carrusel</a>
+    <a href="g4-zoom.html">4 · Zoom</a>
+    <a class="active" href="g5-votacion.html">5 · Votación</a>
+  </nav>
+</header>
+
+<main>
+  <div class="decision-bar">
+    <p class="hint">Vista de decisión: previsualización reducida (32%) + pros y contras. Elige uno.</p>
+    <p id="choice-line" class="empty">Tu elección: —</p>
+  </div>
+
+  <div class="cards">
+
+    <!-- Modelo 1 -->
+    <section class="card" data-choice="1 · Directa (mínima)">
+      <div class="card-head">
+        <span class="caption">1 · Directa (mínima)</span>
+        <a class="open-link" href="wf1-directa.html" target="_blank" rel="noopener" style="font-size:12px;">abrir a tamaño real</a>
+      </div>
+      <div class="preview-wrap">
+        <iframe src="wf1-directa.html" title="1 · Directa (mínima)" loading="eager" tabindex="-1"></iframe>
+      </div>
+      <div class="proscons">
+        <div>
+          <h3>A favor</h3>
+          <ul class="pros">
+            <li>Mínimo scroll: todo lo esencial cabe casi en una pantalla.</li>
+            <li>Carga y lectura rapidísimas; ideal para móvil y prisa.</li>
+            <li>Muy poco mantenimiento: pocas secciones que actualizar.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>En contra</h3>
+          <ul class="cons">
+            <li>Poca info: no explica qué incluye ni por qué elegirla.</li>
+            <li>Sin captura ni prueba visual, el producto se «vende solo».</li>
+          </ul>
+        </div>
+        <button class="choose-btn" type="button">Elegir este modelo</button>
+      </div>
+    </section>
+
+    <!-- Modelo 2 -->
+    <section class="card" data-choice="2 · Dos columnas (con captura)">
+      <div class="card-head">
+        <span class="caption">2 · Dos columnas (con captura)</span>
+        <span class="badge">RECOMENDADO</span>
+      </div>
+      <div class="preview-wrap">
+        <iframe src="wf2-dos-columnas.html" title="2 · Dos columnas (con captura)" loading="eager" tabindex="-1"></iframe>
+      </div>
+      <div class="proscons">
+        <div>
+          <h3>A favor</h3>
+          <ul class="pros">
+            <li>Mejor equilibrio: copy a la izquierda + captura a la derecha.</li>
+            <li>La imagen muestra el producto sin alargar el texto.</li>
+            <li>Escalable: caben bullets, versiones y CTA sin recargar.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>En contra</h3>
+          <ul class="cons">
+            <li>En pantallas estrechas se apila y crece el scroll.</li>
+            <li>Hay que mantener la captura actualizada con cada cambio.</li>
+          </ul>
+        </div>
+        <button class="choose-btn" type="button">Elegir este modelo</button>
+      </div>
+    </section>
+
+    <!-- Modelo 3 -->
+    <section class="card" data-choice="3 · Carta de producto">
+      <div class="card-head">
+        <span class="caption">3 · Carta de producto</span>
+        <a class="open-link" href="wf3-carta-producto.html" target="_blank" rel="noopener" style="font-size:12px;">abrir a tamaño real</a>
+      </div>
+      <div class="preview-wrap">
+        <iframe src="wf3-carta-producto.html" title="3 · Carta de producto" loading="eager" tabindex="-1"></iframe>
+      </div>
+      <div class="proscons">
+        <div>
+          <h3>A favor</h3>
+          <ul class="pros">
+            <li>El más completo: vende el «por qué» antes del «qué».</li>
+            <li>Bueno para presentar features, público objetivo y ventajas.</li>
+            <li>Da imagen de producto cuidado, no de nota técnica.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>En contra</h3>
+          <ul class="cons">
+            <li>El más largo: obliga a scrollear bastante.</li>
+            <li>Más copy que escribir y revisar en cada iteración.</li>
+          </ul>
+        </div>
+        <button class="choose-btn" type="button">Elegir este modelo</button>
+      </div>
+    </section>
+
+    <!-- Modelo 4 -->
+    <section class="card" data-choice="4 · Técnica / releases">
+      <div class="card-head">
+        <span class="caption">4 · Técnica / releases</span>
+        <a class="open-link" href="wf4-tecnica.html" target="_blank" rel="noopener" style="font-size:12px;">abrir a tamaño real</a>
+      </div>
+      <div class="preview-wrap">
+        <iframe src="wf4-tecnica.html" title="4 · Técnica / releases" loading="eager" tabindex="-1"></iframe>
+      </div>
+      <div class="proscons">
+        <div>
+          <h3>A favor</h3>
+          <ul class="pros">
+            <li>Muy útil si hay histórico de versiones: se ve la evolución.</li>
+            <li>Claridad técnica: cambios, notas y compatibilidad a la vista.</li>
+            <li>Fácil de mantener en seco: se añade un release por línea.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>En contra</h3>
+          <ul class="cons">
+            <li>Tono demasiado técnico para un usuario no desarrollador.</li>
+            <li>Poco atractivo como página de descarga «comercial».</li>
+          </ul>
+        </div>
+        <button class="choose-btn" type="button">Elegir este modelo</button>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>Wireframes de baja fidelidad — no es el diseño final.</footer>
+
+<script>
+(function () {
+  var KEY = "studyflow-wf-choice";
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  var line = document.getElementById("choice-line");
+
+  function render(choice) {
+    cards.forEach(function (c) {
+      c.classList.toggle("selected", c.getAttribute("data-choice") === choice);
+    });
+    if (choice) {
+      line.classList.remove("empty");
+      line.innerHTML = "Tu elección: <strong></strong>";
+      line.querySelector("strong").textContent = choice;
+    } else {
+      line.classList.add("empty");
+      line.textContent = "Tu elección: —";
+    }
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  render(saved);
+
+  cards.forEach(function (c) {
+    var btn = c.querySelector(".choose-btn");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var choice = c.getAttribute("data-choice");
+      try { localStorage.setItem(KEY, choice); } catch (e) {}
+      render(choice);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

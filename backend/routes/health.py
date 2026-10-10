@@ -15,7 +15,7 @@ from ai.notebooklm.profiles import STORAGE_FILE, resolve_profile_dir
 
 bp = Blueprint('health', __name__)
 
-APP_VERSION = '3.1.0'
+APP_VERSION = '3.1.1'
 DEFAULT_DOWNLOADS_URL = 'https://studyflowhub.dev'
 
 

@@ -27,7 +27,27 @@ def _repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _force_utf8_stdio() -> None:
+    """stdout/stderr as UTF-8 whatever the launcher handed us.
+
+    The Windows launcher opens the child's stdout on a file in the locale
+    encoding (cp1252), where '✅' does not exist: a print of a success line
+    raised UnicodeEncodeError AFTER a restore had already committed its
+    rows and files, and the client saw a 500 for work that had succeeded.
+    Fixed here, once, at the door, for every print in the process;
+    backup_user_restore._log() is the per-line second line of defence.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass  # StringIO or a stream that refuses: _log() covers the rest
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdio()
     argv = list(sys.argv[1:] if argv is None else argv)
     port = int(os.environ.get("STUDYFLOW_PORT", "8477"))
 

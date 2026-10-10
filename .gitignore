@@ -76,3 +76,9 @@ snapshot.json
 # are the deliverable; the pilot run and its per-step audio are not.
 tools/walkthrough/pilot/
 tools/walkthrough/storyboards/
+
+# Release artifacts served from the downloads page. Built locally by the
+# portable build scripts and published by deploy/downloads/publish.sh; never
+# committed to git (the server holds the real copies).
+deploy/downloads/public/*.zip
+deploy/downloads/_privado/

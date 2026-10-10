@@ -49,7 +49,8 @@ import database as db
 # boundary fails on a type error instead of returning False. One style,
 # everywhere.
 from backup_files import (  # noqa: F401  (re-exported)
-    AUDIO_RE, CATEGORY_OF, DATA_DIR, FILE_CATEGORIES, PDF_RE, resolve_files,
+    AUDIO_RE, CATEGORY_OF, FILE_CATEGORIES, PDF_RE, resolve_files,
+    _category_of_disk_file, archive_rel,
 )
 from backup_resolve import (
     _resource_fragment, lit, resolve_scope, resolve_tree,
@@ -439,7 +440,11 @@ def _build_manifest(user, db_data, files, missing, unattributed,
             "total_bytes": sum(sizes.values()),
         },
         "missing_references": sorted(set(missing)),
-        "unattributed_files": [os.path.relpath(p, DATA_DIR) for p in unattributed],
+        # Listed per category against storage_paths -- never against a root
+        # that may not exist on the machine that reads the manifest.
+        "unattributed_files": [
+            archive_rel(_category_of_disk_file(p), p) for p in unattributed
+        ],
     }
     # A partial backup is a subset on purpose. The restore reads this and
     # warns, because restoring it does not reproduce a whole account and

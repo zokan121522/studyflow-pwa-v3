@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 from flask import current_app
 
 from database import execute, fetchone
+from storage_paths import category_dir
 
 
 def save_pdf_and_block(
@@ -68,11 +69,15 @@ def _persist_pdf_bytes(
 
 
 def _upload_folder() -> str:
-    """Resolved PDF upload folder (app config > env > Docker default)."""
-    return current_app.config.get(
-        "PDF_UPLOAD_FOLDER",
-        os.environ.get("PDF_UPLOAD_FOLDER", "/app/uploads/pdfs"),
-    )
+    """Resolved PDF upload folder (app config > storage_paths).
+
+    The old fallback was the Docker path ``/app/uploads/pdfs``, which on a
+    bare-metal install resolved to ``C:\\app\\...`` on Windows and wrote
+    SCORM-imported PDFs where no route would ever serve them.
+    storage_paths falls back to the repo-local folder routes/pdf.py serves
+    from instead.
+    """
+    return current_app.config.get("PDF_UPLOAD_FOLDER") or category_dir("pdfs")
 
 
 def _upload_path(storage_name: str) -> str:

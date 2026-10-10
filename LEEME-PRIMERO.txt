@@ -1,0 +1,99 @@
+﻿============================================================
+   STUDYFLOW — CÓMO EMPEZAR
+============================================================
+
+  ¡Hola! Sigue estos 5 pasos y tendrás StudyFlow funcionando
+  en tu PC en unos minutos. No hace falta saber de informática.
+
+------------------------------------------------------------
+  PASO A PASO
+------------------------------------------------------------
+
+1) EXTRAE EL ZIP COMPLETO   (muy importante)
+
+   No hagas doble clic en los ficheros de dentro del ZIP.
+   En su lugar:
+     - Click derecho en el ZIP  ->  "Extraer todo..." ("Extract All")
+     - Elige una carpeta (por ejemplo el Escritorio) y extrae.
+
+   ¿Por qué? Si lanzas los ficheros desde dentro del ZIP,
+   Windows los copia a una carpeta temporal y la app no
+   encuentra sus archivos. Siempre: PRIMERO extraer,
+   DESPUÉS abrir.
+
+2) ENTRA EN LA CARPETA EXTRAÍDA y haz DOBLE CLIC en:
+
+        INICIAR_StudyFlow.bat
+
+   Ese es el único fichero que necesitas. Ya está.
+
+3) LA PRIMERA VEZ TARDA 2-3 MINUTOS   (es normal)
+
+   Se está preparando todo: aparecerán mensajes en la
+   ventana. NO CIERRES LA VENTANA, espera a que termine.
+   Las siguientes veces arranca en pocos segundos.
+
+4) SE ABRE SOLO EL NAVEGADOR con StudyFlow dentro de:
+
+        http://127.0.0.1:8477/
+
+   Si el navegador no se abre solo, copia esa dirección a
+   mano en la barra de direcciones. Listo: ya puedes usarlo.
+
+5) PARA DETENER LA APP
+
+   - Cierra la ventana de StudyFlow, o
+   - Abre una ventana de símbolo del sistema (CMD) dentro
+     de esta carpeta y escribe:
+
+         INICIAR_StudyFlow.bat stop
+
+   Para volver a arrancar: doble clic en
+   INICIAR_StudyFlow.bat.
+
+------------------------------------------------------------
+  ¿QUÉ HAY EN ESTA CARPETA?
+------------------------------------------------------------
+
+  INICIAR_StudyFlow.bat   ->  EL QUE USASTÚ. Doble clic y listo.
+  LEEME-PRIMERO.txt       ->  Este fichero.
+  launcher\               ->  El motor de arranque. No lo toques.
+  backend\  frontend\     ->  Parte técnica de la app. No toques.
+  scripts\  tests\        ->  Herramientas de desarrollo. No toques.
+  docker\                 ->  Configuración de servidores. No toques.
+  README.md (si viene)    ->  Documentación técnica (para
+                              programadores). Tú no lo necesitas.
+
+  Tú solo necesitas INICIAR_StudyFlow.bat. El resto se puede
+  mirar, pero nada de lo de dentro debe editarse.
+
+------------------------------------------------------------
+  ¿DÓNDE SE GUARDAN MIS DATOS?
+------------------------------------------------------------
+
+  NO en esta carpeta. Tus datos (agenda, cursos, notas...)
+  se guardan aquí:
+
+        %LOCALAPPDATA%\studyflow\
+
+  Por eso puedes BORRAR esta carpeta del proyecto sin miedo:
+  no pierdes nada. Tus datos siguen ahí fuera.
+
+------------------------------------------------------------
+  SI ALGO FALLA
+------------------------------------------------------------
+
+  - "No encuentro requirements-local.txt" o "No encuentro la
+    carpeta launcher\": estás ejecutando desde dentro del ZIP.
+    Repite el paso 1 (Extraer todo) y vuelve al paso 2.
+
+  - "No encuentro Python": instala Python 3.12 desde
+    https://www.python.org/downloads/ y MARCA la casilla
+    "Add Python to PATH" durante la instalación. Después
+    vuelve a hacer doble clic en INICIAR_StudyFlow.bat.
+
+  - Cualquier otro mensaje que empiece por [X]: léelo con
+    calma, dice qué ha pasado y qué hacer.
+
+  ¿Eres desarrollador? La documentación técnica está en
+  README.md.

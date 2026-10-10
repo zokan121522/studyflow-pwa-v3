@@ -18,3 +18,5 @@
 # .bat with bare LF fails intermittently on Windows (labels/goto break).
 # `-text` disables all conversion, so the committed bytes stay as written.
 launcher/*.bat -text
+INICIAR_StudyFlow.bat -text
+LEEME-PRIMERO.txt -text

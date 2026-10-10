@@ -114,7 +114,8 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // markdown-editor.js (botón 🖼 + insertImage) e image-upload.js
 // (pickAndUploadImage) son assets precacheados: sin este bump las PWAs
 // instaladas seguirían sirviendo el renderer viejo y `![alt](url)` se vería en crudo.
-const ASSET_CACHE = 'studyflow-assets-v103';
+// v104: API button fix
+const ASSET_CACHE = 'studyflow-assets-v104';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

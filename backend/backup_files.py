@@ -32,31 +32,17 @@ import re
 
 import backup_db as db
 from backup_selection import MEDIA_DIRS
+from storage_paths import category_dir
 
-# The uploads root in the container, derived from the same env vars the app
-# itself serves files from rather than from a second hardcoded guess. Every
-# category below is a subdirectory of it, which is what lets the ZIP store
-# paths relative to a root the restore can re-root anywhere.
-def uploads_root() -> str:
-    """The directory the backup format stores its paths relative to.
-
-    This is the single source of truth for the base of ``files/`` inside the
-    archive. The restore MUST use this same value: it used to compute its own
-    base (engine.data_dir()) while the export used dirname(PDF_UPLOAD_FOLDER),
-    and those differ by one level -- on a local install the launcher points
-    PDF_UPLOAD_FOLDER at ``<data>/uploads/pdfs``. Every media file therefore
-    landed in ``<data>/pdfs/`` while the app kept serving ``<data>/uploads/pdfs/``:
-    the database rows came back (so titles rendered) but no PDF, audio or
-    infographic could be found. Deriving both sides from one function is what
-    makes a restore land where the app looks.
-    """
-    return os.path.dirname(
-        (os.environ.get("PDF_UPLOAD_FOLDER") or "/srv/backend/uploads/pdfs")
-        .rstrip("/")
-    )
-
-
-DATA_DIR = uploads_root()
+# WHERE each category lives is no longer guessed here: storage_paths is the
+# one resolver consulted by the export, the restore AND the serving routes,
+# so "the file the backup stored" and "the file the app serves" end up as
+# the same path on every operating system. The old model -- one uploads
+# root, every category a subdirectory of it -- held only inside Docker; on
+# a bare-metal install it aimed the export at C:\srv\backend\uploads on
+# Windows while the app served from four different roots. This module now
+# only maps vocabularies (selection term <-> archive category <-> folder)
+# and resolves one file at a time against storage_paths.
 
 
 FILE_CATEGORIES = {
@@ -133,7 +119,21 @@ def _rel_path(category: str, filename: str) -> str:
     name = _safe_name(filename)
     if name is None:
         return ""
-    return os.path.join(DATA_DIR, FOLDER_OF[category], name)
+    return os.path.join(category_dir(category), name)
+
+
+def archive_rel(category: str, abs_path: str) -> str:
+    """``<category>/<name>`` as the manifest lists it, always with ``/``.
+
+    Built against storage_paths.category_dir -- the same base the archive
+    stores its files relative to -- so the manifest listing cannot drift
+    from the layout the restore writes. On Docker this is byte-identical to
+    the old relpath-against-the-uploads-root listing; on a bare-metal
+    install it replaces junk like ``../.studyflow-app/audio/x.mp3`` with a
+    path that actually sits inside the media tree.
+    """
+    rel = os.path.relpath(abs_path, category_dir(category)).replace(os.sep, "/")
+    return f"{category}/{rel}"
 
 
 class _Collector:
@@ -145,8 +145,7 @@ class _Collector:
     be a lie — but it is not shipped.
     """
 
-    def __init__(self, wanted=None, data_dir=DATA_DIR):
-        self.data_dir = data_dir
+    def __init__(self, wanted=None):
         self.wanted = set(wanted) if wanted is not None else set(
             CATEGORY_OF.values())
         self.files = []
@@ -162,9 +161,20 @@ class _Collector:
         self.owned.add(abs_path)
         if not take or category not in self.wanted or abs_path in self.claimed:
             return
+        # The archive member is ``files/<category>/<name>`` with "/" on every
+        # OS (the zip spec), rooted at this category's own directory -- the
+        # same one the restore writes to and the routes serve from.
+        rel = os.path.relpath(abs_path, category_dir(category)).replace(
+            os.sep, "/")
+        if rel.startswith(".."):
+            # A file outside its own category cannot be addressed in the
+            # archive without "..". Report it instead of shipping a member
+            # the restore would refuse, and never drop it silently.
+            if original:
+                self.missing.append(original)
+            return
         self.claimed.add(abs_path)
-        rel = os.path.relpath(abs_path, self.data_dir).replace(os.sep, "/")
-        self.files.append((abs_path, "files/" + rel, category))
+        self.files.append((abs_path, f"files/{category}/{rel}", category))
 
 
 def resolve_files(conn, user_id: str, sel=None, scope=None):
@@ -372,15 +382,16 @@ def _scan_unclaimed(owned: set, foreign: set) -> list:
     per-user backup exists to prevent. `foreign` holds the paths other users'
     rows claim and is subtracted here.
 
-    Scans all five media directories. In v3 that also means scraped_pdfs,
-    whose three SCORM exports no table references and which therefore always
-    land here -- correct, and visible to the user as an opt-in rather than
-    silently dropped or silently included.
+    Scans all five media directories, each one resolved through
+    storage_paths so the scan sees exactly the folders the app writes to.
+    In v3 that also means scraped_pdfs, whose three SCORM exports no table
+    references and which therefore always land here -- correct, and visible
+    to the user as an opt-in rather than silently dropped or silently
+    included.
     """
     out = []
-    for folder in sorted(DIR_CATEGORY):
-        category = DIR_CATEGORY[folder]
-        path_dir = os.path.join(DATA_DIR, folder)
+    for category in sorted(DIR_CATEGORY):
+        path_dir = category_dir(category)
         if not os.path.isdir(path_dir):
             continue
         for name in sorted(os.listdir(path_dir)):

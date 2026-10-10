@@ -23,7 +23,6 @@ import logging
 import os
 import threading
 import time
-from pathlib import Path
 
 try:  # pragma: no cover - optional, heavy SDK
     from notebooklm.types import (
@@ -80,10 +79,13 @@ logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────
 
-_INFOGRAPHIC_DIR = os.environ.get(
-    "INFOGRAPHIC_UPLOAD_FOLDER",
-    str(Path.home() / ".studyflow-app" / "infographics"),
-)
+# storage_paths resolves this: INFOGRAPHIC_UPLOAD_FOLDER when the deploy
+# sets it, else ~/.studyflow-app/infographics -- the folder the backup
+# export reads and the restore writes, so a restored PNG is served by the
+# same route that generated it.
+from storage_paths import category_dir  # noqa: E402  (kept with the config)
+
+_INFOGRAPHIC_DIR = category_dir("infographics")
 _TEMP_DIR = "/tmp/notebooklm-infographic"
 _NOTEBOOK_PREFIX = "tmp-infographic"
 _SOURCE_WAIT_TIMEOUT = 120.0

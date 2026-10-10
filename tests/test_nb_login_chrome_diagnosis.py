@@ -41,12 +41,43 @@ def _source() -> str:
     return LOGIN.read_text()
 
 
-def test_login_route_still_requests_desktop_chrome():
-    """The --browser chrome flag is the contract with the library."""
-    assert '"--browser", "chrome"' in _source(), (
-        "el login debe seguir pidiendo Chrome de escritorio; cambiarlo a "
-        "chromium cambiaría el comportamiento del login"
+def test_pid_alive_probe_cannot_kill_on_windows():
+    """login-status must never kill the login window it is polling.
+
+    os.kill(pid, 0) is a harmless existence probe on POSIX, but on Windows
+    CPython documents that *any* signal other than CTRL_C_EVENT /
+    CTRL_BREAK_EVENT terminates the process via TerminateProcess with the
+    signal as exit code. The first login-status poll therefore murdered our
+    Python login helper on the user's machine (Windows): the Google window
+    blinked out mid-login, no cookies were ever written, and the app reported
+    a failed sign-in. The fix probes with OpenProcess on Windows.
+    """
+    src = _source()
+    region = src.split("def _pid_alive", 1)[1].split("def _cleanup", 1)[0]
+    assert 'os.name == "nt"' in region, "debe ramificar por plataforma"
+    assert "OpenProcess" in region, (
+        "Windows necesita un probe con OpenProcess; os.kill(pid, 0) mata "
+        "(TerminateProcess con exit code = sig)"
     )
+    win_helper = region.split("def _win_pid_alive", 1)[1].split("def _kill_pid", 1)[0]
+    # Saltar el docstring: solo interesa el código ejecutable.
+    win_code = win_helper.split('"""', 1)[1].split('"""', 1)[1]
+    assert "os.kill" not in win_code, (
+        "el probe de Windows nunca puede llamar a os.kill"
+    )
+
+
+def test_login_route_still_drives_desktop_chrome():
+    """The login must still launch the *desktop* Chrome (channel=chrome)."""
+    src = _source()
+    assert "nb_login_browser.py" in src, (
+        "el login local debe ir por nuestro helper (CLI 0.8.4 false-positiva "
+        "'Already logged in' contra la SPA de notebook.google.com)"
+    )
+    assert '"--profile-dir", browser_profile' in src, (
+        "el helper debe recibir el perfil persistente de Chrome"
+    )
+    assert '"--storage", storage_path' in src
 
 
 def test_chrome_is_probed_before_launching():
@@ -172,3 +203,119 @@ def test_state_file_is_not_a_hardcoded_posix_tmp():
     assert not login.STATE_FILE.startswith("/tmp/"), (
         "ruta POSIX heredada: la app la escribía fuera de Windows"
     )
+
+
+# ── NotebookLM CLI false-positive on the SPA (2026-10-06) ───────────────
+
+HELP_SCRIPT = ROOT / "backend" / "scripts" / "nb_login_browser.py"
+
+
+def test_helper_opens_desktop_chrome_and_waits_for_oauth_cookies():
+    """Pin the fix for "el navegador se cerró sin guardar cookies".
+
+    Failure story this guards:
+
+        ``notebooklm login --browser chrome`` reports "Already logged in."
+        on a *brand-new* profile because notebook.google.com answers HTTP 200
+        with the SPA shell even when unauthenticated — the CLI's URL-based
+        landing check never sees the login redirect, captures domain cookies
+        only (SID missing), writes junk, and closes Chrome without ever
+        showing the sign-in form. Verified empirically twice on 2026-10-06,
+        including with a profile created seconds earlier.
+
+    The helper must:
+      1. drive the *desktop* Chrome (channel=chrome),
+      2. open the server-rendered accounts.google.com form, NOT the SPA,
+      3. decide by waiting for the real OAuth cookies (SID + __Secure-1PSIDTS)
+         read from the LIVE browser context,
+      4. persist storage_state.json only after they exist.
+    """
+    script = HELP_SCRIPT.read_text()
+    assert 'channel="chrome"' in script, (
+        "debe usar el Chrome de escritorio, no el Chromium empaquetado"
+    )
+    assert "__Secure-1PSIDTS" in script, "debe esperar a la cookie OAuth real"
+    assert "REQUIRED.issubset" in script, "el criterio son las cookies, no la URL"
+    assert "AUTH_OK" in script, "debe marcar el fin de autenticación"
+    # The cookies must be read from the live browser BEFORE persisting.
+    assert script.index("ctx.cookies()") < script.index("AUTH_OK"), (
+        "persiste antes de leer las cookies del navegador vivo: no sirve"
+    )
+    # Google blocks automated browsers ("This browser or app may not be
+    # secure"); the SDK ships these flags precisely to avoid that.
+    assert "--disable-blink-features=AutomationControlled" in script, (
+        "faltan los flags anti-detección: Google corta el login"
+    )
+    assert 'ignore_default_args=["--enable-automation"]' in script, (
+        "sin ignorar --enable-automation, navigator.webdriver=true"
+    )
+
+
+def test_login_start_clears_stale_storage_but_keeps_the_profile():
+    """Storage_state is deleted (fresh detection); the browser_profile is kept
+    so the helper can reuse a still-live session instead of forcing re-login."""
+    src = _source()
+    assert "os.remove(storage_path)" in src, (
+        "el storage stale se sigue limpiando (login-status detecta lo nuevo)"
+    )
+    assert "shutil.rmtree(browser_profile)" not in src, (
+        "ya no se borra el perfil: el helper decide por cookies, no por URL "
+        "(un perfil vivo ahorra re-loguear)"
+    )
+
+
+def test_login_start_removes_stale_profile_and_launches(monkeypatch, tmp_path):
+    """Functional: stale storage is deleted and the chrome path still runs,
+    invoking our helper with the persistent profile + storage."""
+    import flask
+    login = _login_module()
+
+    profile_dir = tmp_path / "profiles" / "zokan@example.com"
+    (profile_dir / "browser_profile" / "Default").mkdir(parents=True)
+    (profile_dir / "storage_state.json").write_text("{}")
+    monkeypatch.setattr(login, "COOKIE_DIR", str(tmp_path))
+    monkeypatch.setattr(login, "_missing_desktop_chrome", lambda: False)
+    monkeypatch.setattr(login, "_cleanup", lambda: None)
+    monkeypatch.setattr(login, "set_active_profile", lambda *a, **k: None)
+    monkeypatch.setattr(login, "_write_state", lambda *a, **k: None)
+    monkeypatch.setattr(login, "_schedule_timeout", lambda: None)
+
+    calls = {}
+
+    class FakeProc:
+        pid = 4242
+
+        @staticmethod
+        def poll():
+            return None  # alive past the 1s check
+
+    def fake_popen(cmd, **kw):
+        calls["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(login.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        login,
+        "request",
+        type("R", (),
+             {"get_json": lambda self, silent=True: {"account": "zokan@example.com"},
+              "scheme": "http"})(),
+    )
+    app = flask.Flask(__name__)
+    with app.test_request_context():
+        result = login.login_start()  # token_required inyecta LOCAL_USER_ID
+    if isinstance(result, tuple):
+        result = result[0]
+    assert result.status_code == 200, result.get_data(as_text=True)
+    assert not (profile_dir / "storage_state.json").exists(), (
+        "el storage stale debe limpiarse (login-status detecta lo nuevo)"
+    )
+    assert (profile_dir / "browser_profile").exists(), (
+        "el perfil del navegador se conserva para reutilizar sesión viva"
+    )
+    cmd = " ".join(calls["cmd"])
+    assert "nb_login_browser.py" in cmd, f"debe invocar al helper: {cmd}"
+    assert "--profile-dir" in cmd and "--storage" in cmd, f"args del helper: {cmd}"
+    # The profile dir passed must be the browser_profile sibling.
+    bp = str(profile_dir / "browser_profile")
+    assert bp in cmd.replace("\\", "/"), f"perfil incorrecto en el cmd: {cmd}"

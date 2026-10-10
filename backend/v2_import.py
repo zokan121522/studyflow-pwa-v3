@@ -20,10 +20,10 @@ leaves no half-imported coursework behind.
 """
 
 import logging
-import os
 import zipfile
 
 import v2_domains
+from storage_paths import category_dir
 from v2_migrate import extract_files, migrate_studies, plan
 
 logger = logging.getLogger(__name__)
@@ -32,19 +32,14 @@ logger = logging.getLogger(__name__)
 def _storage_dirs():
     """Where v3 keeps each kind of imported media.
 
-    PDF_UPLOAD_FOLDER mirrors routes/pdf.py so a restored document is
-    served by the same code path as an uploaded one.
+    Delegates to storage_paths, so a v2 restore lands in exactly the
+    folders routes/pdf.py, the TTS route and the infographics route serve
+    from. This used to re-state their env-or-fallback resolution by hand --
+    the comment even promised "PDF_UPLOAD_FOLDER mirrors routes/pdf.py" --
+    and a copy-pasted promise is how the five folders drifted apart in the
+    first place.
     """
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    home = os.path.expanduser("~/.studyflow-app")
-    return {
-        "pdfs": os.environ.get(
-            "PDF_UPLOAD_FOLDER", os.path.join(repo_root, "uploads", "pdfs")),
-        "audio": os.environ.get("AUDIO_UPLOAD_FOLDER",
-                                os.path.join(home, "audio")),
-        "infographics": os.environ.get("INFOGRAPHIC_UPLOAD_FOLDER",
-                                       os.path.join(home, "infographics")),
-    }
+    return {c: category_dir(c) for c in ("pdfs", "audio", "infographics")}
 
 
 def migrate_v2(conn, user_id, zf: zipfile.ZipFile, tables: dict) -> dict:

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>WF4 — Técnica / releases</title>
+<style>
+  body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;background:#eef0f3;color:#2b2f36}
+  .wrap{max-width:960px;margin:0 auto;padding:24px}
+  .lab{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#8b929e;margin-bottom:4px}
+  .box{background:#fff;border:2px dashed #b9c0cc;border-radius:8px}
+  .ph{background:repeating-linear-gradient(45deg,#e6e9ee,#e6e9ee 8px,#dfe3e9 8px,#dfe3e9 16px);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;color:#98a0ad;font-size:12px;text-align:center}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 22px;margin-bottom:10px}
+  .stack{display:flex;flex-direction:column;gap:6px}
+  .k{font-size:11px;color:#8b929e;text-transform:uppercase;letter-spacing:.5px}
+  .v{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .cta{height:46px;width:210px;border-radius:9px;background:#59606d;color:#fff;display:flex;
+       align-items:center;justify-content:center;font-weight:700}
+  .rel{display:grid;grid-template-columns:110px 1fr 90px 130px;align-items:center;gap:10px;padding:14px 20px;
+       border-bottom:1px solid #e6e9ee}
+  .rel.last{border-bottom:0}
+  .pill{height:20px;border-radius:99px;background:#dbe6d9;color:#4c7a4c;font-size:11px;
+        display:flex;align-items:center;justify-content:center}
+  .pill.old{background:#eceef2;color:#8b929e}
+  .btn{height:30px;border-radius:7px;background:#eef1f6;border:1px solid #d5dae2;display:flex;
+       align-items:center;justify-content:center;font-size:12px;color:#59606d}
+  .two{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;margin-top:10px}
+  .card{padding:18px}
+  .li{height:9px;border-radius:3px;background:#e6e9ee;margin-bottom:8px}
+  .warn{background:#fdf1e7;border:2px dashed #e0b58e;color:#9a6b3d}
+  .cmd{background:#f4f6f9;border:1px solid #e0e4ea;border-radius:6px;padding:10px 12px;
+       font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5c6470;word-break:break-all}
+</style></head><body><div class="wrap">
+
+  <div class="box head">
+    <div>
+      <div class="lab">cabecera técnica · versión y hash a la vista</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        <div style="width:22px;height:22px;border-radius:6px;background:#c3cad6"></div>
+        <div style="width:140px;height:14px;border-radius:3px;background:#cfd5de"></div>
+      </div>
+      <div class="stack">
+        <div><span class="k">última</span> <span class="v">3.0.0 · 52 MB · 07/10/2026</span></div>
+        <div><span class="k">sha256</span> <span class="v">2ab08dac…70c9f</span></div>
+      </div>
+    </div>
+    <div class="cta">⬇ DESCARGAR ZIP</div>
+  </div>
+
+  <div class="lab">histórico de versiones</div>
+  <div class="box" style="padding:0">
+    <div class="rel">
+      <div class="v">3.0.0</div>
+      <div class="rel-txt"><div class="li" style="width:88%"></div><div class="li" style="width:52%;margin:0"></div></div>
+      <div class="pill">actual</div>
+      <div class="btn">Descargar</div>
+    </div>
+    <div class="rel last">
+      <div class="v" style="color:#98a0ad">2.x</div>
+      <div class="rel-txt"><div class="li" style="width:70%;background:#eef1f6"></div><div class="li" style="width:40%;background:#eef1f6;margin:0"></div></div>
+      <div class="pill old">anterior</div>
+      <div class="btn">Histórico</div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="box card">
+      <div class="lab">instalación paso a paso</div>
+      <div class="li"></div><div class="li" style="width:88%"></div><div class="li" style="width:64%"></div>
+      <div class="li"></div><div class="li" style="width:72%"></div>
+    </div>
+    <div class="box card warn">
+      <div class="lab" style="color:#b98a5c">aviso</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">Paquete sin firma digital</div>
+      <div class="li" style="background:#f6e2cf"></div>
+      <div class="li" style="background:#f6e2cf;width:78%"></div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:10px;padding:16px">
+    <div class="lab">verificación copiable</div>
+    <div class="cmd">certutil -hashfile StudyFlow-windows-latest.zip SHA256</div>
+  </div>
+</div></body></html>

@@ -20,14 +20,27 @@ import logging
 import os
 
 from database import execute, fetchone
+from openzen_sidecar import apply_sidecar_env
 from secret_box import InvalidToken, decrypt_payload, encrypt_payload
 
 logger = logging.getLogger(__name__)
 
-# Defaults mirror backend/ai/providers/opencode_provider.py in v2. They
+# The local Windows sidecar (see openzen_sidecar) feeds OPENCODE_SERVER_*
+# into the environment so the settings panel shows the same endpoint the
+# provider actually talks to.
+apply_sidecar_env()
+
+# Defaults mirror backend/ai/providers/opencode_provider.py in v3. They
 # live here too because the settings panel has to SHOW the defaults
 # without importing the provider (which pulls httpx + the whole AI stack).
-DEFAULT_SERVER_URL = "http://opencode:54321"
+#
+# v3 is a single-machine PWA: the opencode sidecar runs on the same host,
+# so the default is 127.0.0.1 (the v2-era "http://opencode:54321" Docker
+# hostname only resolves inside a compose network — on a bare Windows box
+# it fails name resolution and OpenZen dies with a connection error).
+# A deployment that talks to a remote sidecar (e.g. the Señor's Mac
+# `opencode serve` on Tailscale) overrides via OPENCODE_SERVER_URL.
+DEFAULT_SERVER_URL = "http://127.0.0.1:54321"
 DEFAULT_MODEL = "big-pickle"
 
 

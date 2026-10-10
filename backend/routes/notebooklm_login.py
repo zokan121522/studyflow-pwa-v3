@@ -137,11 +137,35 @@ def _write_state(status: str,
 def _pid_alive(pid: int | None) -> bool:
     if pid is None:
         return False
+    if os.name == "nt":
+        return _win_pid_alive(pid)
     try:
         os.kill(pid, 0)
         return True
     except (OSError, ProcessLookupError):
         return False
+
+
+def _win_pid_alive(pid: int) -> bool:
+    """Windows liveness probe that CANNOT kill the target.
+
+    ``os.kill(pid, 0)`` is a harmless probe on POSIX but on Windows CPython
+    documents that any signal other than CTRL_C_EVENT/CTRL_BREAK_EVENT causes
+    the process to be unconditionally killed by TerminateProcess (exit code =
+    sig). That murdered our login helper on the first login-status poll: the
+    Chrome window blinked out and the app reported a failed login. Probe with
+    OpenProcess instead — it fails for dead PIDs and never writes the target.
+    """
+    import ctypes
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    kernel32 = ctypes.windll.kernel32
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    kernel32.CloseHandle(handle)
+    return True
 
 
 def _kill_pid(pid: int | None, sig=signal.SIGTERM) -> None:
@@ -263,7 +287,9 @@ def login_start(current_user_id: int):
 
     if _vnc_available():
         return _start_vnc(account_email, storage_path, current_user_id)
-    return _start_chrome_window(account_email, storage_path)
+    return _start_chrome_window(
+        account_email, storage_path, os.path.join(profile_dir, "browser_profile")
+    )
 
 
 def _start_vnc(account_email: str | None, storage_path: str,
@@ -349,8 +375,17 @@ def _start_vnc(account_email: str | None, storage_path: str,
     })
 
 
-def _start_chrome_window(account_email: str | None, storage_path: str):
-    """Real desktop Chrome window (macOS native dev / Windows local install)."""
+def _start_chrome_window(account_email: str | None, storage_path: str,
+                         browser_profile: str):
+    """Real desktop Chrome window (macOS native dev / Windows local install).
+
+    Drives our own Playwright helper (scripts/nb_login_browser.py) instead of
+    ``notebooklm login --browser chrome``: the CLI's URL-based landing check
+    false-positives against notebook.google.com's SPA (HTTP 200 unauthenticated
+    → "Already logged in" → partial cookies → Chrome closed without the sign-in
+    form ever appearing). The helper opens the accounts.google.com form and
+    waits for the real OAuth cookies before persisting.
+    """
     if _missing_desktop_chrome():
         _write_state("idle")
         return jsonify({
@@ -368,8 +403,14 @@ def _start_chrome_window(account_email: str | None, storage_path: str):
             ),
         }), 500
 
-    cmd = [PYTHON, "-m", "notebooklm", "login", "--browser", "chrome",
-           "--storage", storage_path]
+    helper = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "scripts", "nb_login_browser.py",
+    )
+    cmd = [PYTHON, helper,
+           "--profile-dir", browser_profile,
+           "--storage", storage_path,
+           "--timeout", str(LOGIN_TIMEOUT)]
     log_path = os.path.join(COOKIE_DIR, "login.log")
     log_fh = open(log_path, "ab", buffering=0)
     login_proc = subprocess.Popen(

@@ -45,14 +45,23 @@ from ai.config import (
     _invalidate_ai_config_cache,
 )
 from ai.provider import AIProvider
+from openzen_sidecar import apply_sidecar_env
 
 logger = logging.getLogger(__name__)
 
+# v3 local sidecar: ~/.studyflow/opencode_sidecar.env (fixed Basic-auth
+# credentials written by the Windows sidecar boot script) feeds the env
+# below, so the backend authenticates to the local `opencode serve`
+# without any manual configuration.
+apply_sidecar_env()
+
 # ─── Constants ──────────────────────────────────────────────────────
 
-# URL can be overridden via env (e.g. point OpenZEN at the Señor's Mac
-# `opencode serve` on Tailscale instead of the sidecar container).
-_DEFAULT_OPCODE_URL = os.environ.get("OPENCODE_SERVER_URL", "http://opencode:54321")
+# URL can be overridden via env (e.g. point OpenZEN at a remote
+# `opencode serve` on Tailscale, or back at a compose-network sidecar
+# with `http://opencode:54321`). v3 is a single-machine PWA, so the
+# default is the local sidecar, not a Docker hostname.
+_DEFAULT_OPCODE_URL = os.environ.get("OPENCODE_SERVER_URL", "http://127.0.0.1:54321")
 # Two distinct ids that used to be conflated into one attribute:
 #   * PROVIDER_ID is the id the *opencode server* knows its provider by. It
 #     goes on the wire as "providerID", and the server only accepts "opencode"
@@ -110,7 +119,7 @@ class OpenCodeProvider(AIProvider):
 
         Args:
             **kwargs: Optional overrides:
-                server_url: OpenCode server URL (default ``http://opencode:54321``).
+                server_url: OpenCode server URL (default ``http://127.0.0.1:54321``).
                 provider_id: Provider ID on the opencode server (default ``opencode``).
                 model: Model name to use (default ``big-pickle``).
                 api_keys: Optional list of API keys (overrides config).
