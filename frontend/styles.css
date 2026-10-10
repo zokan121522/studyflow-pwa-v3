@@ -666,6 +666,66 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 
 .install-btn:hover { background: var(--primary-dark); }
 
+/* PWA install banner — in-app invitation to install (supersedes .install-btn). */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10000;
+  max-width: 340px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  line-height: 1.3;
+  animation: pwaBannerFadeIn 0.35s ease;
+}
+
+.pwa-install-banner__icon { font-size: 18px; flex-shrink: 0; }
+
+.pwa-install-banner__text { flex: 1; }
+
+.pwa-install-banner__install {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  background: #fff;
+  color: var(--primary-dark);
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pwa-install-banner__install:hover { background: var(--primary-light); color: #fff; }
+
+.pwa-install-banner__dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.8;
+  padding: 4px;
+}
+
+.pwa-install-banner__dismiss:hover { opacity: 1; }
+
+@keyframes pwaBannerFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 520px) {
+  .pwa-install-banner { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+}
+
 /* ============================== UPDATE NOTIFICATION ============================== */
 .update-notification {
   position: fixed;

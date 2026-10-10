@@ -116,7 +116,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // instaladas seguirían sirviendo el renderer viejo y `![alt](url)` se vería en crudo.
 // v104: API button fix
 // v105: restore chunked upload (async)
-const ASSET_CACHE = 'studyflow-assets-v105';
+const ASSET_CACHE = 'studyflow-assets-v106';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -184,6 +184,9 @@ const PRECACHE_ASSETS = [
   '/shared/backup-restore.js',
   '/shared/session-miniplayer.js',
   '/shared/v2-restore-modal.js',
+  // v106: in-app PWA install banner (beforeinstallprompt → explained banner
+  // with [Instalar]/✕ instead of the bare floating button app.js used to add).
+  '/shared/pwa-install-prompt.js',
   // S5: quiz ecosystem. Same reason as above: index.html loads these with
   // <script src>, so a single missing entry means no test, no failed pool
   // and no summary while offline — the feature is simply gone.

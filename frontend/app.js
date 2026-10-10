@@ -116,37 +116,9 @@ window.addEventListener('offline', updateOnlineStatus);
 
 
 // ─── PWA Install Prompt ─────────────────────────────────────────────
-let deferredPrompt = null;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  showInstallButton();
-});
-
-function showInstallButton() {
-  if (window.matchMedia('(display-mode: standalone)').matches) return;
-  if (localStorage.getItem('installPromptDismissed')) return;
-  
-  const btn = document.createElement('button');
-  btn.id = 'install-btn';
-  btn.className = 'install-btn';
-  btn.innerHTML = '📥 Instalar App';
-  btn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log('[PWA] Install outcome:', outcome);
-    if (outcome === 'accepted') {
-      btn.remove();
-    } else {
-      localStorage.setItem('installPromptDismissed', 'true');
-    }
-    deferredPrompt = null;
-  });
-  
-  document.body.appendChild(btn);
-}
+// Moved to /shared/pwa-install-prompt.js (loaded at the end of index.html):
+// the install affordance is now an explained in-app banner instead of a bare
+// floating button.
 
 
 // ─── Auth Token Management ──────────────────────────────────────────
