@@ -1,0 +1,21 @@
+{
+  "file": "StudyFlow-windows-latest.zip",
+  "versioned": "StudyFlow-windows-3.1.1.zip",
+  "version": "3.1.1",
+  "size": 54644649,
+  "date": "10/10/2026",
+  "sha256": "1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66",
+  "app_url": "",
+  "platforms": {
+    "windows": {"file": "StudyFlow-windows-3.1.1.zip", "size": 54644649, "sha256": "1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.1.zip"},
+    "macos": {"file": "StudyFlow-macos-3.1.1.zip", "size": 54644057, "sha256": "51f1bfdc3e2b6c86563671c6989dbe2df5f163ee36106b400df71c3c70ce1b56", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.1.zip"},
+    "linux": {"file": "StudyFlow-linux-3.1.1.zip", "size": 54643235, "sha256": "a34d1088a5705813d38c50026a7282a5a901232a6973e8a4d6367e316a89cdc7", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.1.zip"}
+  },
+  "notes": [
+    "Punto verde: el servidor está en marcha. Un clic te lo confirma.",
+    "Punto rojo: el servidor está apagado. Un clic lo arranca por ti, con el progreso a la vista.",
+    "Si no logra arrancarlo, te lo dice claro y te indica dónde mirar el registro.",
+    "Una sola base de datos: tu copia local es la única fuente de verdad.",
+    "Arreglado el aviso de actualización de la app instalada."
+  ]
+}

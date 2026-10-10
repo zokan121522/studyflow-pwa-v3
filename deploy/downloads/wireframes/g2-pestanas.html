@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería 2 — Pestañas · Modelos de descarga StudyFlow</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a22; --border:#262a35;
+    --text:#e8eaf0; --muted:#98a0b3; --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .topbar{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 20px;
+  }
+  .topbar h1{margin:0 0 8px; font-size:16px; font-weight:600;}
+  .nav{display:flex; flex-wrap:wrap; gap:8px;}
+  .nav a{
+    font-size:13px; color:var(--muted); background:var(--bg);
+    border:1px solid var(--border); border-radius:6px;
+    padding:5px 10px; text-decoration:none;
+  }
+  .nav a:hover{color:var(--text); border-color:var(--accent); text-decoration:none;}
+  .nav a.active{background:var(--accent); color:#0f1117; border-color:var(--accent); font-weight:600;}
+
+  main{padding:20px;}
+
+  .tabs{
+    display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;
+  }
+  .tab{
+    font-family:inherit; font-size:13px; cursor:pointer;
+    background:var(--bg); color:var(--muted);
+    border:1px solid var(--border); border-radius:8px;
+    padding:8px 14px;
+  }
+  .tab:hover{color:var(--text); border-color:var(--accent);}
+  .tab.active{
+    background:var(--accent); color:#0f1117;
+    border-color:var(--accent); font-weight:600;
+  }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; overflow:hidden;
+  }
+  .panel-head{
+    padding:10px 14px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .caption{font-size:14px; font-weight:600;}
+  .open-link{font-size:12px; color:var(--accent);}
+
+  .wf-frame{display:block; width:100%; border:0; background:#fff;
+    height:calc(100vh - 150px);}
+  .wf-frame[hidden]{display:none;}
+
+  footer{padding:16px 20px 28px; color:var(--muted); font-size:12px; text-align:center;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Galería de modelos — página de descarga StudyFlow</h1>
+  <nav class="nav">
+    <a href="g1-grid.html">1 · Cuadrícula</a>
+    <a class="active" href="g2-pestanas.html">2 · Pestañas</a>
+    <a href="g3-carrusel.html">3 · Carrusel</a>
+    <a href="g4-zoom.html">4 · Zoom</a>
+    <a href="g5-votacion.html">5 · Votación</a>
+  </nav>
+</header>
+
+<main>
+  <div class="tabs" id="tabs" role="tablist">
+    <button class="tab" type="button" role="tab" data-idx="0">1 · Directa (mínima)</button>
+    <button class="tab" type="button" role="tab" data-idx="1">2 · Dos columnas (con captura)</button>
+    <button class="tab" type="button" role="tab" data-idx="2">3 · Carta de producto</button>
+    <button class="tab" type="button" role="tab" data-idx="3">4 · Técnica / releases</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="caption" id="caption">1 · Directa (mínima)</span>
+      <a class="open-link" id="openlink" href="wf1-directa.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+    </div>
+
+    <iframe class="wf-frame" data-idx="0" src="wf1-directa.html"
+      title="1 · Directa (mínima)" loading="eager"></iframe>
+    <iframe class="wf-frame" data-idx="1" src="wf2-dos-columnas.html"
+      title="2 · Dos columnas (con captura)" loading="eager" hidden></iframe>
+    <iframe class="wf-frame" data-idx="2" src="wf3-carta-producto.html"
+      title="3 · Carta de producto" loading="eager" hidden></iframe>
+    <iframe class="wf-frame" data-idx="3" src="wf4-tecnica.html"
+      title="4 · Técnica / releases" loading="eager" hidden></iframe>
+  </div>
+</main>
+
+<footer>Wireframes de baja fidelidad — no es el diseño final.</footer>
+
+<script>
+(function () {
+  var labels = [
+    "1 · Directa (mínima)",
+    "2 · Dos columnas (con captura)",
+    "3 · Carta de producto",
+    "4 · Técnica / releases"
+  ];
+  var files = [
+    "wf1-directa.html",
+    "wf2-dos-columnas.html",
+    "wf3-carta-producto.html",
+    "wf4-tecnica.html"
+  ];
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".wf-frame"));
+  var caption = document.getElementById("caption");
+  var openlink = document.getElementById("openlink");
+
+  function show(idx) {
+    tabs.forEach(function (t, i) {
+      t.classList.toggle("active", i === idx);
+      t.setAttribute("aria-selected", i === idx ? "true" : "false");
+    });
+    frames.forEach(function (f, i) {
+      if (i === idx) { f.removeAttribute("hidden"); }
+      else { f.setAttribute("hidden", ""); }
+    });
+    caption.textContent = labels[idx];
+    openlink.href = files[idx];
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      show(parseInt(t.getAttribute("data-idx"), 10));
+    });
+  });
+
+  // Pestaña por defecto = modelo 2 (índice 1)
+  show(1);
+})();
+</script>
+
+</body>
+</html>

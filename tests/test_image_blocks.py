@@ -432,3 +432,86 @@ def test_the_volume_is_declared_and_mounted():
 def re_volumes_declared(compose):
     top = compose.split("\nvolumes:")[-1]
     return any(line.strip().startswith("image_uploads:") for line in top.splitlines())
+
+
+def test_upload_returns_the_row_it_inserted_even_when_a_stale_higher_id_exists(
+    monkeypatch, tmp_path
+):
+    """A restored DB has non-chronological ids.
+
+    `ORDER BY id DESC LIMIT 1` then returned a stale row (a /srv path that no
+    longer existed on disk) instead of the row just inserted, so the editor
+    embedded a file_url that 404'd. The insert must identify its own row.
+    """
+    import database as db
+    import routes.image as image
+
+    monkeypatch.setattr(image, "UPLOAD_FOLDER", str(tmp_path / "images"))
+
+    stale = {
+        "id": 3, "user_id": 1, "course_id": None, "topic_id": None,
+        "filename": "old.png", "original_name": "vieja.png", "mime": "image/png",
+        "file_size": 10, "storage_path": "/srv/backend/uploads/images/old.png",
+        "created_at": None,
+    }
+
+    class Cursor:
+        rowcount = 1
+
+        def __init__(self):
+            self._sql = ""
+            self.executed = []
+
+        def execute(self, sql, params=None):
+            self._sql = " ".join(sql.split())
+            self.executed.append((self._sql, params))
+
+        def fetchone(self):
+            if "RETURNING" in self._sql:
+                p = self.executed[-1][1]
+                return {
+                    "id": 42, "user_id": p[0], "course_id": p[1], "topic_id": p[2],
+                    "filename": p[3], "original_name": p[4], "mime": p[5],
+                    "file_size": p[6], "storage_path": p[7], "created_at": None,
+                }
+            return stale  # the buggy SELECT ... ORDER BY id DESC path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    cur = Cursor()
+
+    @contextmanager
+    def fake_get_db():
+        yield FakeConn(cur)
+
+    monkeypatch.setattr(db, "get_db", fake_get_db)
+
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="test-secret",
+        JWT_ACCESS_TOKEN_EXPIRES=3600, SECRET_KEY="test-secret",
+    )
+    app.register_blueprint(image_bp, url_prefix="/api")
+    c = app.test_client()
+    with app.app_context():
+        headers = {"Authorization": "Bearer " + generate_token(1)}
+
+    r = c.post(
+        "/api/image/upload",
+        data={"file": (io.BytesIO(PNG), "nueva.png")},
+        headers=headers, content_type="multipart/form-data",
+    )
+
+    body = r.get_json()["image"]
+    assert body["original_name"] == "nueva.png", (
+        "upload returned a stale row instead of the one it inserted"
+    )
+    assert body["storage_path"] != stale["storage_path"]
+    assert any("RETURNING" in sql for sql, _ in cur.executed), (
+        "the insert must identify its own row with RETURNING"
+    )
+    assert not any("ORDER BY id DESC LIMIT 1" in sql for sql, _ in cur.executed)

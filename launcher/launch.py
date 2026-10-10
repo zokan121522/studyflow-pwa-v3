@@ -60,6 +60,11 @@ from pathlib import Path
 DEFAULT_PORT = 8477
 PORT_SCAN_RANGE = 40
 
+#: The resident control helper (launcher/control.py) listens here. It is a
+#: separate, fixed port: it must be findable by a web page without a scan, and
+#: nothing else in this install binds it.
+CONTROL_PORT = 8478
+
 #: How long to wait for /api/health before giving up on the child.
 HEALTH_TIMEOUT_S = 45.0
 
@@ -305,9 +310,99 @@ def wait_until_healthy(port: int, process: subprocess.Popen) -> bool:
 
 
 def record_state(port: int, pid: int) -> None:
-    state_file().write_text(
-        json.dumps({"port": port, "pid": pid, "started": time.time()}, indent=2)
-    )
+    data = _read_state()
+    data.update({"port": port, "pid": pid, "started": time.time()})
+    _write_state(data)
+
+
+def _read_state() -> dict:
+    """The state file as a dict. Never raises; a corrupt file reads as empty."""
+    try:
+        data = json.loads(state_file().read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _write_state(data: dict) -> None:
+    state_file().write_text(json.dumps(data, indent=2))
+
+
+# ─── resident control helper ───────────────────────────────────────
+#
+# launch.py exits the moment the server is up. Without something that stays
+# listening, a web page cannot revive a server that has since gone down -- a
+# browser can open a socket, not start a process. control.py is that something;
+# it must outlive this launcher, which is why it is spawned detached and its
+# pid is recorded here so stop() can end it with the server.
+
+
+def control_port() -> int:
+    try:
+        return int(os.environ.get("STUDYFLOW_CONTROL_PORT") or CONTROL_PORT)
+    except ValueError:
+        return CONTROL_PORT
+
+
+def control_running() -> bool:
+    """Is a control helper already answering /status on the control port?"""
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{control_port()}/status", timeout=0.5
+        ) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def spawn_control() -> subprocess.Popen | None:
+    """Start the resident helper detached, or None if one is already alive.
+
+    Detached (new session; pythonw on Windows) for the same reason as the
+    server: it has to survive the terminal that launched it, or the whole point
+    -- being there later when the server is down -- is lost.
+    """
+    if control_running():
+        return None  # reuse the live helper; never a second one on the port
+    log = log_file()
+    with open(log, "a", buffering=1) as handle:
+        handle.write(
+            f"\n--- control start {time.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"port={control_port()} ---\n"
+        )
+    flags = 0
+    if os.name == "nt":
+        for name in ("DETACHED_PROCESS", "CREATE_NEW_PROCESS_GROUP"):
+            flags |= getattr(subprocess, name, 0)
+    try:
+        return subprocess.Popen(
+            [child_executable(), str(repo_root() / "launcher" / "control.py")],
+            stdout=open(log, "a", buffering=1),
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=os.name != "nt",
+            creationflags=flags or 0,
+            cwd=str(repo_root()),
+        )
+    except OSError:
+        return None
+
+
+def record_control_pid(pid: int) -> None:
+    data = _read_state()
+    data["control_pid"] = pid
+    _write_state(data)
+
+
+def stop_control() -> None:
+    """SIGTERM the helper recorded in the state file. Silent if already gone."""
+    recorded = _read_state().get("control_pid")
+    if not isinstance(recorded, int):
+        return
+    try:
+        os.kill(recorded, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
 
 
 def open_browser(port: int) -> None:
@@ -405,6 +500,7 @@ def stop() -> int:
     port = running_port()
     if port is None:
         print("StudyFlow no está corriendo.")
+        stop_control()
         try:
             state_file().unlink()
         except OSError:
@@ -434,6 +530,9 @@ def stop() -> int:
         if _probe(port, timeout=0.3) is None:
             break
         time.sleep(0.25)
+    # The helper listens for a down server, so it goes after the server and its
+    # pid is dropped with the rest of the state file.
+    stop_control()
     try:
         state_file().unlink()
     except OSError:
@@ -480,6 +579,9 @@ def start(open_it: bool = True, windowed: bool = True) -> int:
         return 1
 
     record_state(port, process.pid)
+    control = spawn_control()
+    if control is not None:
+        record_control_pid(control.pid)
     print(f"StudyFlow en http://127.0.0.1:{port}/")
     print(f"  datos : {directory}")
     print(f"  log   : {log_file()}")

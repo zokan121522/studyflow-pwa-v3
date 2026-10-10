@@ -102,7 +102,8 @@
 .md-view a:hover, .sf-td-block-content a:hover { opacity: .8; }
 
 /* ─── Images ────────────────────────────────────────────── */
-.md-view img, .sf-td-block-content img {
+.md-view img, .sf-td-block-content img,
+.md-preview img, .ct-preview img, .so-notes-rendered img, .md-img {
   max-width: 100%; height: auto; border-radius: 4px;
   margin: 8px 0; display: block;
 }

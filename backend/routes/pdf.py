@@ -18,6 +18,7 @@ from serial import iso
 
 from database import execute, fetchone, fetchall
 from routes.auth import token_required
+from storage_paths import category_dir, resolve_media
 from models import PDF
 
 
@@ -25,13 +26,12 @@ bp = Blueprint('pdf', __name__)
 logger = logging.getLogger(__name__)
 
 # Configuration
-# Default to a repo-local folder rather than the container path '/app/...':
-# this module is imported by the bare-metal dev server too, where '/app' does
-# not exist and is not writable. In Docker, PDF_UPLOAD_FOLDER is set explicitly.
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-UPLOAD_FOLDER = os.environ.get(
-    'PDF_UPLOAD_FOLDER', os.path.join(_REPO_ROOT, 'uploads', 'pdfs')
-)
+# storage_paths is the single resolver: PDF_UPLOAD_FOLDER when the deploy
+# sets it (Docker), otherwise the repo-local <root>/uploads/pdfs this module
+# used to compute for itself. The export, the restore and the AI readers all
+# ask the same function, which is what makes a restored PDF land where this
+# route serves it -- on every OS, not just in the container.
+UPLOAD_FOLDER = category_dir('pdfs')
 MAX_FILE_SIZE = int(os.environ.get('MAX_FILE_SIZE', 50 * 1024 * 1024))  # 50MB
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -146,11 +146,12 @@ def get_pdf(current_user_id: int, pdf_id: int):
         return jsonify({'error': 'PDF not found'}), 404
 
     pdf = PDF.from_row(row)
-    if not os.path.exists(pdf.storage_path):
+    pdf_path = resolve_media('pdfs', pdf.storage_path)
+    if not os.path.exists(pdf_path):
         return jsonify({'error': 'File not found on disk'}), 404
 
     return send_file(
-        pdf.storage_path,
+        pdf_path,
         mimetype='application/pdf',
         as_attachment=False,
         download_name=pdf.original_name
@@ -167,7 +168,7 @@ def delete_pdf(current_user_id: int, pdf_id: int):
 
     # Delete file from disk
     try:
-        os.remove(row['storage_path'])
+        os.remove(resolve_media('pdfs', row['storage_path']))
     except OSError:
         pass  # File already gone
 

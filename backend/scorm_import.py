@@ -21,6 +21,7 @@ from xml.etree import ElementTree as ET
 
 from database import fetchone
 from pdf_resources import save_pdf_and_block
+from storage_paths import category_dir
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +337,10 @@ def _run_scraper(
     login form instead of the course.
     """
     from scraping.runner import run_scrape  # type: ignore
-    scrape_dir = os.environ.get("SCRAPED_DIR", "/tmp/scraped_pdfs")
+    # storage_paths: SCRAPED_DIR when the deploy sets it (the launcher does
+    # on local installs), else /tmp/scraped_pdfs -- and the backup export
+    # scans the very same folder, so scraped PDFs round-trip.
+    scrape_dir = category_dir("scraped_pdfs")
     os.makedirs(scrape_dir, exist_ok=True)
     username, password = _load_scrape_credentials(user_id, progress_cb)
     try:

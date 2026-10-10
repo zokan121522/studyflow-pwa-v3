@@ -44,8 +44,17 @@ set "VENV=.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 
 echo.
-echo   StudyFlow
-echo   ──────────────────────────────────────────────
+echo   ============================================================
+echo                    S T U D Y F L O W
+echo   ============================================================
+echo.
+echo   Primer arranque, solo la primera vez, estos 4 pasos:
+echo       1/4  Preparando el entorno
+echo       2/4  Descargando Python si falta
+echo       3/4  Instalando dependencias - puede tardar 2-3 min
+echo       4/4  Arrancando la app
+echo.
+echo   A partir de aqui: doble clic y directo a la 4/4.
 echo.
 
 REM ── ¿Python disponible? ────────────────────────────────────────────────────
@@ -87,7 +96,7 @@ if "%~1"=="stop"   goto run
 if "%~1"=="status" goto run
 
 :setup
-echo   Preparando el entorno ^(solo la primera vez, puede tardar 2-3 min^)..
+echo   [1/4] Preparando el entorno ^(solo la primera vez, puede tardar 2-3 min^)..
 echo.
 %PY% -m venv "%VENV%"
 if errorlevel 1 (
@@ -96,7 +105,8 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo   Instalando dependencias..
+echo   [2/4] Python listo - no hay que descargar nada.
+echo   [3/4] Instalando dependencias - puede tardar 2-3 min..
 echo.
 "%VENV_PY%" -m pip install --upgrade pip --quiet
 "%VENV_PY%" -m pip install -r requirements-local.txt
@@ -120,7 +130,7 @@ if "%~1"=="setup" (
 if "%~1"=="" goto run
 
 :run
-echo   Arrancando StudyFlow..
+echo   [4/4] Arrancando StudyFlow..
 echo.
 "%VENV_PY%" launcher\launch.py %*
 set "CODE=%ERRORLEVEL%"
@@ -128,5 +138,27 @@ if not "%CODE%"=="0" (
     echo.
     echo   [X] No arranco. Log en: %%LOCALAPPDATA%%\studyflow\launcher.log
     pause
+    goto fin
 )
+if "%~1"=="stop"   goto fin
+if "%~1"=="--stop" goto fin
+if "%~1"=="status" goto fin
+if "%~1"=="setup"  goto fin
+echo.
+echo   ============================================================
+echo        ***  STUDYFLOW ESTA EN MARCHA  ***
+echo   ============================================================
+echo.
+echo   Navegador abriendose en http://127.0.0.1:8477/
+echo     - si no se abre, copialo a mano en la barra de direcciones.
+echo.
+echo   Para detener la app: cierra esta ventana, o abre una
+echo   ventana CMD en la carpeta y escribe:
+echo.
+echo         INICIAR_StudyFlow.bat stop
+echo.
+echo   Mientras esta ventana este abierta, StudyFlow sigue aqui.
+echo.
+pause
+:fin
 endlocal & exit /b %CODE%

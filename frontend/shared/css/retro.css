@@ -1,0 +1,659 @@
+/* ============================================================================
+   STUDYFLOW — RETRO//AI THEME  (ochentero de IA)
+   ----------------------------------------------------------------------------
+   Hoja ADITIVA: se carga la ÚLTIMA en <head>. No toca el bundle original.
+   Solo actúa sobre tema OSCURO (default). data-theme="light" queda intacto.
+   Estética: terminal de IA de los 80 — neón cyan/magenta, scanlines CRT,
+   grid synthwave, tipografía mono, esquinas rectas, glow por todas partes.
+   ========================================================================== */
+
+/* ============================== 1. TOKENS ============================== */
+html:not([data-theme="light"]) {
+  /* Paleta neón ochentera */
+  --retro-cyan:    #00f0ff;
+  --retro-magenta: #ff3df0;
+  --retro-green:   #39ff88;
+  --retro-amber:   #ffb300;
+  --retro-bg:      #05070d;
+  --retro-panel:   #0a101c;
+
+  /* Re-mapeo de tokens globales -> paleta retro */
+  --bg:             #05070d;
+  --surface:        #0a101c;
+  --surface-hover:  #0f1830;
+  --border:         #14314a;
+  --border-light:   #1d4668;
+  --text:           #d8faff;
+  --text-secondary: #8fdceb;
+  --text-muted:     #4d7d8f;
+  --primary:        #00f0ff;
+  --primary-light:  #063a4d;
+  --primary-dark:   #00c2d6;
+  --green:          #39ff88;
+  --green-bg:       #06281a;
+  --red:            #ff4d6d;
+  --red-bg:         #2d0a14;
+  --amber:          #ffb300;
+  --amber-bg:       #2b1c04;
+
+  /* Esquinas rectas: look hardware ochentero */
+  --radius:    4px;
+  --radius-sm: 3px;
+  --radius-xs: 2px;
+
+  /* Sombras con tinte neón */
+  --shadow:   0 2px 10px rgba(0, 0, 0, .65);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, .7);
+
+  /* Tipografía: mono de sistema (funciona offline, sin CDNs) */
+  --font:      'Lucida Console', 'Monaco', 'Menlo', 'Courier New', monospace;
+  --font-mono: 'Lucida Console', 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+/* ============================== 2. TEXTURA CRT ============================== */
+/* Grid synthwave sutil de fondo (fijo, decorativo) */
+html:not([data-theme="light"]) body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    linear-gradient(rgba(0, 240, 255, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, .045) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Scanlines CRT (por encima de todo, jamás intercepta clics) */
+html:not([data-theme="light"]) body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, .16) 0,
+    rgba(0, 0, 0, .16) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* ============================== 3. TIPOGRAFÍA / SELECCIÓN ============================== */
+html:not([data-theme="light"]) ::selection {
+  background: var(--retro-magenta);
+  color: #05070d;
+}
+
+html:not([data-theme="light"]) :focus-visible {
+  outline: 2px solid var(--retro-magenta);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(255, 61, 240, .55);
+}
+
+html:not([data-theme="light"]) h1,
+html:not([data-theme="light"]) h2,
+html:not([data-theme="light"]) h3 {
+  text-shadow:
+    0 0 8px  rgba(0, 240, 255, .45),
+    0 0 28px rgba(0, 240, 255, .18);
+}
+
+/* ============================== 4. HEADER / LOGO ============================== */
+html:not([data-theme="light"]) .header {
+  background: linear-gradient(180deg, #0c1524 0%, #0a101c 100%);
+  border-bottom: 1px solid rgba(0, 240, 255, .55);
+  box-shadow: 0 1px 14px rgba(0, 240, 255, .28);
+}
+
+html:not([data-theme="light"]) .header-logo {
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  text-shadow: 0 0 10px rgba(0, 240, 255, .5);
+}
+
+html:not([data-theme="light"]) .logo-icon {
+  background: linear-gradient(135deg, var(--retro-cyan), var(--retro-magenta));
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, .35);
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, .7),
+    0 0 26px rgba(255, 61, 240, .45);
+  animation: sf-glow-pulse 2.4s ease-in-out infinite;
+}
+
+html:not([data-theme="light"]) .hdr-btn {
+  border-color: var(--border);
+  border-radius: 2px;
+}
+
+html:not([data-theme="light"]) .hdr-btn:hover {
+  border-color: var(--retro-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, .5);
+}
+
+/* ============================== 5. BOTONES ============================== */
+html:not([data-theme="light"]) .btn {
+  font-family: var(--font);
+  letter-spacing: .05em;
+  border-radius: 2px;
+  border: 1px solid var(--border-light);
+  text-transform: none;
+}
+
+html:not([data-theme="light"]) .btn:hover {
+  border-color: var(--retro-cyan);
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, .45),
+    inset 0 0 10px rgba(0, 240, 255, .12);
+}
+
+html:not([data-theme="light"]) .btn:active {
+  box-shadow: inset 0 0 14px rgba(0, 240, 255, .35);
+}
+
+/* Fondo neón, texto oscuro: contraste real (no blanco sobre cian) */
+html:not([data-theme="light"]) .btn-primary {
+  background: linear-gradient(180deg, #22f5ff 0%, #00c8dd 100%);
+  border-color: var(--retro-cyan);
+  color: #05070d;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(0, 240, 255, .5);
+}
+
+html:not([data-theme="light"]) .btn-primary:hover {
+  background: linear-gradient(180deg, #6ff9ff 0%, #00e2f0 100%);
+  box-shadow:
+    0 0 20px rgba(0, 240, 255, .85),
+    0 0 44px rgba(0, 240, 255, .35);
+}
+
+html:not([data-theme="light"]) .btn-danger {
+  background: rgba(255, 77, 109, .12);
+  border-color: var(--retro-magenta);
+  color: #ff8fa8;
+}
+
+html:not([data-theme="light"]) .btn-danger:hover {
+  background: var(--retro-magenta);
+  border-color: var(--retro-magenta);
+  color: #05070d;
+  box-shadow: 0 0 16px rgba(255, 61, 240, .7);
+}
+
+/* ============================== 6. INPUTS (modo terminal) ============================== */
+html:not([data-theme="light"]) input,
+html:not([data-theme="light"]) select,
+html:not([data-theme="light"]) textarea {
+  background: #04060b;
+  border-color: #1d4668;
+  border-radius: 2px;
+  caret-color: var(--retro-green);
+}
+
+html:not([data-theme="light"]) input:focus,
+html:not([data-theme="light"]) select:focus,
+html:not([data-theme="light"]) textarea:focus {
+  border-color: var(--retro-cyan);
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, .5),
+    inset 0 0 8px rgba(0, 240, 255, .15);
+}
+
+html:not([data-theme="light"]) input::placeholder,
+html:not([data-theme="light"]) textarea::placeholder {
+  color: #3f6b7c;
+}
+
+/* ============================== 7. TABS / NAV ============================== */
+html:not([data-theme="light"]) .tab-btn {
+  font-family: var(--font);
+  letter-spacing: .06em;
+}
+
+html:not([data-theme="light"]) .tab-btn.active {
+  color: var(--retro-cyan);
+  text-shadow: 0 0 10px rgba(0, 240, 255, .7);
+}
+
+html:not([data-theme="light"]) .tab-btn.active::after {
+  box-shadow: 0 0 10px rgba(0, 240, 255, .9), 0 0 22px rgba(0, 240, 255, .5);
+}
+
+html:not([data-theme="light"]) .tab-bar {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Sidebar de columnas: título tipo prompt de terminal */
+html:not([data-theme="light"]) .col-title {
+  font-family: var(--font);
+  letter-spacing: .18em;
+  color: var(--retro-cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, .4);
+}
+
+html:not([data-theme="light"]) .col-title::before {
+  content: "> ";
+  color: var(--retro-magenta);
+  text-shadow: 0 0 8px rgba(255, 61, 240, .6);
+}
+
+html:not([data-theme="light"]) .col-left::before {
+  background: rgba(0, 240, 255, .35);
+}
+
+html:not([data-theme="light"]) .dropdown-item:hover {
+  background: rgba(0, 240, 255, .14);
+}
+
+html:not([data-theme="light"]) .user-nav-trigger {
+  border-radius: 2px;
+}
+
+html:not([data-theme="light"]) .user-nav-trigger:hover {
+  border-color: var(--retro-cyan);
+  box-shadow: 0 0 8px rgba(0, 240, 255, .45);
+}
+
+/* ============================== 8. MODALES / OVERLAYS ============================== */
+html:not([data-theme="light"]) .overlay {
+  background: rgba(2, 4, 8, .82);
+}
+
+html:not([data-theme="light"]) .omodal {
+  background: var(--retro-panel);
+  border: 1px solid rgba(0, 240, 255, .65);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px rgba(255, 61, 240, .25),
+    0 0 34px rgba(0, 240, 255, .35),
+    0 0 90px rgba(255, 61, 240, .15);
+}
+
+html:not([data-theme="light"]) .omodal-head {
+  border-bottom: 1px solid rgba(0, 240, 255, .4);
+}
+
+/* ============================== 9. ESTADOS VACÍOS / LOADING ============================== */
+html:not([data-theme="light"]) .empty-state {
+  border: 1px dashed rgba(0, 240, 255, .5);
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(0, 240, 255, .03) 0 12px,
+      transparent 12px 24px
+    );
+}
+
+html:not([data-theme="light"]) .empty-state .big {
+  filter: drop-shadow(0 0 12px rgba(0, 240, 255, .6));
+}
+
+html:not([data-theme="light"]) .loading-screen {
+  background: #05070d;
+  font-family: var(--font);
+}
+
+html:not([data-theme="light"]) .loading-text {
+  color: var(--retro-green);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(57, 255, 136, .7);
+}
+
+html:not([data-theme="light"]) .loading-spinner {
+  border-top-color: var(--retro-green);
+  border-right-color: rgba(57, 255, 136, .35);
+  box-shadow: 0 0 16px rgba(57, 255, 136, .55);
+}
+
+html:not([data-theme="light"]) .offline-indicator {
+  background: var(--retro-amber);
+  color: #05070d;
+  font-family: var(--font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* ============================== 10. SCROLLBARS NEÓN ============================== */
+html:not([data-theme="light"]) ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html:not([data-theme="light"]) ::-webkit-scrollbar-track {
+  background: #04060b;
+}
+
+html:not([data-theme="light"]) ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #0e5f6e, #0a3a46);
+  border: 1px solid rgba(0, 240, 255, .5);
+  border-radius: 0;
+}
+
+html:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #14c8dc, #0e7d8e);
+  box-shadow: 0 0 10px rgba(0, 240, 255, .8);
+}
+
+/* ============================== 11. ANIMACIONES ============================== */
+@keyframes sf-glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 10px rgba(0, 240, 255, .7),
+      0 0 26px rgba(255, 61, 240, .45);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(0, 240, 255, 1),
+      0 0 40px rgba(255, 61, 240, .75);
+  }
+}
+
+@keyframes sf-blink {
+  0%, 49%  { opacity: 1; }
+  50%, 100% { opacity: .15; }
+}
+
+/* Cursor de terminal parpadeante para títulos de sección con data-cursor */
+html:not([data-theme="light"]) [data-cursor]::after {
+  content: "_";
+  color: var(--retro-green);
+  animation: sf-blink 1s steps(1) infinite;
+  text-shadow: 0 0 8px rgba(57, 255, 136, .8);
+}
+
+/* ============================== 12. LANDING ============================== */
+html:not([data-theme="light"]) .badge {
+  font-family: var(--font);
+  border: 1px solid rgba(0, 240, 255, .6);
+  border-radius: 2px;
+  background: rgba(0, 240, 255, .08);
+  color: var(--retro-cyan);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px rgba(0, 240, 255, .3);
+}
+
+html:not([data-theme="light"]) .logo {
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+/* ============================== 13. LIGHT — PAPEL RETRO 80s ==============================
+   Mismo ADN ochentero en modo claro: papel hueso + tinta negra + acentos
+   flúor (cian/magenta), tipografía mono, esquinas rectas, sombras duras
+   offset tipo impresión risograph. Sin grises apagados. */
+html[data-theme="light"] {
+  /* Paleta papel + tinta */
+  --retro-ink:     #12141a;
+  --retro-paper:   #ece9dd;
+  --retro-paper-2: #f6f3e9;
+  --retro-fluo-cyan:   #007a8a;
+  --retro-fluo-magenta: #c2008f;
+
+  /* Re-mapeo de tokens (gana al bloque light anterior por orden) */
+  --bg:             #ece9dd;
+  --surface:        #f6f3e9;
+  --surface-hover:  #e2ded0;
+  --border:         #12141a;
+  --border-light:   #55565c;
+  --text:           #12141a;
+  --text-secondary: #3c4048;
+  --text-muted:     #6f7076;
+  --primary:        #007a8a;
+  --primary-light:  #cdeef2;
+  --primary-dark:   #00586a;
+  --green:          #00794a;
+  --green-bg:       #d5efdf;
+  --red:            #c0122f;
+  --red-bg:         #fbdde2;
+  --amber:          #a35c00;
+  --amber-bg:       #fdeecd;
+  --shadow:         3px 3px 0 rgba(18, 20, 26, .9);
+  --shadow-md:      5px 5px 0 rgba(18, 20, 26, .85);
+
+  --radius:    4px;
+  --radius-sm: 3px;
+  --radius-xs: 2px;
+
+  --font:      'Lucida Console', 'Monaco', 'Menlo', 'Courier New', monospace;
+  --font-mono: 'Lucida Console', 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+/* Textura sutil: papel con rejilla cian tenue + scanlines ultrafinas */
+html[data-theme="light"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    linear-gradient(rgba(0, 122, 138, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 122, 138, .05) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+html[data-theme="light"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(18, 20, 26, .05) 0,
+    rgba(18, 20, 26, .05) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+html[data-theme="light"] ::selection {
+  background: var(--retro-fluo-magenta);
+  color: #f6f3e9;
+}
+
+html[data-theme="light"] :focus-visible {
+  outline: 2px solid var(--retro-ink);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 122, 138, .45);
+}
+
+/* Títulos: tinta con marca de impresión cian */
+html[data-theme="light"] h1,
+html[data-theme="light"] h2,
+html[data-theme="light"] h3 {
+  text-shadow: 1px 1px 0 rgba(0, 240, 255, .55);
+}
+
+/* Cabecera: doble regla de tinta (tipo cabecera de boletín ochentero) */
+html[data-theme="light"] .header {
+  background: var(--retro-paper-2);
+  border-bottom: 3px double var(--retro-ink);
+  box-shadow: 0 2px 0 rgba(18, 20, 26, .18);
+}
+
+html[data-theme="light"] .header-logo {
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+html[data-theme="light"] .logo-icon {
+  background: linear-gradient(135deg, var(--retro-fluo-cyan), var(--retro-fluo-magenta));
+  border: 1.5px solid var(--retro-ink);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--retro-ink);
+  animation: none;
+}
+
+/* Botones: bloque de tinta con sombra dura offset */
+html[data-theme="light"] .btn {
+  font-family: var(--font);
+  border: 1.5px solid var(--retro-ink);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--retro-ink);
+  transition: transform .08s, box-shadow .08s, background .12s;
+}
+
+html[data-theme="light"] .btn:hover {
+  background: var(--retro-paper);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--retro-ink);
+}
+
+html[data-theme="light"] .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--retro-ink);
+}
+
+html[data-theme="light"] .btn-primary {
+  background: var(--retro-fluo-cyan);
+  border-color: var(--retro-ink);
+  color: #f6f3e9;
+  font-weight: 700;
+}
+
+html[data-theme="light"] .btn-primary:hover {
+  background: #0090a3;
+}
+
+html[data-theme="light"] .btn-danger {
+  background: var(--red-bg);
+  border-color: var(--retro-ink);
+  color: var(--red);
+}
+
+html[data-theme="light"] .btn-danger:hover {
+  background: var(--red);
+  color: #f6f3e9;
+}
+
+/* Inputs: recuadro de tinta sobre papel */
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  background: #fffdf6;
+  border: 1.5px solid var(--retro-ink);
+  border-radius: 2px;
+  caret-color: var(--retro-fluo-magenta);
+}
+
+html[data-theme="light"] input:focus,
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus {
+  border-color: var(--retro-ink);
+  box-shadow: 2px 2px 0 rgba(0, 122, 138, .75);
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #8a8b90;
+}
+
+/* Tabs / columnas */
+html[data-theme="light"] .tab-btn {
+  font-family: var(--font);
+  letter-spacing: .06em;
+}
+
+html[data-theme="light"] .tab-btn.active {
+  color: var(--retro-fluo-cyan);
+}
+
+html[data-theme="light"] .col-title {
+  font-family: var(--font);
+  letter-spacing: .18em;
+  color: var(--retro-ink);
+}
+
+html[data-theme="light"] .col-title::before {
+  content: "> ";
+  color: var(--retro-fluo-magenta);
+}
+
+/* Modales: ficha de papel con sombra dura */
+html[data-theme="light"] .overlay {
+  background: rgba(18, 20, 26, .55);
+}
+
+html[data-theme="light"] .omodal {
+  background: var(--retro-paper-2);
+  border: 2px solid var(--retro-ink);
+  border-radius: 3px;
+  box-shadow: 7px 7px 0 rgba(18, 20, 26, .9);
+}
+
+html[data-theme="light"] .omodal-head {
+  border-bottom: 2px solid var(--retro-ink);
+}
+
+/* Estados vacíos / loading / scrollbars */
+html[data-theme="light"] .empty-state {
+  border: 1.5px dashed var(--retro-ink);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(0, 122, 138, .05) 0 12px,
+      transparent 12px 24px
+    );
+}
+
+html[data-theme="light"] .loading-text {
+  color: var(--retro-fluo-cyan);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+html[data-theme="light"] .loading-spinner {
+  border-top-color: var(--retro-fluo-cyan);
+}
+
+html[data-theme="light"] .offline-indicator {
+  background: var(--retro-ink);
+  color: #f6f3e9;
+  font-family: var(--font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-track {
+  background: var(--retro-paper);
+  border-left: 1.5px solid var(--retro-ink);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: var(--retro-fluo-cyan);
+  border: 1.5px solid var(--retro-ink);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--retro-fluo-magenta);
+}
+
+/* Landing light */
+html[data-theme="light"] .badge {
+  font-family: var(--font);
+  border: 1.5px solid var(--retro-ink);
+  background: #fff3b0;
+  color: var(--retro-ink);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 var(--retro-ink);
+}
+
+html[data-theme="light"] .logo {
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}

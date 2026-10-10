@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería 4 — Zoom (vista general) · Modelos de descarga StudyFlow</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a22; --border:#262a35;
+    --text:#e8eaf0; --muted:#98a0b3; --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .topbar{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 20px;
+  }
+  .topbar h1{margin:0 0 8px; font-size:16px; font-weight:600;}
+  .nav{display:flex; flex-wrap:wrap; gap:8px;}
+  .nav a{
+    font-size:13px; color:var(--muted); background:var(--bg);
+    border:1px solid var(--border); border-radius:6px;
+    padding:5px 10px; text-decoration:none;
+  }
+  .nav a:hover{color:var(--text); border-color:var(--accent); text-decoration:none;}
+  .nav a.active{background:var(--accent); color:#0f1117; border-color:var(--accent); font-weight:600;}
+
+  main{padding:20px;}
+
+  .hint{color:var(--muted); font-size:12px; margin:0 0 14px;}
+
+  .grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px;
+  }
+  .cell{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; overflow:hidden; display:flex; flex-direction:column;
+    min-width:0;
+  }
+  .cell-head{
+    display:flex; flex-direction:column; gap:4px;
+    padding:10px 12px; border-bottom:1px solid var(--border);
+  }
+  .caption{font-size:13px; font-weight:600;}
+  .open-link{font-size:12px; color:var(--accent);}
+
+  .zoom-frame-wrap{
+    position:relative; overflow:hidden;
+    height:340px; background:#fff; border-top:1px solid var(--border);
+  }
+  .zoom-frame-wrap iframe{
+    position:absolute; top:0; left:0;
+    width:222.222%;   /* 100 / 0.45 */
+    height:222.222%;
+    border:0; background:#fff;
+    transform:scale(0.45);
+    transform-origin:top left;
+    pointer-events:none;
+  }
+
+  @media (max-width:1100px){
+    .grid{grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width:560px){
+    .grid{grid-template-columns:1fr;}
+  }
+
+  footer{padding:16px 20px 28px; color:var(--muted); font-size:12px; text-align:center;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Galería de modelos — página de descarga StudyFlow</h1>
+  <nav class="nav">
+    <a href="g1-grid.html">1 · Cuadrícula</a>
+    <a href="g2-pestanas.html">2 · Pestañas</a>
+    <a href="g3-carrusel.html">3 · Carrusel</a>
+    <a class="active" href="g4-zoom.html">4 · Zoom</a>
+    <a href="g5-votacion.html">5 · Votación</a>
+  </nav>
+</header>
+
+<main>
+  <p class="hint">Vista general: los 4 modelos a la vez, reducidos al 45%. Usa «abrir a tamaño real» para verlos completos.</p>
+
+  <div class="grid">
+    <section class="cell">
+      <div class="cell-head">
+        <span class="caption">1 · Directa (mínima)</span>
+        <a class="open-link" href="wf1-directa.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+      </div>
+      <div class="zoom-frame-wrap">
+        <iframe src="wf1-directa.html" title="1 · Directa (mínima)" loading="eager" tabindex="-1"></iframe>
+      </div>
+    </section>
+
+    <section class="cell">
+      <div class="cell-head">
+        <span class="caption">2 · Dos columnas (con captura)</span>
+        <a class="open-link" href="wf2-dos-columnas.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+      </div>
+      <div class="zoom-frame-wrap">
+        <iframe src="wf2-dos-columnas.html" title="2 · Dos columnas (con captura)" loading="eager" tabindex="-1"></iframe>
+      </div>
+    </section>
+
+    <section class="cell">
+      <div class="cell-head">
+        <span class="caption">3 · Carta de producto</span>
+        <a class="open-link" href="wf3-carta-producto.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+      </div>
+      <div class="zoom-frame-wrap">
+        <iframe src="wf3-carta-producto.html" title="3 · Carta de producto" loading="eager" tabindex="-1"></iframe>
+      </div>
+    </section>
+
+    <section class="cell">
+      <div class="cell-head">
+        <span class="caption">4 · Técnica / releases</span>
+        <a class="open-link" href="wf4-tecnica.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+      </div>
+      <div class="zoom-frame-wrap">
+        <iframe src="wf4-tecnica.html" title="4 · Técnica / releases" loading="eager" tabindex="-1"></iframe>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>Wireframes de baja fidelidad — no es el diseño final.</footer>
+
+</body>
+</html>

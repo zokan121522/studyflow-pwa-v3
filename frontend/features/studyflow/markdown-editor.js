@@ -62,6 +62,7 @@ window.App.MarkdownEditor = (function () {
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'ol')" title="Lista numerada">#.</button>
       <span class="md-tb-sep"></span>
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'link')" title="Enlace">🔗</button>
+      <button type="button" class="md-tb-btn" onclick="${M}.insertImage(this)" title="Imagen">🖼</button>
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'code')" title="Código">&lt;/&gt;</button>
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'table')" title="Tabla">⊞</button>
       <span class="md-tb-sep"></span>
@@ -394,11 +395,39 @@ window.App.MarkdownEditor = (function () {
       .forEach((p) => { p.style.display = "none"; });
   }
 
+  // ───────────────────────────────────────────────────────────────
+  // insertImage(btn) — pick + upload an image, embed `![alt](file_url)`.
+  // ───────────────────────────────────────────────────────────────
+  async function insertImage(btn) {
+    const ta = btn.closest(".md-toolbar")
+      ?.parentElement?.querySelector("textarea");
+    if (!ta) return;
+    const U = window.App && window.App.ImageUpload;
+    if (!U || typeof U.pickAndUploadImage !== "function") {
+      console.warn("[Studyflow] ImageUpload.pickAndUploadImage no disponible");
+      return;
+    }
+    const res = await U.pickAndUploadImage({});
+    if (!res || !res.file_url) return;
+    const alt = String(res.title || "imagen").replace(/[\[\]]/g, "");
+    const md = "![" + alt + "](" + res.file_url + ")";
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = ta.value;
+    const nl = start > 0 && text[start - 1] !== "\n" ? "\n" : "";
+    const insert = nl + md;
+    ta.value = text.substring(0, start) + insert + text.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + insert.length;
+    ta.focus();
+    ta.dispatchEvent(new Event("input"));
+  }
+
   // ── Public API ───────────────────────────────────────────────
   return {
     toolbar,
     editForm,
     applyMarkdown,
+    insertImage,
     toggleColorPicker,
     pickColor,
     pickFreeColor,

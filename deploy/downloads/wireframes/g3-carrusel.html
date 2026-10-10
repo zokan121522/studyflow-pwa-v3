@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería 3 — Carrusel · Modelos de descarga StudyFlow</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a22; --border:#262a35;
+    --text:#e8eaf0; --muted:#98a0b3; --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .topbar{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 20px;
+  }
+  .topbar h1{margin:0 0 8px; font-size:16px; font-weight:600;}
+  .nav{display:flex; flex-wrap:wrap; gap:8px;}
+  .nav a{
+    font-size:13px; color:var(--muted); background:var(--bg);
+    border:1px solid var(--border); border-radius:6px;
+    padding:5px 10px; text-decoration:none;
+  }
+  .nav a:hover{color:var(--text); border-color:var(--accent); text-decoration:none;}
+  .nav a.active{background:var(--accent); color:#0f1117; border-color:var(--accent); font-weight:600;}
+
+  main{padding:16px 20px 8px;}
+
+  .carousel-controls{
+    display:flex; align-items:center; justify-content:center;
+    gap:16px; margin-bottom:12px;
+  }
+  .nav-btn{
+    font-family:inherit; font-size:24px; line-height:1;
+    width:44px; height:44px; border-radius:50%;
+    background:var(--surface); color:var(--text);
+    border:1px solid var(--border); cursor:pointer;
+  }
+  .nav-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .counter{font-size:14px; color:var(--muted); min-width:52px; text-align:center;}
+
+  .dots{display:flex; gap:8px; justify-content:center; margin-bottom:12px;}
+  .dot{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--border); border:0; padding:0; cursor:pointer;
+  }
+  .dot.active{background:var(--accent);}
+
+  .stage{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; overflow:hidden;
+  }
+  .stage-head{
+    padding:10px 14px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .caption{font-size:14px; font-weight:600;}
+  .open-link{font-size:12px; color:var(--accent);}
+
+  .wf-frame{
+    display:block; width:100%; border:0; background:#fff;
+    height:calc(100vh - 180px);
+  }
+  .wf-frame[hidden]{display:none;}
+
+  footer{padding:12px 20px 24px; color:var(--muted); font-size:12px; text-align:center;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Galería de modelos — página de descarga StudyFlow</h1>
+  <nav class="nav">
+    <a href="g1-grid.html">1 · Cuadrícula</a>
+    <a href="g2-pestanas.html">2 · Pestañas</a>
+    <a class="active" href="g3-carrusel.html">3 · Carrusel</a>
+    <a href="g4-zoom.html">4 · Zoom</a>
+    <a href="g5-votacion.html">5 · Votación</a>
+  </nav>
+</header>
+
+<main>
+  <div class="carousel-controls">
+    <button class="nav-btn" id="prev" type="button" aria-label="Anterior">&lsaquo;</button>
+    <span class="counter" id="counter">1 / 4</span>
+    <button class="nav-btn" id="next" type="button" aria-label="Siguiente">&rsaquo;</button>
+  </div>
+
+  <div class="dots" id="dots">
+    <button class="dot" type="button" data-idx="0" aria-label="Ir al modelo 1"></button>
+    <button class="dot" type="button" data-idx="1" aria-label="Ir al modelo 2"></button>
+    <button class="dot" type="button" data-idx="2" aria-label="Ir al modelo 3"></button>
+    <button class="dot" type="button" data-idx="3" aria-label="Ir al modelo 4"></button>
+  </div>
+
+  <div class="stage">
+    <div class="stage-head">
+      <span class="caption" id="caption">1 · Directa (mínima)</span>
+      <a class="open-link" id="openlink" href="wf1-directa.html" target="_blank" rel="noopener">abrir a tamaño real</a>
+    </div>
+
+    <iframe class="wf-frame" src="wf1-directa.html"
+      title="1 · Directa (mínima)" loading="eager"></iframe>
+    <iframe class="wf-frame" src="wf2-dos-columnas.html"
+      title="2 · Dos columnas (con captura)" loading="eager" hidden></iframe>
+    <iframe class="wf-frame" src="wf3-carta-producto.html"
+      title="3 · Carta de producto" loading="eager" hidden></iframe>
+    <iframe class="wf-frame" src="wf4-tecnica.html"
+      title="4 · Técnica / releases" loading="eager" hidden></iframe>
+  </div>
+</main>
+
+<footer>Wireframes de baja fidelidad — no es el diseño final.</footer>
+
+<script>
+(function () {
+  var labels = [
+    "1 · Directa (mínima)",
+    "2 · Dos columnas (con captura)",
+    "3 · Carta de producto",
+    "4 · Técnica / releases"
+  ];
+  var files = [
+    "wf1-directa.html",
+    "wf2-dos-columnas.html",
+    "wf3-carta-producto.html",
+    "wf4-tecnica.html"
+  ];
+  var total = 4;
+  var current = 0;
+
+  var frames = Array.prototype.slice.call(document.querySelectorAll(".wf-frame"));
+  var dots = Array.prototype.slice.call(document.querySelectorAll(".dot"));
+  var counter = document.getElementById("counter");
+  var caption = document.getElementById("caption");
+  var openlink = document.getElementById("openlink");
+
+  function show(idx) {
+    current = ((idx % total) + total) % total;
+    frames.forEach(function (f, i) {
+      if (i === current) { f.removeAttribute("hidden"); }
+      else { f.setAttribute("hidden", ""); }
+    });
+    dots.forEach(function (d, i) {
+      d.classList.toggle("active", i === current);
+    });
+    counter.textContent = (current + 1) + " / " + total;
+    caption.textContent = labels[current];
+    openlink.href = files[current];
+  }
+
+  document.getElementById("prev").addEventListener("click", function () { show(current - 1); });
+  document.getElementById("next").addEventListener("click", function () { show(current + 1); });
+  dots.forEach(function (d) {
+    d.addEventListener("click", function () {
+      show(parseInt(d.getAttribute("data-idx"), 10));
+    });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") { show(current - 1); }
+    else if (e.key === "ArrowRight") { show(current + 1); }
+  });
+
+  show(0);
+})();
+</script>
+
+</body>
+</html>

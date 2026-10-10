@@ -37,7 +37,6 @@ import json
 import os
 import re
 import threading
-from pathlib import Path
 
 import edge_tts
 
@@ -50,10 +49,12 @@ from ai.providers import get_provider
 
 # ── config ──────────────────────────────────────────────────────────
 
-_AUDIO_DIR = os.environ.get(
-    "AUDIO_UPLOAD_FOLDER",
-    str(Path.home() / ".studyflow-app" / "audio"),
-)
+# storage_paths resolves this: AUDIO_UPLOAD_FOLDER when the deploy sets it,
+# else ~/.studyflow-app/audio -- the same folder the backup export reads
+# and the restore writes.
+from storage_paths import category_dir  # noqa: E402  (kept with the config)
+
+_AUDIO_DIR = category_dir("audio")
 
 # ── language → voice mapping ────────────────────────────────────────
 

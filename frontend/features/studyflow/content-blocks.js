@@ -87,6 +87,15 @@ window.App.ContentBlocks = (function () {
       stash.push("<code>" + escHtml(c) + "</code>");
       return "\u0000I" + (stash.length - 1) + "\u0000";
     });
+    // images ![alt](url) — MUST run before the link pass
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (_, alt, src) {
+      if (/^(\/|https?:\/\/)/i.test(src)) {
+        stash.push('<img class="md-img" src="' + escHtml(src) + '" alt="' + escHtml(alt) + '" loading="lazy">');
+      } else {
+        stash.push(escHtml(alt));
+      }
+      return "\u0000I" + (stash.length - 1) + "\u0000";
+    });
     // links [text](url) — handle YouTube specially
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, text, href) {
       if (YT_URL_RE.test(href)) {

@@ -10,8 +10,12 @@ single-user PWA:
   • `installed`, `enabled`, `hidden` are NEVER touched by the upsert
     conflict path, so user choices survive re-seeding (mirrors v2's
     "status preserved across re-seed" comment).
-  • `hidden` IS seeded on the initial INSERT for IA-bound slugs so they
-    stay tucked away until the IA backend ships.
+  • The IA addons (notebooklm/opencode) are seeded installed+enabled on the
+    initial INSERT: they shipped with the backend (routes/ai.py + local
+    Chrome login) and are core to the product. They stop being hidden —
+    an addon hidden in the marketplace can never be installed from the UI,
+    which silently stripped the AI toolbar down to just "MD → PDF"
+    (addons-core.activeBlockActionsSync filters by installed && enabled).
 
 Catalog adapted to v3 reality: S5/S6/S9 addons (quiz/flashcards/playground)
 are present so the marketplace shows them up-front, but their JS modules
@@ -21,9 +25,11 @@ NOTE: kept flat at backend/addons_seed.py (not in models/) because v3 has
 backend/models.py as a single file, not a package.
 """
 
-# AI-bound slugs are seeded hidden=True so the marketplace filters them away
-# by default. All other slugs are visible (hidden=False on initial INSERT).
-HIDDEN_BY_DEFAULT = frozenset({"notebooklm", "opencode"})
+# AI-bound slugs used to be seeded hidden=True so the marketplace filtered
+# them away until the IA backend shipped. The backend ships in this version
+# (routes/ai.py + local Chrome login), so nothing is hidden by default; the
+# IA addons additionally seed installed+enabled (see their catalog rows).
+HIDDEN_BY_DEFAULT = frozenset()
 
 ADDON_CATALOG_SEED = [
     # ── Quiz (S5) ────────────────────────────────────────────────
@@ -58,20 +64,29 @@ ADDON_CATALOG_SEED = [
         "version": "1.0.0",
         "url_prefix": "/api/ai/generate-grammar-exercises",
     },
-    # ── IA phase addons (hidden until the IA backend ships) ──────
+    # ── IA phase addons (shipped with the backend) ────────────────────
+    # notebooklm/opencode carry installed+enabled on the initial INSERT:
+    # they are core product features in this version (routes/ai.py + local
+    # Chrome login). Only the initial INSERT carries the flags — the ON
+    # CONFLICT path never touches them, so a user uninstall/disable survives
+    # re-seeding.
     {
         "slug": "notebooklm",
         "name": "NotebookLM",
-        "description": "Generación de contenido con Gemini (Markdown, HTML, Test, Infografía) — fase IA, pendiente.",
+        "description": "Generación de contenido con Gemini (Markdown, HTML, Test, Infografía, Audio).",
         "version": "1.0.0",
         "url_prefix": "/api/ai/notebooklm",
+        "installed": True,
+        "enabled": True,
     },
     {
         "slug": "opencode",
         "name": "OpenZen",
-        "description": "Agente local sin cuota (OpenZen, Audio, YouTube) — fase IA, pendiente.",
+        "description": "Agente local sin cuota (OpenZen, Audio, YouTube Zen, English, Vocabulary).",
         "version": "1.18.27",
         "url_prefix": "",
+        "installed": True,
+        "enabled": True,
     },
     # ── Core toolbar sections (Phase 59 v2 — always visible) ─────
     {
@@ -94,8 +109,9 @@ ADDON_CATALOG_SEED = [
 def seed_addon_catalog() -> None:
     """Idempotent upsert of the addon catalog.
 
-    Inserts a fresh row per slug with `hidden` set from HIDDEN_BY_DEFAULT;
-    on CONFLICT (slug) the UPDATE branch refreshes ONLY name/description/
+    Inserts a fresh row per slug with `hidden` set from HIDDEN_BY_DEFAULT and
+    `installed`/`enabled` from the catalog entry (defaults False); on
+    CONFLICT (slug) the UPDATE branch refreshes ONLY name/description/
     version/url_prefix so user choices (installed/enabled/hidden) survive
     re-seeding. Mirrors v2's "status preserved across re-seed" rule.
     """
@@ -105,8 +121,8 @@ def seed_addon_catalog() -> None:
         execute(
             """
             INSERT INTO addons (slug, name, description, version,
-                                url_prefix, hidden)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                                url_prefix, hidden, installed, enabled)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (slug) DO UPDATE SET
                 name        = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -121,5 +137,7 @@ def seed_addon_catalog() -> None:
                 addon.get("version", "0.0.0"),
                 addon.get("url_prefix"),
                 addon["slug"] in HIDDEN_BY_DEFAULT,
+                bool(addon.get("installed", False)),
+                bool(addon.get("enabled", False)),
             ),
         )

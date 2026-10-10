@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="es" data-captura="claro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudyFlow — App de estudio offline para Windows, Mac y Linux</title>
+<meta name="description" content="StudyFlow reúne cursos, agenda, hábitos, tests y apuntes en una app de escritorio para Windows, Mac y Linux. Funciona sin conexión y tus datos son tuyos.">
+<link rel="canonical" href="https://studyflowhub.dev/">
+<meta name="theme-color" content="#0f1117">
+<meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="StudyFlow">
+<meta property="og:locale" content="es_ES">
+<meta property="og:url" content="https://studyflowhub.dev/">
+<meta property="og:title" content="StudyFlow — Tu app de estudio, todo en uno y sin conexión">
+<meta property="og:description" content="Cursos, agenda, hábitos, tests y apuntes en una sola app para Windows, Mac y Linux. Funciona sin conexión y tus datos se quedan en tu ordenador.">
+<meta property="og:image" content="https://studyflowhub.dev/img/app-1-dashboard-light.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="1000">
+<meta property="og:image:alt" content="StudyFlow — panel de inicio con cursos, progreso y agenda">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="StudyFlow — Tu app de estudio, todo en uno y sin conexión">
+<meta name="twitter:description" content="Cursos, agenda, hábitos, tests y apuntes en una sola app para Windows, Mac y Linux. Sin conexión y con tus datos en tu ordenador.">
+<meta name="twitter:image" content="https://studyflowhub.dev/img/app-1-dashboard.jpg">
+<meta name="twitter:image:alt" content="StudyFlow — panel de inicio con cursos, progreso y agenda">
+
+<link rel="icon" type="image/png" href="favicon.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "StudyFlow",
+      "description": "App de estudio todo en uno: cursos, agenda, hábitos, tests y apuntes. Funciona sin conexión en Windows, macOS y Linux.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "url": "https://studyflowhub.dev/",
+      "image": "https://studyflowhub.dev/img/app-1-dashboard.jpg",
+      "softwareVersion": "3.1.1",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "StudyFlow"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "name": "StudyFlow",
+      "url": "https://studyflowhub.dev/",
+      "inLanguage": "es-ES"
+    }
+  ]
+}
+</script>
+
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a22; --surface-2:#0b0d12; --border:#262a35;
+    --text:#e8eaf0; --muted:#98a0b3; --accent:#5b8cff; --accent-2:#3f6fe0;
+    --ok:#3ecf8e;
+    --warn-bg:#1c1913; --warn-border:#463a27; --warn-text:#e8b06a;
+    --disabled-bg:#2a2f3c; --chip-bg:#1e222c; --off-bg:#1a1e27;
+    --shadow:0 12px 34px rgba(0,0,0,.34);
+    --accent-shadow:rgba(91,140,255,.30);
+    --hero-glow:radial-gradient(1100px 420px at 50% -140px, rgba(91,140,255,.20), transparent 72%);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f4f6fb; --surface:#ffffff; --surface-2:#eef1f7; --border:#e1e6ef;
+      --text:#1b1f2a; --muted:#5b6474; --accent:#3f6fe0; --accent-2:#2b57c4;
+      --ok:#17915c;
+      --warn-bg:#fff8ec; --warn-border:#f0dcb8; --warn-text:#8a5a12;
+      --disabled-bg:#dfe4ee; --chip-bg:#eef1f7; --off-bg:#e7eaf2;
+      --shadow:0 12px 34px rgba(31,45,80,.12);
+      --accent-shadow:rgba(63,111,224,.28);
+      --hero-glow:radial-gradient(1100px 420px at 50% -140px, rgba(63,111,224,.16), transparent 72%);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  /* Los destinos del índice no quedan ocultos bajo la cabecera. */
+  #galeria,#novedades,#descarga,#historico,#detalles{scroll-margin-top:72px}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       display:flex;justify-content:center;padding:22px 18px 60px;
+       -webkit-font-smoothing:antialiased}
+  main{width:100%;max-width:1040px}
+
+  /* ── Cabecera de marca ──────────────────────────────────────── */
+  .site-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 2px 24px}
+  .site-head .logo{width:30px;height:30px;border-radius:9px;background:var(--accent);
+       display:flex;align-items:center;justify-content:center;
+       font-weight:800;font-size:15px;color:#fff;flex:none}
+  .site-head .name{font-size:18px;font-weight:750;letter-spacing:-.2px;margin:0}
+  .tag{font-family:var(--mono);font-size:12px;color:var(--ok);
+       background:rgba(62,207,142,.12);border:1px solid rgba(62,207,142,.35);
+       border-radius:99px;padding:3px 12px}
+
+  /* ── Índice de la página ────────────────────────────────────── */
+  .idx{display:flex;gap:8px;margin:0 2px 24px;padding:0 0 2px;
+       overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;
+       scrollbar-width:none}
+  .idx::-webkit-scrollbar{display:none}
+  .idx a{flex:none;font-size:13px;font-weight:700;color:var(--muted);
+       text-decoration:none;background:var(--surface);border:1px solid var(--border);
+       border-radius:99px;padding:8px 16px;transition:color .15s,border-color .15s,background .15s}
+  .idx a:hover{color:var(--accent);border-color:var(--accent)}
+  .idx a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── Tarjetas y títulos ─────────────────────────────────────── */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;
+        padding:28px;margin-bottom:22px;box-shadow:var(--shadow)}
+  h2.sec{font-size:clamp(22px,3vw,30px);letter-spacing:-.5px;margin:40px 2px 16px;font-weight:750}
+  .lab{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);
+       margin:0 0 14px;font-weight:700}
+
+  /* ── HERO ───────────────────────────────────────────────────── */
+  .hero{position:relative;overflow:hidden;text-align:center;
+        background:var(--surface);background-image:var(--hero-glow);
+        border:1px solid var(--border);border-radius:24px;
+        padding:48px 30px 34px;margin-bottom:26px;box-shadow:var(--shadow)}
+  .hero .kicker{margin:0 0 14px;font-size:13px;font-weight:750;letter-spacing:1.4px;
+        text-transform:uppercase;color:var(--accent)}
+  .hero h1{font-size:clamp(29px,4.8vw,46px);line-height:1.12;letter-spacing:-1px;
+        margin:0 auto 16px;max-width:780px;font-weight:800}
+  .hero .sub{color:var(--muted);font-size:clamp(16px,2.1vw,19px);line-height:1.55;
+        max-width:660px;margin:0 auto 28px}
+  .hero-cta{display:flex;flex-direction:column;align-items:center;gap:11px}
+  .hero-trust{margin:16px 0 0;color:var(--muted);font-size:13.5px}
+  .hero-trust span{white-space:nowrap}
+  /* ── Captura del inicio en el hero (con pestañas claro/oscuro) ─ */
+  .hero-app{position:relative;margin:34px auto 4px;max-width:900px}
+  .hero-shot{display:block;width:100%;height:auto;aspect-ratio:16/10;
+       border-radius:16px;background:var(--surface-2);
+       border:1px solid var(--border);box-shadow:0 16px 42px var(--accent-shadow)}
+  .hero-tabs{display:inline-flex;gap:6px;padding:8px 10px;margin:0 auto 12px;
+       background:var(--surface-2);border:1px solid var(--border);border-radius:999px}
+  .hero-cap{appearance:none;-webkit-appearance:none;background:none;
+       border:1px solid transparent;border-radius:999px;color:var(--muted);
+       font-family:inherit;font-size:12.5px;font-weight:750;letter-spacing:.4px;
+       padding:7px 16px;cursor:pointer;white-space:nowrap;
+       transition:background .15s,color .15s}
+  .hero-cap:hover{color:var(--text)}
+  .hero-cap.on{background:var(--accent);color:#fff;box-shadow:0 6px 18px var(--accent-shadow)}
+  .hero-cap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .hero-app figcaption{font-size:14px;color:var(--muted);text-align:center;margin-top:12px}
+
+  /* ── Botones ────────────────────────────────────────────────── */
+  .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+       font-weight:750;padding:18px 36px;border-radius:14px;font-size:17.5px;
+       letter-spacing:.2px;white-space:nowrap;
+       box-shadow:0 10px 26px var(--accent-shadow);transition:background .15s,transform .15s}
+  .btn:hover{background:var(--accent-2);transform:translateY(-1px)}
+  .btn.disabled,.btn[aria-disabled="true"]{opacity:.6;cursor:not-allowed;
+       pointer-events:none;background:var(--disabled-bg);color:var(--muted);box-shadow:none}
+  .btn-app{display:block}
+  .btn-app.disabled{opacity:.6;cursor:not-allowed;pointer-events:none;
+       background:var(--disabled-bg);color:var(--muted);box-shadow:none}
+
+  /* ── Insignia de plataforma y nota móvil ────────────────────── */
+  .dl-wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px}
+  .badge-win{font-size:12px;text-transform:uppercase;letter-spacing:.7px;
+       color:var(--muted);border:1px solid var(--border);border-radius:99px;
+       padding:6px 13px;white-space:nowrap;font-weight:700;background:var(--surface-2)}
+  .nota-movil{display:none;width:100%;margin:0;color:var(--muted);font-size:13px}
+  body.es-movil .nota-movil{display:block}
+
+  /* ── Pantallas grandes (galería / hero) ─────────────────────── */
+  .thumb{display:block;width:100%;background:var(--surface-2);
+         border:1px solid var(--border);padding:0;border-radius:18px;
+         overflow:hidden;cursor:zoom-in;
+         transition:transform .18s,border-color .18s,box-shadow .18s}
+  .thumb img{display:block;width:100%;height:auto}
+  .thumb:hover,.thumb:focus-visible{transform:translateY(-3px);border-color:var(--accent);
+         box-shadow:0 16px 42px var(--accent-shadow);outline:none}
+  figure.shot{margin:0 auto;max-width:960px}
+  figure.shot figcaption{font-size:14px;color:var(--muted);text-align:center;margin-top:12px}
+  .gal{display:flex;flex-direction:column;gap:38px}
+  .fig-audio{margin:6px auto 0;display:block;max-width:100%}
+  .fig-cap{font-size:13.5px;color:var(--muted);text-align:center;margin:6px 0 0}
+  figure.audio-block{margin:14px auto 0;max-width:760px}
+  figure.audio-block audio{width:100%}
+  figure.audio-block figcaption{font-size:13.5px;color:var(--muted);text-align:center;margin-top:8px}
+
+  /* ── Botón flotante "volver arriba" ─────────────────────────── */
+  #to-top{position:fixed;right:18px;bottom:18px;z-index:1000;
+       width:44px;height:44px;border-radius:50%;padding:0;
+       display:flex;align-items:center;justify-content:center;
+       background:var(--surface);color:var(--text);border:1px solid var(--border);
+       font-size:20px;line-height:1;cursor:pointer;
+       box-shadow:0 8px 22px var(--accent-shadow);
+       opacity:0;pointer-events:none;
+       transition:opacity .18s,background .15s,color .15s,transform .15s}
+  #to-top.show{opacity:1;pointer-events:auto}
+  #to-top:hover{background:var(--accent);color:#fff;transform:translateY(-2px)}
+  #to-top:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── Novedades de la versión ────────────────────────────────── */
+  .novedades ul{margin:0;padding-left:22px;color:var(--muted);font-size:15px;
+        line-height:1.7}
+  .novedades li{margin-bottom:4px}
+  .novedades li strong{color:var(--text)}
+  .novedades figure{margin:22px auto 0;max-width:760px}
+  .novedades figcaption{font-size:13.5px;color:var(--muted);text-align:center;
+        margin-top:10px}
+  .novedades .nov-cta{margin:18px 0 0;color:var(--muted);font-size:14px}
+  .novedades .nov-audio audio{width:100%}
+  .novedades .nov-prev{margin:26px auto 0;max-width:760px;border-top:1px solid var(--border);
+        padding-top:16px}
+  .novedades .nov-prev summary{cursor:pointer;color:var(--muted);font-size:14px;
+        font-weight:650}
+
+  /* ── Selector de versión de capturas (Auto · Claro · Oscuro) ── */
+  .cap-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 2px 20px}
+  .cap-lab{font-size:13px;color:var(--muted);font-weight:650}
+  .cap-toggle{display:inline-flex;gap:6px;background:var(--surface-2);
+       border:1px solid var(--border);border-radius:12px;padding:5px}
+  .cap-btn{appearance:none;-webkit-appearance:none;background:none;
+       border:1px solid transparent;border-radius:9px;color:var(--muted);
+       font-family:inherit;font-size:13.5px;font-weight:750;letter-spacing:.4px;
+       padding:9px 18px;cursor:pointer;white-space:nowrap;
+       transition:background .15s,color .15s}
+  .cap-btn:hover{color:var(--text)}
+  .cap-btn.on{background:var(--accent);color:#fff;box-shadow:0 6px 18px var(--accent-shadow)}
+  .cap-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── Aviso móvil ────────────────────────────────────────────── */
+  .aviso-movil{display:none}
+  body.es-movil .aviso-movil{display:block}
+  .aviso-movil h2{margin:0 0 10px;font-size:19px;color:var(--text)}
+  .aviso-movil p{margin:0 0 12px;color:var(--muted);font-size:15px}
+  #aviso-pasos ol{margin:0 0 16px;padding-left:20px;font-size:15px}
+  #aviso-pasos li{margin-bottom:6px}
+  #aviso-pasos p{margin:0 0 16px}
+  .aviso-movil .btn-app{width:100%;text-align:center;min-height:52px;line-height:1.3;
+       padding:15px 20px;border-radius:12px;font-size:16px;
+       background:var(--accent);color:#fff;text-decoration:none;font-weight:750;
+       box-shadow:0 10px 26px var(--accent-shadow)}
+  .aviso-alt{margin:10px 0 0;color:var(--muted);font-size:13px}
+
+  /* ── Descarga: pestañas por sistema operativo ───────────────── */
+  .tabs{display:flex;gap:8px;margin-bottom:22px;background:var(--surface-2);
+        border:1px solid var(--border);border-radius:14px;padding:6px}
+  .tab{flex:1;min-width:0;appearance:none;-webkit-appearance:none;background:none;
+       border:1px solid transparent;border-radius:10px;color:var(--muted);
+       font-family:inherit;font-size:15px;font-weight:750;letter-spacing:.7px;
+       padding:14px 8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+  .tab:hover{color:var(--text)}
+  .tab.on{background:var(--accent);color:#fff;box-shadow:0 6px 20px var(--accent-shadow)}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .panel{display:none}
+  .panel.on{display:block}
+  .pl-head{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:20px}
+  .pl-meta{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .pl-meta.soon{color:var(--warn-text)}
+  .pl-steps{padding-left:22px;margin:0}
+  .pl-steps li{margin-bottom:10px}
+  .osblock[hidden]{display:none}
+  .videonote{margin:20px 0 0;padding-top:16px;border-top:1px solid var(--border);
+       color:var(--muted);font-size:14.5px}
+  .videonote .ok{color:var(--ok);font-weight:650}
+
+  /* ── Descarga: tres tarjetas por sistema operativo ──────────── */
+  .pcards{display:grid;grid-template-columns:1fr 1.22fr 1fr;gap:14px;
+       align-items:stretch;margin-bottom:14px}
+  .pcard{position:relative;display:flex;flex-direction:column;align-items:center;
+       justify-content:center;gap:10px;text-decoration:none;color:var(--text);
+       background:var(--surface-2);border:1px solid var(--border);border-radius:16px;
+       padding:22px 14px;cursor:pointer;
+       transition:transform .15s,border-color .15s,box-shadow .15s}
+  .pcard:hover{transform:translateY(-3px);border-color:var(--accent);
+       box-shadow:0 14px 34px var(--accent-shadow)}
+  .pcard.primary{background:linear-gradient(180deg,rgba(91,140,255,.14),rgba(91,140,255,.04));
+       border-color:rgba(91,140,255,.5);padding:30px 16px}
+  .pcard.on{border-color:var(--accent);box-shadow:0 10px 28px var(--accent-shadow)}
+  .pcard.primary.on{background:linear-gradient(180deg,rgba(91,140,255,.22),rgba(91,140,255,.07))}
+  .pcard .pc-os{font-size:17px;font-weight:800;letter-spacing:-.2px}
+  .pcard.primary .pc-os{font-size:21px}
+  .pcard .pc-cta{font-size:13.5px;font-weight:750;color:var(--accent);
+       border:1px solid var(--accent);border-radius:99px;padding:8px 18px;white-space:nowrap}
+  .pcard.primary .pc-cta{background:var(--accent);color:#fff}
+  .pcard.disabled{opacity:.5;pointer-events:none}
+  .pc-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 22px;
+       color:var(--muted);font-size:13px}
+
+  /* ── Hero: cuerpo y CTA pequeña ─────────────────────────────── */
+  .hero .hero-body{color:var(--muted);font-size:clamp(15px,1.9vw,17px);
+       line-height:1.6;max-width:640px;margin:0 auto 24px}
+  .btn-sm{padding:13px 26px;font-size:15px;border-radius:12px}
+
+  /* ── Cabecera técnica ───────────────────────────────────────── */
+  .tech{display:flex;gap:28px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  .tech-meta{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;
+       font-family:var(--mono);font-size:13px;min-width:0;margin:0}
+  .tech-meta dt{color:var(--muted);text-transform:uppercase;font-size:11px;
+       letter-spacing:.5px;align-self:center}
+  .tech-meta dd{margin:0;word-break:break-all}
+
+  /* ── Verificación copiable ──────────────────────────────────── */
+  .cmdrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .cmd{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);
+       border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:13px;
+       color:var(--text);word-break:break-all;margin:0}
+  .copy{background:transparent;border:1px solid var(--border);color:var(--muted);
+       border-radius:8px;padding:10px 18px;font-size:13px;cursor:pointer;font-family:inherit}
+  .copy:hover{border-color:var(--accent);color:var(--accent)}
+  .sha{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin-top:16px;
+       font-family:var(--mono);font-size:13px}
+  .sha dt{color:var(--muted);text-transform:uppercase;font-size:11px;
+       letter-spacing:.5px;align-self:center}
+  .sha dd{margin:0;word-break:break-all;color:var(--ok)}
+
+  /* ── Requisitos + aviso ─────────────────────────────────────── */
+  .two{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+  .two > .card{margin-bottom:0}
+  ol{padding-left:22px;margin:0}
+  ol li{margin-bottom:10px}
+  ul{padding-left:20px;margin:10px 0 0}
+  li{margin-bottom:8px}
+  code{font-family:var(--mono);font-size:13px;background:var(--surface-2);
+       border:1px solid var(--border);border-radius:5px;padding:1px 6px;word-break:break-all}
+  .warn{background:var(--warn-bg);border:1px solid var(--warn-border)}
+  .warn .lab{color:var(--warn-text)}
+  .warn h3{margin:0 0 10px;font-size:15.5px;color:var(--warn-text)}
+  .warn p{margin:0 0 10px;font-size:14.5px;color:var(--muted)}
+  .warn p:last-child{margin-bottom:0}
+  .warn strong{color:var(--text)}
+
+  /* ── Histórico de versiones ─────────────────────────────────── */
+  .rel-head,.rel-row{display:grid;grid-template-columns:88px 1fr 96px 128px;
+       gap:14px;align-items:center;padding:14px 22px}
+  .rel-head{font-size:11px;text-transform:uppercase;letter-spacing:.7px;
+       color:var(--muted);border-bottom:1px solid var(--border);font-weight:700}
+  .rel-row{border-bottom:1px solid var(--border)}
+  .rel-row:last-child{border-bottom:0}
+  .rel-row.current{background:rgba(91,140,255,.06)}
+  .rel-row.old{opacity:.6}
+  .rel-v{font-family:var(--mono);font-size:14px;font-weight:650}
+  .rel-row.old .rel-v{color:var(--muted);font-weight:400}
+  .rel-txt{font-size:14px;color:var(--muted);min-width:0}
+  .rel-row.current .rel-txt strong{color:var(--text)}
+  .pill{font-size:11px;font-weight:750;text-align:center;border-radius:99px;
+       padding:4px 0;letter-spacing:.4px}
+  .pill.now{background:rgba(62,207,142,.14);color:var(--ok);border:1px solid rgba(62,207,142,.35)}
+  .pill.prev{background:var(--chip-bg);color:var(--muted);border:1px solid var(--border)}
+  .rowbtn{display:block;text-align:center;font-size:13px;font-weight:650;
+       border-radius:8px;padding:8px 0;text-decoration:none}
+  .rowbtn.go{background:rgba(91,140,255,.14);color:var(--accent);border:1px solid rgba(91,140,255,.4)}
+  .rowbtn.go:hover{background:rgba(91,140,255,.24)}
+  .rowbtn.off{background:var(--off-bg);color:var(--muted);border:1px solid var(--border);cursor:not-allowed}
+
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:34px}
+
+  /* ── Lightbox (overlay siempre oscuro, texto claro) ─────────── */
+  #lightbox{position:fixed;inset:0;background:rgba(6,8,12,.93);z-index:90;
+       display:none;align-items:center;justify-content:center}
+  #lightbox.open{display:flex}
+  #lightbox img{max-width:92vw;max-height:84vh;border-radius:12px;display:block;
+       box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .lb-close,.lb-prev,.lb-next{position:absolute;background:none;border:0;
+       color:#f2f4f8;font-size:26px;line-height:1;cursor:pointer;
+       padding:8px 14px;border-radius:8px;opacity:.78;transition:opacity .15s}
+  .lb-close:hover,.lb-prev:hover,.lb-next:hover{opacity:1}
+  .lb-close{top:14px;right:16px}
+  .lb-prev{left:10px;top:50%;transform:translateY(-50%)}
+  .lb-next{right:10px;top:50%;transform:translateY(-50%)}
+  .lb-cap{position:absolute;bottom:18px;left:0;right:0;text-align:center;
+       color:#c7cdda;font-size:14px}
+  .lb-cap .lb-count{font-family:var(--mono);font-size:12px;opacity:.8;margin-left:10px}
+
+  /* ── Responsive ─────────────────────────────────────────────── */
+  @media (max-width:820px){
+    .two{grid-template-columns:1fr}
+  }
+  @media (max-width:640px){
+    body{padding:18px 14px 50px}
+    .hero{padding:36px 20px 26px;border-radius:20px}
+    .card{padding:22px}
+    .tech{flex-direction:column}
+    .btn{width:100%;text-align:center;padding:16px 20px;font-size:16px}
+    .tab{font-size:13px;letter-spacing:.3px;padding:12px 4px}
+    .pcards{grid-template-columns:1fr}
+    .pcard.primary{order:-1;padding:24px 14px}
+    .rel-head{display:none}
+    .rel-row{grid-template-columns:1fr auto;gap:8px 12px;padding:14px 18px}
+    .rel-txt{grid-column:1 / -1}
+    .rowbtn{grid-column:1 / -1;padding:12px 0}
+    .copy{min-height:44px}
+    .lb-close,.lb-prev,.lb-next{min-width:44px;min-height:44px;text-align:center}
+    .badge-win{padding:6px 12px}
+    .cap-bar{gap:8px}
+    .cap-toggle{width:100%}
+    .cap-btn{flex:1;padding:12px 6px;font-size:13px}
+  }
+  @media (max-width:400px){
+    .hero h1{letter-spacing:-.5px}
+    .card{padding:18px}
+    .tech-meta{font-size:12px}
+    .tab{font-size:12px;letter-spacing:.2px}
+  }
+
+  /* ── Verificación humana (modal slide-to-download) ──────────── */
+  .hc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.74);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;padding:18px;z-index:9999}
+  .hc-overlay.open{display:flex}
+  .hc-card{position:relative;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:26px 22px 20px;width:100%;max-width:420px;
+    box-shadow:0 24px 64px rgba(0,0,0,.55)}
+  .hc-close{position:absolute;top:8px;right:8px;background:none;border:none;
+    color:var(--muted);font-size:19px;line-height:1;cursor:pointer;
+    padding:7px 10px;border-radius:8px;font-family:inherit}
+  .hc-close:hover{color:var(--text);background:var(--border)}
+  .hc-title{margin:0 0 5px;font-size:17.5px;font-weight:650;letter-spacing:-.2px}
+  .hc-sub{margin:0 0 14px;font-size:13.5px;color:var(--muted)}
+  .hc-file{font-family:var(--mono);font-size:12.5px;color:var(--ok);
+    background:var(--surface-2);border:1px solid var(--border);border-radius:7px;
+    padding:8px 11px;margin-bottom:16px;word-break:break-all}
+  .hc-track{position:relative;height:54px;background:var(--surface-2);
+    border:1px solid var(--border);border-radius:99px;overflow:hidden;
+    user-select:none;-webkit-user-select:none;touch-action:none;margin-bottom:14px}
+  .hc-fill{position:absolute;top:0;bottom:0;left:0;width:0;
+    background:rgba(91,140,255,.22);border-right:1px solid rgba(91,140,255,.55);
+    pointer-events:none}
+  .hc-label{position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center;font-size:13.5px;font-weight:600;color:var(--muted);
+    pointer-events:none;letter-spacing:.3px;padding-left:40px}
+  .hc-knob{position:absolute;top:4px;left:4px;width:44px;height:44px;border-radius:50%;
+    background:var(--accent);color:#fff;display:flex;align-items:center;
+    justify-content:center;font-size:17px;font-weight:700;cursor:grab;
+    touch-action:none;z-index:2;box-shadow:0 4px 14px var(--accent-shadow)}
+  .hc-knob:active{cursor:grabbing}
+  .hc-track.done .hc-fill{width:100% !important;
+    background:rgba(62,207,142,.2);border-right-color:transparent}
+  .hc-track.done .hc-knob{background:var(--ok);cursor:default;
+    box-shadow:0 4px 14px rgba(62,207,142,.45)}
+  .hc-track.done .hc-label{color:var(--ok);padding-left:0}
+  .hc-fallback{border-top:1px dashed var(--border);padding-top:13px}
+  .hc-fallback-lab{display:flex;gap:9px;align-items:center;font-size:13.5px;
+    color:var(--muted);cursor:pointer;margin-bottom:11px}
+  .hc-fallback-lab input{width:17px;height:17px;accent-color:var(--accent);
+    cursor:pointer;flex:none;margin:0}
+  .hc-dl{width:100%;background:var(--border);color:var(--muted);border:none;
+    border-radius:9px;padding:11px 14px;font-family:inherit;font-size:13.5px;
+    font-weight:700;cursor:not-allowed;transition:background .15s,color .15s}
+  .hc-dl.on{background:var(--accent);color:#fff;cursor:pointer}
+  .hc-dl.on:hover{background:var(--accent-2)}
+  @media (max-width:400px){
+    .hc-card{padding:22px 16px 16px}
+    .hc-label{font-size:12.5px;padding-left:34px}
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ── Cabecera de marca ──────────────────────────────────────── -->
+  <header class="site-head">
+    <div class="logo" aria-hidden="true">S</div>
+    <p class="name">StudyFlow</p>
+    <span class="tag" id="tag-version">3.1.1</span>
+  </header>
+
+  <!-- ── Índice de la página ────────────────────────────────────── -->
+  <nav class="idx" aria-label="Índice de la página">
+    <a href="#galeria">Galería</a>
+    <a href="#novedades">Novedades</a>
+    <a href="#descarga">Descargar</a>
+    <a href="#historico">Histórico</a>
+    <a href="#detalles">Detalles</a>
+  </nav>
+
+  <!-- ── HERO (primero) ─────────────────────────────────────────── -->
+  <section class="hero" aria-labelledby="hero-title">
+    <h1 id="hero-title">Estudia mejor · sin nubes · sin líos</h1>
+    <p class="sub">Tu app de estudio, todo en uno y sin conexión</p>
+    <p class="hero-body">Cursos, agenda, hábitos, tests y apuntes en una sola app para
+      Windows, Mac y Linux. Funciona sin internet y tus datos se quedan en tu
+      ordenador, no en la nube.</p>
+    <div class="hero-cta">
+      <a class="btn btn-sm" id="btn-download" href="#descarga">⬇ Descargar StudyFlow</a>
+      <p class="hero-trust"><span>✓ Sin instalar</span> · <span>✓ Sin permisos de admin</span> ·
+        <span>✓ 15 videotutoriales incluidos</span></p>
+    </div>
+    <figure class="hero-app">
+      <div class="hero-tabs" role="group" aria-label="Tema de la captura">
+        <button type="button" class="hero-cap on" data-hero-cap="claro" aria-pressed="true">Claro</button>
+        <button type="button" class="hero-cap" data-hero-cap="oscuro" aria-pressed="false">Oscuro</button>
+      </div>
+      <img id="hero-app" class="hero-shot" src="img/app-1-dashboard-light.jpg?v=2"
+        alt="StudyFlow: panel de inicio con cursos, agenda, hábitos y progreso"
+        width="1600" height="1000" loading="eager"
+        data-dark="img/app-1-dashboard.jpg?v=2" data-light="img/app-1-dashboard-light.jpg?v=2">
+      <figcaption>Vista inicial: tu panel de estudio</figcaption>
+    </figure>
+  </section>
+
+  <!-- Aviso para quien llega desde el móvil (solo visible en móvil) -->
+  <section class="card aviso-movil" aria-labelledby="movil-title">
+    <h2 id="movil-title">📱 Estás en el móvil</h2>
+    <p>StudyFlow es una app de escritorio (Windows, macOS o Linux): en el teléfono
+      no se instala ni hay nada que descomprimir. StudyFlow en el móvil se usa como
+      aplicación web: se abre y se añade a la pantalla de inicio, y queda con su
+      icono como cualquier app.</p>
+    <div id="aviso-pasos"></div>
+    <a class="btn-app disabled" id="btn-app" role="button" aria-disabled="true">Abrir StudyFlow</a>
+    <p class="aviso-alt" id="aviso-alt">El enlace estará disponible cuando el servidor esté encendido.</p>
+  </section>
+
+  <!-- ── Galería: pantallas grandes ─────────────────────────────── -->
+  <h2 class="sec" id="galeria-title">Así se ve StudyFlow</h2>
+  <div class="cap-bar">
+    <span class="cap-lab">Vista de las capturas</span>
+    <div class="cap-toggle" role="group" aria-label="Elige la versión de las capturas: clara u oscura">
+      <button type="button" id="captura-claro" class="cap-btn on" data-cap="claro" aria-pressed="true">Claro</button>
+      <button type="button" id="captura-oscuro" class="cap-btn" data-cap="oscuro" aria-pressed="false">Oscuro</button>
+    </div>
+  </div>
+  <section class="card gal" id="galeria" aria-labelledby="galeria-title">
+    <figure class="shot">
+      <button type="button" class="thumb"
+              data-full="img/app-1-dashboard.jpg?v=2"
+              data-full-light="img/app-1-dashboard-light.jpg?v=2"
+              data-caption="Panel de inicio">
+        <picture>
+          <source srcset="img/app-1-dashboard-light.jpg?v=2" media="(prefers-color-scheme: light)">
+          <img src="img/app-1-dashboard.jpg?v=2" width="1600" height="1000"
+               alt="StudyFlow — panel de inicio con cursos, progreso y agenda"
+               loading="lazy" decoding="async">
+        </picture>
+      </button>
+      <figcaption>Panel de inicio: tus cursos, tu progreso y tu agenda de un vistazo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-1-dashboard.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
+    </figure>
+
+    <figure class="shot">
+      <button type="button" class="thumb"
+              data-full="img/app-2-cursos.jpg?v=2"
+              data-full-light="img/app-2-cursos-light.jpg?v=2"
+              data-caption="Cursos y tests">
+        <picture>
+          <source srcset="img/app-2-cursos-light.jpg?v=2" media="(prefers-color-scheme: light)">
+          <img src="img/app-2-cursos.jpg?v=2" width="1600" height="1000"
+               alt="StudyFlow — pantalla de cursos con temas y tests de repaso"
+               loading="lazy" decoding="async">
+        </picture>
+      </button>
+      <figcaption>Cursos y tests: organiza el temario y repasa a tu ritmo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-2-cursos.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
+    </figure>
+
+    <figure class="shot">
+      <button type="button" class="thumb"
+              data-full="img/app-3-agenda.jpg?v=4"
+              data-full-light="img/app-3-agenda-light.jpg?v=4"
+              data-caption="Agenda semanal">
+        <picture>
+          <source srcset="img/app-3-agenda-light.jpg?v=4" media="(prefers-color-scheme: light)">
+          <img src="img/app-3-agenda.jpg?v=4" width="1600" height="1000"
+               alt="StudyFlow — agenda semanal con sesiones de estudio planificadas"
+               loading="lazy" decoding="async">
+        </picture>
+      </button>
+      <figcaption>Agenda semanal: planifica tus sesiones de un vistazo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-3-agenda.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
+    </figure>
+
+    <figure class="shot">
+      <button type="button" class="thumb"
+              data-full="img/app-4-habitos.jpg?v=2"
+              data-full-light="img/app-4-habitos-light.jpg?v=2"
+              data-caption="Hábitos">
+        <picture>
+          <source srcset="img/app-4-habitos-light.jpg?v=2" media="(prefers-color-scheme: light)">
+          <img src="img/app-4-habitos.jpg?v=2" width="1600" height="1000"
+               alt="StudyFlow — seguimiento de hábitos diarios y rachas"
+               loading="lazy" decoding="async">
+        </picture>
+      </button>
+      <figcaption>Hábitos: crea rutinas y mantén la constancia</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-4-habitos.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
+    </figure>
+  </section>
+
+  <!-- ── Novedades 3.1.1 (oficial) ────────────────────────────── -->
+  <section class="card novedades" id="novedades" aria-labelledby="novedades-title">
+    <h2 class="sec" id="novedades-title" style="margin-top:0">🆕 3.1.1 — El botón del servidor, ahora de verdad</h2>
+    <p class="sub">StudyFlow 3.1.1 convierte el indicador del servidor en un botón de verdad.</p>
+    <ul id="nov-list">
+      <li><strong>Punto verde:</strong> el servidor está en marcha. Un clic te lo confirma.</li>
+      <li><strong>Punto rojo:</strong> el servidor está apagado. Un clic lo arranca por ti, con el progreso a la vista.</li>
+      <li><strong>Si no logra arrancarlo,</strong> te lo dice claro y te indica dónde mirar el registro.</li>
+      <li><strong>Una sola base de datos:</strong> tu copia local es la única fuente de verdad.</li>
+      <li><strong>Arreglado</strong> el aviso de actualización de la app instalada.</li>
+    </ul>
+    <figure class="nov-audio">
+      <audio controls preload="metadata" src="audio/novedades-3.1.1.mp3">Tu navegador no soporta audio.</audio>
+      <figcaption>Escucha las novedades (voz de Álvaro)</figcaption>
+    </figure>
+    <details class="nov-prev">
+      <summary>Novedades anteriores (3.1.0)</summary>
+      <figure>
+        <button type="button" class="thumb"
+                data-full="img/novedades-3.1.0.jpg"
+                data-full-light="img/novedades-3.1.0-light.jpg"
+                data-caption="Novedades de la versión 3.1.0">
+          <picture>
+            <source srcset="img/novedades-3.1.0-light.jpg" media="(prefers-color-scheme: light)">
+            <img id="nov-img-prev" src="img/novedades-3.1.0.jpg"
+                 alt="Ejemplo de las novedades de StudyFlow 3.1.0: imágenes en los apuntes"
+                 loading="lazy" decoding="async"
+                 onerror="this.closest('figure').hidden = true">
+          </picture>
+        </button>
+        <figcaption>Imágenes en tus apuntes y copias portables entre ordenadores.</figcaption>
+      </figure>
+    </details>
+  </section>
+
+  <!-- ── Descarga: tres tarjetas por sistema operativo ──────────── -->
+  <section class="card" id="descarga" aria-labelledby="descarga-title">
+    <h2 class="sec" id="descarga-title" style="margin-top:0">Descarga StudyFlow para tu ordenador</h2>
+    <p class="lab">Elige tu sistema operativo</p>
+    <figure class="audio-block">
+      <audio controls preload="metadata" src="audio/descarga.mp3">Tu navegador no soporta audio.</audio>
+      <figcaption>Escucha cómo se descarga (voz de Álvaro)</figcaption>
+    </figure>
+    <!-- hrefs versionados *-3.1.1.zip: version.json (platforms.url) los reescribe por SO al cargar. -->
+    <div class="pcards" role="group" aria-label="Elige tu sistema operativo">
+      <a class="pcard" data-os="linux" href="StudyFlow-linux-3.1.1.zip"
+         aria-label="Descargar StudyFlow para Linux">
+        <span class="pc-os">Linux</span>
+        <span class="pc-cta">⬇ Descargar</span>
+      </a>
+      <a class="pcard primary on" data-os="windows" href="StudyFlow-windows-3.1.1.zip"
+         aria-label="Descargar StudyFlow para Windows" aria-current="true">
+        <span class="pc-os">Windows</span>
+        <span class="pc-cta">⬇ Descargar</span>
+      </a>
+      <a class="pcard" data-os="macos" href="StudyFlow-macos-3.1.1.zip"
+         aria-label="Descargar StudyFlow para macOS">
+        <span class="pc-os">macOS</span>
+        <span class="pc-cta">⬇ Descargar</span>
+      </a>
+    </div>
+    <p class="pc-hint">Plataforma activa: <span class="badge-win" id="badge-os">Windows</span>
+      <span class="nota-movil">Paquete para escritorio: en el móvil no se instala.</span></p>
+
+    <div class="panel on" id="panel-windows" role="tabpanel" aria-label="Windows">
+      <div class="pl-head">
+        <a class="btn" id="dl-windows" href="StudyFlow-windows-3.1.1.zip">⬇ Descargar StudyFlow para Windows</a>
+        <span class="pl-meta" id="meta-windows">52 MB · ZIP portable</span>
+      </div>
+      <p class="lab">Windows · pasos</p>
+      <ol class="pl-steps">
+        <li>Extrae el ZIP completo con <strong>Extraer todo</strong> (<em>Extract All</em>):
+            no lo ejecutes desde dentro del ZIP.</li>
+        <li>Haz doble clic en <code>INICIAR_StudyFlow.bat</code>.</li>
+        <li>La primera vez tarda <strong>2–3 minutos</strong> (instala sus dependencias);
+            después arranca en segundos.</li>
+        <li>Se abre el navegador en <code>http://127.0.0.1:8477/</code>.</li>
+        <li>Cierra la ventana para detener StudyFlow. Tus datos quedan en
+            <code>%LOCALAPPDATA%\studyflow</code>.</li>
+      </ol>
+    </div>
+
+    <div class="panel" id="panel-macos" role="tabpanel" aria-label="macOS">
+      <div class="pl-head">
+        <a class="btn" id="dl-macos" href="StudyFlow-macos-3.1.1.zip">⬇ Descargar StudyFlow para macOS</a>
+        <span class="pl-meta" id="meta-macos">— · ZIP portable</span>
+      </div>
+      <p class="lab">macOS · pasos</p>
+      <ol class="pl-steps">
+        <li>Descomprime el ZIP (doble clic sobre él).</li>
+        <li>Haz doble clic en <code>StudyFlow.command</code>. Si macOS lo bloquea
+            (Gatekeeper): clic derecho → <strong>Abrir</strong> → <strong>Abrir</strong>.</li>
+        <li>La primera vez tarda <strong>2–3 minutos</strong> (instala sus dependencias);
+            después arranca en segundos.</li>
+        <li>Se abre el navegador en <code>http://127.0.0.1:8477/</code>.</li>
+        <li>Cierra la ventana o pulsa <code>Ctrl+C</code> para detener StudyFlow.
+            Tus datos quedan en <code>~/Library/Application Support/studyflow</code>.</li>
+      </ol>
+    </div>
+
+    <div class="panel" id="panel-linux" role="tabpanel" aria-label="Linux">
+      <div class="pl-head">
+        <a class="btn" id="dl-linux" href="StudyFlow-linux-3.1.1.zip">⬇ Descargar StudyFlow para Linux</a>
+        <span class="pl-meta" id="meta-linux">— · ZIP portable</span>
+      </div>
+      <p class="lab">Linux · pasos</p>
+      <ol class="pl-steps">
+        <li>Descomprime el ZIP (con el gestor de archivos o
+            <code>unzip StudyFlow-linux-*.zip</code>).</li>
+        <li>En una terminal: <code>bash StudyFlow.sh</code> (o doble clic si el
+            gestor de archivos lo permite).</li>
+        <li>La primera vez tarda <strong>2–3 minutos</strong> (instala sus dependencias);
+            después arranca en segundos.</li>
+        <li>Se abre el navegador en <code>http://127.0.0.1:8477/</code>.</li>
+        <li>Cierra la ventana para detener StudyFlow. Tus datos quedan en
+            <code>~/.local/share/studyflow</code>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── Histórico de versiones ─────────────────────────────────── -->
+  <h2 class="sec">Histórico de versiones</h2>
+  <section class="card" id="historico" style="padding:0;margin-bottom:22px">
+    <div class="rel-head">
+      <div>Versión</div><div>Cambios</div><div>Estado</div><div>Descarga</div>
+    </div>
+    <div class="rel-row current">
+      <div class="rel-v" id="rel-version">3.1.1</div>
+      <div class="rel-txt"><strong>Imágenes dentro de los apuntes y copias portables
+        entre ordenadores.</strong> Pega o sube una imagen en una nota y abre una copia
+        hecha en otro sistema (Windows, macOS o Linux) sin perder nada.</div>
+      <div class="pill now">actual</div>
+      <a class="rowbtn go" id="rel-dl" href="StudyFlow-windows-3.1.1.zip">Descargar</a>
+    </div>
+    <div class="rel-row old">
+      <div class="rel-v">3.0.0</div>
+      <div class="rel-txt"><strong>Primera versión pública.</strong> Paquetes portables
+        para Windows, macOS y Linux con launcher, 15 videotutoriales incluidos y
+        arranque automático.</div>
+      <div class="pill prev">anterior</div>
+      <span class="rowbtn off">Histórico</span>
+    </div>
+  </section>
+
+  <!-- ── Detalles técnicos (área secundaria) ────────────────────── -->
+  <h2 class="sec">Detalles técnicos</h2>
+
+  <!-- Cabecera técnica: versión + tamaño + fecha + SHA -->
+  <section class="card" id="detalles">
+    <p class="lab">Cabecera técnica · versión y hash a la vista</p>
+    <div class="tech">
+      <dl class="tech-meta">
+        <dt>Última versión</dt><dd id="m-version">3.1.1</dd>
+        <dt>Tamaño</dt><dd id="m-size">52 MB</dd>
+        <dt>Publicado</dt><dd id="m-date">08/10/2026</dd>
+        <dt>SHA256</dt><dd id="m-sha-short">5f7cfe29f479e828e966eae748923f2ffc992a0d1e50489842e05d6ea361c96b</dd>
+      </dl>
+    </div>
+    <p class="videonote">
+      Paquete portable: <strong>no requiere instalación ni permisos de administrador</strong>.
+      Los <strong>15 videotutoriales van dentro del ZIP</strong> y se reproducen en local:
+      <span class="ok">sin conexión y sin depender de ningún servidor</span>.
+    </p>
+  </section>
+
+  <!-- Requisitos + aviso: cambian con la pestaña activa -->
+  <div class="two">
+    <section class="card" aria-labelledby="req-title">
+      <h2 class="lab" id="req-title" style="font-size:11px">Requisitos</h2>
+      <div class="osblock" data-os="windows">
+        <ul>
+          <li>Windows 10 u 11, <strong>64 bits</strong>.</li>
+          <li>Python 3 instalado (el lanzador de Windows usa <code>py</code>).</li>
+          <li>Microsoft Edge (viene de serie en Windows).</li>
+          <li>~1 GB de disco libre.</li>
+        </ul>
+      </div>
+      <div class="osblock" data-os="macos" hidden>
+        <ul>
+          <li>macOS 12 o superior (Intel y Apple Silicon).</li>
+          <li>Python 3 instalado (<code>python3</code>).</li>
+          <li>Safari o cualquier navegador.</li>
+          <li>~1 GB de disco libre.</li>
+        </ul>
+      </div>
+      <div class="osblock" data-os="linux" hidden>
+        <ul>
+          <li>Distribución con escritorio (Ubuntu, Debian, Fedora…).</li>
+          <li>Python 3 instalado (<code>python3</code>).</li>
+          <li>Terminal y navegador (Firefox, Chrome…).</li>
+          <li>~1 GB de disco libre.</li>
+        </ul>
+      </div>
+    </section>
+
+    <aside class="card warn">
+      <p class="lab">Aviso</p>
+      <div class="osblock" data-os="windows">
+        <h3>Paquete sin firma digital</h3>
+        <p>Windows (SmartScreen) puede mostrar el aviso
+          <strong>«Windows protegió tu PC»</strong> porque el paquete
+          <strong>no está firmado digitalmente</strong>.</p>
+        <p>Elige <strong>Más información → Ejecutar de todas formas</strong>. Es normal:
+          es un paquete propio, no uno comercial.</p>
+      </div>
+      <div class="osblock" data-os="macos" hidden>
+        <h3>Gatekeeper (app sin firmar)</h3>
+        <p>macOS puede decir que <strong>no se puede abrir</strong> porque viene de un
+          desarrollador no identificado.</p>
+        <p>Clic derecho sobre <code>StudyFlow.command</code> → <strong>Abrir</strong> →
+          <strong>Abrir</strong>. Solo la primera vez.</p>
+      </div>
+      <div class="osblock" data-os="linux" hidden>
+        <h3>Ejecución del script</h3>
+        <p>Si la terminal no deja ejecutar el script, dale permisos y lánzalo:</p>
+        <p><code>chmod +x StudyFlow.sh</code> y después <code>bash StudyFlow.sh</code>.</p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Verificación copiable -->
+  <section class="card" style="margin-top:22px">
+    <p class="lab">Verificación copiable</p>
+    <p style="margin:0 0 12px;color:var(--muted);font-size:14.5px" id="cmd-intro">
+      Comprueba que la descarga no se corrompió. En PowerShell o CMD:
+    </p>
+    <div class="cmdrow">
+      <pre class="cmd" id="cmd-hash">certutil -hashfile StudyFlow-windows-3.1.1.zip SHA256</pre>
+      <button class="copy" id="btn-copy" type="button">Copiar</button>
+    </div>
+    <dl class="sha">
+      <dt>SHA256</dt><dd id="m-sha">5f7cfe29f479e828e966eae748923f2ffc992a0d1e50489842e05d6ea361c96b</dd>
+    </dl>
+  </section>
+
+  <footer>StudyFlow · paquetes servidos desde casa</footer>
+</main>
+
+<!-- Lightbox de la galería -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Vista ampliada de la app">
+  <button type="button" class="lb-close" aria-label="Cerrar">✕</button>
+  <button type="button" class="lb-prev" aria-label="Imagen anterior">‹</button>
+  <img id="lb-img" src="" alt="">
+  <button type="button" class="lb-next" aria-label="Imagen siguiente">›</button>
+  <p class="lb-cap"><span id="lb-caption"></span><span class="lb-count" id="lb-count"></span></p>
+</div>
+
+<script>
+  // Detección de móvil → muestra el aviso superior y los pasos según plataforma.
+  (function () {
+    var ua = navigator.userAgent || '';
+    var esMovil = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua) ||
+                  (navigator.maxTouchPoints > 0 && window.innerWidth <= 820);
+    if (!esMovil) return;
+    document.body.classList.add('es-movil');
+    var pasos = document.getElementById('aviso-pasos');
+    if (/iPhone|iPad|iPod/.test(ua)) {
+      pasos.innerHTML = '<ol>' +
+        '<li>Abre este enlace en Safari</li>' +
+        '<li>Toca Compartir (el cuadrado con la flecha)</li>' +
+        '<li>Añadir a pantalla de inicio</li>' +
+        '<li>Ponle nombre y añadir</li></ol>';
+    } else if (/Android/.test(ua)) {
+      pasos.innerHTML = '<ol>' +
+        '<li>Abre este enlace en Chrome</li>' +
+        '<li>Menú ⋮ arriba a la derecha</li>' +
+        '<li>Instalar aplicación (o Añadir a pantalla de inicio)</li>' +
+        '<li>Confirma</li></ol>';
+    } else {
+      pasos.innerHTML = '<p>Abre este enlace en el navegador y usa la opción ' +
+        'Añadir a pantalla de inicio del menú.</p>';
+    }
+  })();
+
+  // Tabs por SO + relleno desde version.json (lo genera publish.sh).
+  // version.json puede traer "platforms": {windows:{file,size,sha256,url}, macos, linux}.
+  // Si falta una plataforma → "(disponible pronto)" y botón deshabilitado.
+  // Si el fetch falla, la página se queda con los zips conocidos de abajo.
+  (function () {
+    var DATOS = {
+      windows: {
+        nombre: 'Windows',
+        file: 'StudyFlow-windows-3.1.1.zip',
+        size: 54644649,
+        sha: '1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66',
+        hashCmd: function (f) { return 'certutil -hashfile ' + f + ' SHA256'; },
+        hashIntro: 'Comprueba que la descarga no se corrompió. En PowerShell o CMD:',
+        ok: true
+      },
+      macos: {
+        nombre: 'macOS',
+        file: 'StudyFlow-macos-3.1.1.zip',
+        size: null,
+        sha: null,
+        hashCmd: function (f) { return 'shasum -a 256 ' + f; },
+        hashIntro: 'Comprueba que la descarga no se corrompió. En Terminal:',
+        ok: true
+      },
+      linux: {
+        nombre: 'Linux',
+        file: 'StudyFlow-linux-3.1.1.zip',
+        size: null,
+        sha: null,
+        hashCmd: function (f) { return 'sha256sum ' + f; },
+        hashIntro: 'Comprueba que la descarga no se corrompió. En la terminal:',
+        ok: true
+      }
+    };
+    var ORDEN = ['windows', 'macos', 'linux'];
+    var actual = 'windows';
+
+    function human(n) {
+      if (!n) return null;
+      return (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    }
+
+    // Botón grande + tamaño de cada panel + href de la tarjeta de plataforma.
+    function pintaPlat(os) {
+      var d = DATOS[os];
+      var a = document.getElementById('dl-' + os);
+      var m = document.getElementById('meta-' + os);
+      var card = document.querySelector('.pcard[data-os="' + os + '"]');
+      if (a && m) {
+        if (d.ok) {
+          a.setAttribute('href', d.file);
+          a.classList.remove('disabled');
+          a.removeAttribute('aria-disabled');
+          m.classList.remove('soon');
+          m.textContent = (d.size ? human(d.size) : '—') + ' · ZIP portable';
+        } else {
+          a.removeAttribute('href');
+          a.classList.add('disabled');
+          a.setAttribute('aria-disabled', 'true');
+          m.classList.add('soon');
+          m.textContent = '(disponible pronto)';
+        }
+      }
+      if (card) {
+        if (d.ok) {
+          card.setAttribute('href', d.file);
+          card.classList.remove('disabled');
+        } else {
+          card.removeAttribute('href');
+          card.classList.add('disabled');
+        }
+      }
+    }
+
+    // Cabecera técnica + verificación + enlace del histórico para el SO activo.
+    function pintaFicha(os) {
+      var d = DATOS[os];
+      var btn = document.getElementById('btn-download');
+      var relDl = document.getElementById('rel-dl');
+      document.getElementById('badge-os').textContent = d.nombre;
+      document.getElementById('m-size').textContent = d.size ? human(d.size) : '—';
+      document.getElementById('m-sha').textContent = d.sha || '—';
+      document.getElementById('m-sha-short').textContent = d.sha || '—';
+      document.getElementById('cmd-hash').textContent = d.hashCmd(d.file);
+      document.getElementById('cmd-intro').textContent = d.hashIntro;
+      if (d.ok) {
+        // #btn-download es la CTA del hero: siempre ancla a #descarga (no descarga directa).
+        btn.classList.remove('disabled');
+        btn.removeAttribute('aria-disabled');
+        relDl.setAttribute('href', d.file);
+        relDl.classList.remove('off');
+        relDl.classList.add('go');
+        relDl.textContent = 'Descargar';
+      } else {
+        btn.classList.add('disabled');
+        btn.setAttribute('aria-disabled', 'true');
+        relDl.removeAttribute('href');
+        relDl.classList.add('off');
+        relDl.classList.remove('go');
+        relDl.textContent = 'Próximamente';
+      }
+    }
+
+    function setPlataforma(os) {
+      if (!DATOS[os]) return;
+      actual = os;
+      ORDEN.forEach(function (k) {
+        var c = document.querySelector('.pcard[data-os="' + k + '"]');
+        if (c) {
+          var on = (k === os);
+          c.classList.toggle('on', on);
+          if (on) c.setAttribute('aria-current', 'true');
+          else c.removeAttribute('aria-current');
+        }
+        var p = document.getElementById('panel-' + k);
+        if (p) p.classList.toggle('on', k === os);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.osblock'), function (b) {
+        b.hidden = b.getAttribute('data-os') !== os;
+      });
+      pintaFicha(os);
+    }
+
+    // Plataforma inicial: SIEMPRE Windows (sin auto-detección por UA).
+    ORDEN.forEach(pintaPlat);
+    setPlataforma('windows');
+
+    ORDEN.forEach(function (k) {
+      var c = document.querySelector('.pcard[data-os="' + k + '"]');
+      if (c) c.addEventListener('click', function () { setPlataforma(k); });
+    });
+
+    // version.json → versión/fecha/app_url + platforms por SO.
+    fetch('version.json', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (v) {
+        var el = {
+          version: document.getElementById('m-version'),
+          relVersion: document.getElementById('rel-version'),
+          date: document.getElementById('m-date'),
+          tag: document.getElementById('tag-version')
+        };
+        if (v.version) {
+          el.version.textContent = v.version;
+          el.relVersion.textContent = v.version;
+          el.tag.textContent = v.version;
+        }
+        if (v.date) el.date.textContent = v.date;
+
+        // La sección de novedades 3.1.1 lleva su contenido fijo en el HTML: no la
+        // reescribimos con las "notes" de version.json.
+
+        // Plataformas. Sin "platforms" pero con file top-level → sólo Windows.
+        var plats = v.platforms;
+        if (!plats && v.file) {
+          plats = { windows: { file: v.file, size: v.size, sha256: v.sha256 } };
+        }
+        if (plats) {
+          ORDEN.forEach(function (os) {
+            var p = plats[os];
+            var f = p && (p.url || p.file);
+            if (!f) { DATOS[os].ok = false; return; }
+            DATOS[os].ok = true;
+            DATOS[os].file = f;
+            DATOS[os].size = p.size || null;
+            DATOS[os].sha = p.sha256 || null;
+          });
+          ORDEN.forEach(pintaPlat);
+        }
+        pintaFicha(actual);
+
+        // Botón "Abrir StudyFlow": activo solo si version.json trae app_url.
+        var appBtn = document.getElementById('btn-app');
+        var appAlt = document.getElementById('aviso-alt');
+        if (v.app_url) {
+          appBtn.href = v.app_url;
+          appBtn.classList.remove('disabled');
+          appBtn.removeAttribute('aria-disabled');
+          appAlt.hidden = true;
+        }
+      })
+      .catch(function () { /* sin version.json: zips conocidos */ });
+  })();
+
+  // Botón copiar del comando de verificación.
+  (function () {
+    var btn = document.getElementById('btn-copy');
+    btn.addEventListener('click', function () {
+      var txt = document.getElementById('cmd-hash').textContent;
+      function done() {
+        btn.textContent = 'Copiado ✓';
+        setTimeout(function () { btn.textContent = 'Copiar'; }, 1800);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done, fallback);
+      } else { fallback(); }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  })();
+
+  // Selector manual de versión de las capturas (Auto · Claro · Oscuro).
+  // 'auto' sigue la preferencia del sistema (por defecto); el resto la fuerza.
+  // Afecta tanto al <img src> como al <source media> de cada <picture>.
+  (function () {
+    var botones = Array.prototype.slice.call(document.querySelectorAll('.cap-btn'));
+    if (!botones.length) return;
+
+    // Guarda el src oscuro (atributo del img) y el claro (srcset del source)
+    // para poder reescribirlos sin perder ninguna variante.
+    var shots = Array.prototype.slice.call(document.querySelectorAll('.thumb')).map(function (t) {
+      var img = t.querySelector('img');
+      var source = t.querySelector('source');
+      return {
+        img: img,
+        source: source,
+        dark: img ? img.getAttribute('src') : null,
+        light: (source && source.getAttribute('srcset')) || (img ? img.getAttribute('src') : null)
+      };
+    });
+
+    var captura = document.documentElement.getAttribute('data-captura') || 'claro';
+
+    function aplicar() {
+      document.documentElement.setAttribute('data-captura', captura);
+      shots.forEach(function (s) {
+        if (!s.img) return;
+        if (captura === 'claro') {
+          if (s.source) s.source.media = 'all';
+          s.img.src = s.light;
+        } else if (captura === 'oscuro') {
+          if (s.source) s.source.media = 'not all';
+          s.img.src = s.dark;
+        }
+      });
+      botones.forEach(function (b) {
+        var on = b.getAttribute('data-cap') === captura;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+
+    botones.forEach(function (b) {
+      b.addEventListener('click', function () {
+        captura = b.getAttribute('data-cap') || 'claro';
+        aplicar();
+      });
+    });
+
+    aplicar();
+  })();
+
+  // Lightbox de la galería: abrir, navegar con teclas/botones y cerrar.
+  // Carga la variante clara u oscura según el tema actual del sistema.
+  (function () {
+    var lb = document.getElementById('lightbox');
+    var img = document.getElementById('lb-img');
+    var cap = document.getElementById('lb-caption');
+    var count = document.getElementById('lb-count');
+    var closeBtn = lb.querySelector('.lb-close');
+    var thumbs = Array.prototype.slice.call(document.querySelectorAll('.thumb'));
+    var idx = 0, lastFocus = null;
+
+    function modoCaptura() {
+      return document.documentElement.getAttribute('data-captura') || 'claro';
+    }
+    function resolverFuente(el) {
+      if (modoCaptura() === 'oscuro') return el.getAttribute('data-full');
+      return el.getAttribute('data-full-light') || el.getAttribute('data-full');
+    }
+    function show(i) {
+      idx = (i + thumbs.length) % thumbs.length;
+      var t = thumbs[idx];
+      var caption = t.getAttribute('data-caption') || '';
+      img.src = resolverFuente(t);
+      img.alt = caption;
+      cap.textContent = caption;
+      count.textContent = (idx + 1) + ' / ' + thumbs.length;
+    }
+    function open(i) {
+      lastFocus = document.activeElement;
+      show(i);
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      closeBtn.focus();
+    }
+    function close() {
+      lb.classList.remove('open');
+      document.body.style.overflow = '';
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    thumbs.forEach(function (t, i) {
+      t.addEventListener('click', function () { open(i); });
+    });
+    closeBtn.addEventListener('click', close);
+    lb.querySelector('.lb-prev').addEventListener('click', function (e) {
+      e.stopPropagation(); show(idx - 1);
+    });
+    lb.querySelector('.lb-next').addEventListener('click', function (e) {
+      e.stopPropagation(); show(idx + 1);
+    });
+    lb.addEventListener('click', function (e) {
+      if (e.target === lb) close(); // clic en el fondo, no en la imagen
+    });
+    document.addEventListener('keydown', function (e) {
+      if (!lb.classList.contains('open')) return;
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowLeft') show(idx - 1);
+      else if (e.key === 'ArrowRight') show(idx + 1);
+    });
+
+    // Si el tema cambia con el lightbox abierto, recarga la variante correcta.
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: light)');
+      var onCambio = function () { if (lb.classList.contains('open')) show(idx); };
+      if (mq.addEventListener) mq.addEventListener('change', onCambio);
+      else if (mq.addListener) mq.addListener(onCambio);
+    }
+  })();
+
+  // Toggle temas del hero (Claro/Oscuro).
+  (function () {
+    var img = document.getElementById('hero-app');
+    if (!img) return;
+    var botones = Array.prototype.slice.call(document.querySelectorAll('.hero-cap'));
+    var cap = 'claro';
+    function aplicar() {
+      img.src = cap === 'oscuro' ? img.getAttribute('data-dark') : img.getAttribute('data-light');
+      botones.forEach(function (b) {
+        var on = b.getAttribute('data-hero-cap') === cap;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    botones.forEach(function (b) {
+      b.addEventListener('click', function () { cap = b.getAttribute('data-hero-cap') || 'claro'; aplicar(); });
+    });
+    aplicar();
+  })();
+</script>
+<button type="button" id="to-top" aria-label="Volver arriba" title="Subir al inicio">↑</button>
+<script src="download.js" defer></script>
+<script>
+  // Botón flotante "volver arriba": aparece tras bajar ~300px.
+  (function () {
+    var btn = document.getElementById('to-top');
+    if (!btn) return;
+    var limit = 300;
+    function onScroll() { btn.classList.toggle('show', window.scrollY > limit); }
+    btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>

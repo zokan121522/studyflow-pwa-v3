@@ -11,8 +11,11 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
+import threading
 import time
+import uuid
 import zipfile
 from io import BytesIO
 
@@ -124,13 +127,14 @@ _COPY_ESCAPES = {"t": "\t", "n": "\n", "r": "\r", "b": "\b",
                  "f": "\f", "v": "\v", "\\": "\\"}
 
 
-def _selection_from_request():
-    """The optional `selection` field, or None for a full import.
+def _raw_selection():
+    """The optional `selection` field as a plain dict, or None.
 
     None means the caller asked for nothing in particular (old client,
     curl without the field) and also covers a present-but-unreadable
     value: a truncated upload or a hand-edited request must degrade to
-    the historical full restore, never to a 500.
+    the historical full restore, never to a 500. The chunked job store
+    keeps this dict; only the request-facing wrapper wraps it later.
     """
     raw = request.form.get("selection")
     if raw is None:
@@ -143,7 +147,13 @@ def _selection_from_request():
     if not isinstance(parsed, dict):
         _log("  · selection no es un objeto, se importa el backup completo")
         return None
-    return Selection(parsed)
+    return parsed
+
+
+def _selection_from_request():
+    """The same field, wrapped for the routes that import right away."""
+    parsed = _raw_selection()
+    return None if parsed is None else Selection(parsed)
 
 
 def _key(value):
@@ -809,7 +819,17 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
         # Parents before children so the maps are complete before any child
         # FK is rewritten, whatever order the archive shipped the sections.
         resolved.sort(key=lambda item: _TREE_ORDER.get(item[1], 99))
-        maps = {t: {} for t in _NATURAL_KEY_TABLES}
+        # One remap map per table the per-row path touches -- not just the
+        # natural-key tree. pdfs/images/quiz_* are also restored row by row
+        # (to rewrite their tree FKs through the SAME archive-id -> new-id
+        # map), so they need an entry too. Initialising only the tree made
+        # maps["pdfs"] miss, and the KeyError raised at the write site was
+        # swallowed by this loop's per-table savepoint: the table was
+        # reported "failed" while its rows -- and therefore the served
+        # media -- silently never came back. Deriving the keys from
+        # _PER_ROW_TABLES (the exact set the loop iterates) keeps them from
+        # drifting apart again.
+        maps = {t: {} for t in _PER_ROW_TABLES}
         for table, real, columns, data in resolved:
             cur.execute("SAVEPOINT one_table")
             try:
@@ -935,43 +955,67 @@ def _write_missing_files(zf, names) -> int:
     return written
 
 
-@bp.route("/backup/mine/restore", methods=["POST"])
-@token_required
-def restore_mine(user_id):
-    """Import a personal backup. Adds rows and files; destroys nothing."""
-    if not isinstance(user_id, int):
-        return jsonify(error="Invalid user identity"), 400
-    if "file" not in request.files:
-        return jsonify(error="No file uploaded"), 400
+class _RestoreError(str):
+    """An error message that remembers the HTTP status it deserves.
 
-    upload = request.files["file"]
-    if not upload.filename or not upload.filename.endswith(".zip"):
-        return jsonify(error="Expected a .zip personal backup"), 400
+    ``_run_restore`` reports failure as a plain string -- its contract is
+    ``(report | None, error | None)`` -- while the single-POST route has
+    to keep answering 400/403/500 exactly as it always did. A str
+    subclass carries the status without changing that shape: everywhere
+    else (job store, browser alert) it is still just the message.
+    """
+    status = 500
 
+    def __new__(cls, message: str, status: int = 400):
+        obj = super().__new__(cls, message)
+        obj.status = status
+        return obj
+
+
+def _run_restore(zip_path, selection=None, user_id: int = 1):
+    """Run the additive restore over an already-stored archive.
+
+    This is the whole body that used to live inline in ``restore_mine``:
+    open the zip, validate manifest/owner/paths, import the rows and
+    write the files, then build the report. ``zip_path`` is a filesystem
+    path (chunked job) or a file-like object (the single-POST route,
+    which keeps its historic in-memory upload). ``selection`` is a raw
+    dict, a Selection, or None for the full import.
+
+    Returns ``(report, None)`` on success or ``(None, error)`` on
+    failure, where error is a str carrying the status the caller should
+    answer with (see _RestoreError).
+    """
     started = time.monotonic()
     try:
-        zf = zipfile.ZipFile(BytesIO(upload.read()))
+        zf = zipfile.ZipFile(zip_path)
         names = zf.namelist()
         if "user_data.sql" not in names:
-            return jsonify(
-                error="Not a personal backup (missing user_data.sql)"), 400
+            return None, _RestoreError(
+                "Not a personal backup (missing user_data.sql)")
 
         try:
             manifest = _read_manifest(zf)
         except ValueError as e:
-            return jsonify(error=str(e)), 400
+            return None, _RestoreError(str(e))
 
         owner = manifest.get("user", {}).get("id")
         # v3 ids are ints, so the manifest stores an int and comparing it
         # against a stringified one would reject the user's own backup.
         if owner is not None and owner != user_id:
-            return jsonify(
-                error="This backup belongs to a different user"), 403
+            return None, _RestoreError(
+                "This backup belongs to a different user", 403)
 
         if _has_unsafe_member(names):
-            return jsonify(error="Invalid backup: unsafe path in archive"), 400
+            return None, _RestoreError(
+                "Invalid backup: unsafe path in archive")
 
-        sel = _selection_from_request()
+        if isinstance(selection, Selection):
+            sel = selection
+        elif isinstance(selection, dict):
+            sel = Selection(selection)
+        else:
+            sel = None
         parsed = _parse_data_sql(zf.read("user_data.sql").decode("utf-8"))
         parsed, names = _safe_apply_selection(parsed, names, sel, manifest)
 
@@ -988,16 +1032,202 @@ def restore_mine(user_id):
         _log(f"✅ restore personal: usuario {user_id} -> {rows} filas, "
              f"{skipped} ya existentes, {written} ficheros en "
              f"{time.monotonic() - started:.1f}s")
-        return jsonify(ok=True, rows_inserted=stats, rows_total=rows,
-                       files_written=written, failed_tables=failed,
-                       skipped=skipped, imported=_section_counts(stats),
-                       partial=bool(manifest.get("partial")),
-                       note="Existing rows and files were left untouched.")
+        return {"ok": True, "rows_inserted": stats, "rows_total": rows,
+                "files_written": written, "failed_tables": failed,
+                "skipped": skipped, "imported": _section_counts(stats),
+                "partial": bool(manifest.get("partial")),
+                "note": "Existing rows and files were left untouched."}, None
     except zipfile.BadZipFile:
-        return jsonify(error="Invalid or corrupt zip file"), 400
+        return None, _RestoreError("Invalid or corrupt zip file")
     except Exception as e:
         _log(f"✗ restore personal: {e}")
-        return jsonify(error=f"Restore failed: {e}"), 500
+        return None, _RestoreError(f"Restore failed: {e}", 500)
+
+
+@bp.route("/backup/mine/restore", methods=["POST"])
+@token_required
+def restore_mine(user_id):
+    """Import a personal backup. Adds rows and files; destroys nothing."""
+    if not isinstance(user_id, int):
+        return jsonify(error="Invalid user identity"), 400
+    if "file" not in request.files:
+        return jsonify(error="No file uploaded"), 400
+
+    upload = request.files["file"]
+    if not upload.filename or not upload.filename.endswith(".zip"):
+        return jsonify(error="Expected a .zip personal backup"), 400
+
+    report, err = _run_restore(BytesIO(upload.read()),
+                               _selection_from_request(), user_id)
+    if err is not None:
+        return jsonify(error=str(err)), getattr(err, "status", 500)
+    return jsonify(report)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Chunked restore jobs — a 1.3 GB multipart POST dies mid-flight in the
+# browser ("Failed to fetch"), so the client uploads the zip in pieces,
+# the server reassembles them and the import runs in a background
+# thread. Same additive restore, same report, just survivable.
+# ═══════════════════════════════════════════════════════════════════
+#
+# One local user, one server process: an in-memory dict guarded by a
+# lock is enough. Parts live under ``<data_dir>/restore-jobs/<job_id>/``
+# as ``part-{index:06d}`` and are deleted as the zip is reassembled.
+# After a job reaches done/error the directory is simply left in place;
+# a cleanup after ~1h is fine to add later, no timer is registered here
+# on purpose.
+
+_RESTORE_JOBS: dict = {}
+_RESTORE_JOBS_LOCK = threading.Lock()
+
+
+def _jobs_root() -> str:
+    """Where chunked jobs assemble. Re-resolved per call on purpose:
+    the module-level DATA_DIR is frozen at import, while engine.data_dir()
+    re-reads the environment (test fixtures and launchers that export
+    STUDYFLOW_DATA_DIR after the import must still land somewhere
+    writable and private to the run)."""
+    base = os.environ.get("DATA_DIR") or str(_engine_data_dir())
+    return os.path.join(base, "restore-jobs")
+
+
+@bp.route("/backup/mine/restore/start", methods=["POST"])
+@token_required
+def restore_start(user_id):
+    """Open a chunked restore job: 202 + job_id, state=receiving."""
+    if not isinstance(user_id, int):
+        return jsonify(error="Invalid user identity"), 400
+    filename = (request.form.get("filename") or "").strip()
+    if not filename:
+        return jsonify(error="filename is required"), 400
+    try:
+        total_chunks = int(request.form.get("total_chunks", ""))
+    except (TypeError, ValueError):
+        total_chunks = -1
+    if not 1 <= total_chunks <= 100000:
+        return jsonify(error="total_chunks must be an integer in 1..100000"), 400
+
+    job_id = uuid.uuid4().hex
+    job_dir = os.path.join(_jobs_root(), job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    job = {"state": "receiving", "filename": filename,
+           "total_chunks": total_chunks, "received": set(), "path": job_dir,
+           "selection": _raw_selection(), "result": None, "error": None,
+           "started": time.time(), "user_id": user_id}
+    with _RESTORE_JOBS_LOCK:
+        _RESTORE_JOBS[job_id] = job
+    return jsonify(job_id=job_id), 202
+
+
+@bp.route("/backup/mine/restore/chunk", methods=["POST"])
+@token_required
+def restore_chunk(user_id):
+    """Receive one slice of the zip: part-{index:06d} inside the job dir."""
+    job_id = request.form.get("job_id") or ""
+    with _RESTORE_JOBS_LOCK:
+        job = _RESTORE_JOBS.get(job_id)
+    if job is None or job["state"] != "receiving":
+        return jsonify(error="Unknown job or not receiving"), 409
+    try:
+        index = int(request.form.get("index", ""))
+    except (TypeError, ValueError):
+        index = -1
+    if not 0 <= index < job["total_chunks"]:
+        return jsonify(error="index out of range"), 400
+    if "file" not in request.files:
+        return jsonify(error="No chunk uploaded"), 400
+
+    part = os.path.join(job["path"], f"part-{index:06d}")
+    with open(part, "wb") as out:
+        shutil.copyfileobj(request.files["file"].stream, out)
+    with _RESTORE_JOBS_LOCK:
+        job["received"].add(index)
+    return jsonify(ok=True), 200
+
+
+@bp.route("/backup/mine/restore/finish", methods=["POST"])
+@token_required
+def restore_finish(user_id):
+    """Reassemble the parts in order, then restore in the background."""
+    job_id = request.form.get("job_id") or ""
+    with _RESTORE_JOBS_LOCK:
+        job = _RESTORE_JOBS.get(job_id)
+        if job is None or job["state"] != "receiving":
+            return jsonify(error="Unknown job or not receiving"), 409
+        missing = [i for i in range(job["total_chunks"])
+                   if i not in job["received"]]
+    if missing:
+        return jsonify(error=f"{len(missing)} chunk(s) missing",
+                       missing=missing[:50]), 400
+
+    # Stream part by part so a 1.3 GB zip is never held in memory twice;
+    # each part is deleted as soon as it has been copied.
+    zip_path = os.path.join(job["path"], "backup.zip")
+    try:
+        with open(zip_path, "wb") as out:
+            for i in range(job["total_chunks"]):
+                part = os.path.join(job["path"], f"part-{i:06d}")
+                with open(part, "rb") as src:
+                    shutil.copyfileobj(src, out)
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+    except OSError as e:
+        return jsonify(error=f"Could not reassemble the backup: {e}"), 400
+
+    with _RESTORE_JOBS_LOCK:
+        job["state"] = "restoring"
+    threading.Thread(target=_restore_job_worker, args=(job_id,),
+                     daemon=True).start()
+    return jsonify(started=True), 202
+
+
+def _restore_job_worker(job_id: str) -> None:
+    """Background half of /finish: run the shared restore on the zip."""
+    with _RESTORE_JOBS_LOCK:
+        job = _RESTORE_JOBS.get(job_id)
+    if job is None:
+        return
+    try:
+        report, err = _run_restore(os.path.join(job["path"], "backup.zip"),
+                                   job["selection"], job.get("user_id", 1))
+        with _RESTORE_JOBS_LOCK:
+            if err is not None:
+                job["state"] = "error"
+                job["error"] = str(err)
+            else:
+                job["state"] = "done"
+                job["result"] = {"rows_inserted": report["rows_inserted"],
+                                 "skipped": report["skipped"],
+                                 "files_written": report["files_written"],
+                                 "partial": report["partial"]}
+    except Exception as e:          # never leave the job hanging in "restoring"
+        _log(f"✗ restore job {job_id}: {e}")
+        with _RESTORE_JOBS_LOCK:
+            job["state"] = "error"
+            job["error"] = str(e)
+
+
+@bp.route("/backup/mine/restore/status", methods=["GET"])
+@token_required
+def restore_status(user_id):
+    """Poll the job: receiving → restoring → done | error."""
+    job_id = request.args.get("job") or ""
+    with _RESTORE_JOBS_LOCK:
+        job = _RESTORE_JOBS.get(job_id)
+        if job is None:
+            return jsonify(error="Unknown job"), 404
+        payload = {"state": job["state"]}
+        if job["state"] == "receiving":
+            payload["progress"] = round(
+                len(job["received"]) / max(job["total_chunks"], 1), 3)
+        elif job["state"] == "done" and job["result"]:
+            payload.update(job["result"])
+        elif job["state"] == "error":
+            payload["error"] = job["error"]
+    return jsonify(payload), 200
 
 
 # ═══════════════════════════════════════════════════════════════════

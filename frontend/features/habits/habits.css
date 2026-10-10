@@ -134,3 +134,82 @@
 #note-overlay .omodal-body textarea {
   min-height: 200px;
 }
+
+/* ============================== LIGHT-MODE CONTRAST — HÁBITOS REGISTER ==============================
+   Scoped fix for the "📋 Seguimiento Diario" weekly register only (the
+   ht-* shell defined in agenda-overlays.css + the hab-*/pct-* row classes
+   defined above). In light mode the empty checkboxes, table borders,
+   separators and labels were too faint on the cream paper background.
+   Everything here is gated under html[data-theme="light"], so the default
+   dark / retro theme is untouched. No layout or JS changes. */
+
+/* 1) Table shell + row separators: solid medium-gray lines on cream */
+html[data-theme="light"] .ht-wrap {
+  border: 1.5px solid #8a8578;
+}
+html[data-theme="light"] .ht-wrap td {
+  border-bottom: 1px solid #b3ad9d;
+  color: #2f2f35;
+}
+
+/* 2) Header row: slightly darker paper + strong ink text so it stands out */
+html[data-theme="light"] .ht-wrap th {
+  background: #e2ded0;
+  color: #2f2f35;
+  font-weight: 700;
+  border-bottom: 1.5px solid #8a8578;
+}
+
+/* 3) Cell inputs + labels readable (dark ink on light paper) */
+html[data-theme="light"] .ht-wrap td .hab-num,
+html[data-theme="light"] .ht-wrap td .hab-text {
+  border: 1px solid #8a8578;
+  background: #fffdf6;
+  color: #2f2f35;
+}
+html[data-theme="light"] .ht-wrap td .hab-day-label {
+  color: #2f2f35;
+  font-weight: 600;
+}
+html[data-theme="light"] .ht-wrap td.hab-idx,
+html[data-theme="light"] .ht-wrap td.hab-media {
+  color: #4a463c;
+}
+
+/* 4) % counter + progress track readable on the light background */
+html[data-theme="light"] .ht-wrap .pct-label {
+  color: #2f6f4f;
+  font-weight: 700;
+}
+html[data-theme="light"] .ht-wrap .pbar {
+  background: #d8d4c8;
+}
+
+/* 5) Checkboxes: visible empty box (medium-gray border) and a strong green
+   check when ticked. appearance:none is required for the border and the SVG
+   checkmark to render consistently; size stays 15px so layout is unchanged. */
+html[data-theme="light"] .ht-wrap td input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid #8a8578;
+  border-radius: 3px;
+  background: #fffdf6;
+  cursor: pointer;
+  vertical-align: middle;
+}
+html[data-theme="light"] .ht-wrap td input[type="checkbox"]:checked {
+  background-color: #2f6f4f;
+  border-color: #2f6f4f;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+
+/* 6) Toolbar label ("📋 Registro") + note trigger readable */
+html[data-theme="light"] .ht-toolbar .ht-label,
+html[data-theme="light"] .ht-wrap .note-trigger {
+  color: #2f2f35;
+}

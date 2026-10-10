@@ -17,7 +17,7 @@ import os
 import shutil
 
 from database import execute, fetchall
-from ai.notebooklm.utils import COOKIE_DIR, ACTIVE_FILE
+from ai.notebooklm.utils import COOKIE_DIR, ACTIVE_FILE, _local_part
 
 STORAGE_FILE = "storage_state.json"
 
@@ -79,11 +79,32 @@ def resolve_profile_dir(email: str) -> str | None:
     follow it, but legacy profiles may still exist directly under
     ``{email}/``.  This helper returns whichever exists, preferring the
     ``profiles/`` variant.
+
+    v3 fix: also include the bare local-part variant (e.g. ``zokan121522``
+    instead of ``zokan121522@gmail.com``) because the upload path creates
+    directories named after the local part.  Priority is:
+      1. First candidate containing a non-empty storage_state.json (size > 0)
+      2. Fallback: first candidate that exists as a directory
     """
+    local = _local_part(email)
     candidates = [
         os.path.join(COOKIE_DIR, "profiles", email),
+        os.path.join(COOKIE_DIR, "profiles", local),
         os.path.join(COOKIE_DIR, email),
+        os.path.join(COOKIE_DIR, local),
     ]
+
+    # First pass: return first candidate with a non-empty storage_state.json
+    for c in candidates:
+        storage_path = os.path.join(c, STORAGE_FILE)
+        if os.path.isdir(c) and os.path.isfile(storage_path):
+            try:
+                if os.path.getsize(storage_path) > 0:
+                    return c
+            except OSError:
+                pass
+
+    # Fallback: first candidate that exists as a directory
     for c in candidates:
         if os.path.isdir(c):
             return c

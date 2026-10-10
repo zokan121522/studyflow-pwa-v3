@@ -1,0 +1,9 @@
+{
+  "3.0.0": [
+    "Primera versión pública: paquetes portables para Windows, macOS y Linux con launcher y 15 videotutoriales incluidos."
+  ],
+  "3.1.0": [
+    "Imágenes dentro de tus apuntes: pega o sube una imagen y aparece dentro de la nota.",
+    "Copias portables de verdad: una copia hecha en un ordenador se abre bien en otro (Windows, macOS o Linux)."
+  ]
+}
