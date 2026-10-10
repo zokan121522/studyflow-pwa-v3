@@ -1057,8 +1057,9 @@ def restore_mine(user_id):
     if not upload.filename or not upload.filename.endswith(".zip"):
         return jsonify(error="Expected a .zip personal backup"), 400
 
-    report, err = _run_restore(BytesIO(upload.read()),
-                               _selection_from_request(), user_id)
+    stream = upload.stream
+    stream.seek(0)
+    report, err = _run_restore(stream, _selection_from_request(), user_id)
     if err is not None:
         return jsonify(error=str(err)), getattr(err, "status", 500)
     return jsonify(report)
@@ -1339,7 +1340,12 @@ def inspect_mine(user_id):
     if not upload.filename or not upload.filename.endswith(".zip"):
         return jsonify(error="Expected a .zip personal backup"), 400
     try:
-        zf = zipfile.ZipFile(BytesIO(upload.read()))
+        # Read straight from Flask's spooled upload stream: on a big
+        # backup the file already lives on disk, so ZipFile can page it
+        # in on demand instead of pulling the whole 1.3 GB into RAM.
+        stream = upload.stream
+        stream.seek(0)
+        zf = zipfile.ZipFile(stream)
     except zipfile.BadZipFile:
         return jsonify(error="Invalid or corrupt zip file"), 400
 
