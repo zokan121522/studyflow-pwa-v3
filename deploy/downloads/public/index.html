@@ -196,6 +196,24 @@
   figure.shot{margin:0 auto;max-width:960px}
   figure.shot figcaption{font-size:14px;color:var(--muted);text-align:center;margin-top:12px}
   .gal{display:flex;flex-direction:column;gap:38px}
+  .fig-audio{margin:6px auto 0;display:block;max-width:100%}
+  .fig-cap{font-size:13.5px;color:var(--muted);text-align:center;margin:6px 0 0}
+  figure.audio-block{margin:14px auto 0;max-width:760px}
+  figure.audio-block audio{width:100%}
+  figure.audio-block figcaption{font-size:13.5px;color:var(--muted);text-align:center;margin-top:8px}
+
+  /* ── Botón flotante "volver arriba" ─────────────────────────── */
+  #to-top{position:fixed;right:18px;bottom:18px;z-index:1000;
+       width:44px;height:44px;border-radius:50%;padding:0;
+       display:flex;align-items:center;justify-content:center;
+       background:var(--surface);color:var(--text);border:1px solid var(--border);
+       font-size:20px;line-height:1;cursor:pointer;
+       box-shadow:0 8px 22px var(--accent-shadow);
+       opacity:0;pointer-events:none;
+       transition:opacity .18s,background .15s,color .15s,transform .15s}
+  #to-top.show{opacity:1;pointer-events:auto}
+  #to-top:hover{background:var(--accent);color:#fff;transform:translateY(-2px)}
+  #to-top:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* ── Novedades de la versión ────────────────────────────────── */
   .novedades ul{margin:0;padding-left:22px;color:var(--muted);font-size:15px;
@@ -532,6 +550,8 @@
         </picture>
       </button>
       <figcaption>Panel de inicio: tus cursos, tu progreso y tu agenda de un vistazo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-1-dashboard.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
     </figure>
 
     <figure class="shot">
@@ -547,6 +567,8 @@
         </picture>
       </button>
       <figcaption>Cursos y tests: organiza el temario y repasa a tu ritmo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-2-cursos.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
     </figure>
 
     <figure class="shot">
@@ -562,6 +584,8 @@
         </picture>
       </button>
       <figcaption>Agenda semanal: planifica tus sesiones de un vistazo</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-3-agenda.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
     </figure>
 
     <figure class="shot">
@@ -577,6 +601,8 @@
         </picture>
       </button>
       <figcaption>Hábitos: crea rutinas y mantén la constancia</figcaption>
+      <audio class="fig-audio" controls preload="metadata" src="audio/captura-4-habitos.mp3">Tu navegador no soporta audio.</audio>
+      <p class="fig-cap">Escucha qué es (voz de Álvaro)</p>
     </figure>
   </section>
 
@@ -626,6 +652,10 @@
   <section class="card" id="descarga" aria-labelledby="descarga-title">
     <h2 class="sec" id="descarga-title" style="margin-top:0">Descarga StudyFlow para tu ordenador</h2>
     <p class="lab">Elige tu sistema operativo</p>
+    <figure class="audio-block">
+      <audio controls preload="metadata" src="audio/descarga.mp3">Tu navegador no soporta audio.</audio>
+      <figcaption>Escucha cómo se descarga (voz de Álvaro)</figcaption>
+    </figure>
     <!-- hrefs *-latest.zip: publish.sh crea ese alias por OS en cada publish → nunca caducan ni dan 404. -->
     <div class="pcards" role="group" aria-label="Elige tu sistema operativo">
       <a class="pcard" data-os="linux" href="StudyFlow-linux-latest.zip"
@@ -1202,6 +1232,21 @@
     aplicar();
   })();
 </script>
+<button type="button" id="to-top" aria-label="Volver arriba" title="Subir al inicio">↑</button>
 <script src="download.js" defer></script>
+<script>
+  // Botón flotante "volver arriba": aparece tras bajar ~300px.
+  (function () {
+    var btn = document.getElementById('to-top');
+    if (!btn) return;
+    var limit = 300;
+    function onScroll() { btn.classList.toggle('show', window.scrollY > limit); }
+    btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
 </body>
 </html>
