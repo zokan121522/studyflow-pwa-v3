@@ -110,6 +110,7 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // y reutiliza el modal de backup-selector.js en modo review para restaurar
 // solo lo marcado. Al cambiar app.js y backup-selector.js hay que refrescar
 // el precache, o las PWAs instaladas seguirían con el código viejo.
+<<<<<<< HEAD
 // v103: imágenes inline en markdown. content-blocks.js (pasada de render nueva),
 // markdown-editor.js (botón 🖼 + insertImage) e image-upload.js
 // (pickAndUploadImage) son assets precacheados: sin este bump las PWAs
@@ -117,6 +118,9 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v104: API button fix
 // v105: restore chunked upload (async)
 const ASSET_CACHE = 'studyflow-assets-v105';
+=======
+const ASSET_CACHE = 'studyflow-assets-v101';
+>>>>>>> origin/main
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

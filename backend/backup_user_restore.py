@@ -1340,6 +1340,171 @@ def inspect_mine(user_id):
         return jsonify(error="Expected a .zip personal backup"), 400
     try:
         zf = zipfile.ZipFile(BytesIO(upload.read()))
+        names = zf.namelist()
+        if "user_data.sql" not in names:
+            return jsonify(
+                error="Not a personal backup (missing user_data.sql)"), 400
+
+        try:
+            manifest = _read_manifest(zf)
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
+
+        owner = manifest.get("user", {}).get("id")
+        # v3 ids are ints, so the manifest stores an int and comparing it
+        # against a stringified one would reject the user's own backup.
+        if owner is not None and owner != user_id:
+            return jsonify(
+                error="This backup belongs to a different user"), 403
+
+        if _has_unsafe_member(names):
+            return jsonify(error="Invalid backup: unsafe path in archive"), 400
+
+        sel = _selection_from_request()
+        parsed = _parse_data_sql(zf.read("user_data.sql").decode("utf-8"))
+        parsed, names = _safe_apply_selection(parsed, names, sel, manifest)
+
+        conn = db.get_connection()
+        try:
+            stats, skipped = _import_tables(conn, parsed, user_id)
+        finally:
+            conn.close()
+
+        written = _write_missing_files(zf, names)
+        rows = sum(n for n in stats.values() if n > 0)
+        failed = [t for t, n in stats.items() if n < 0]
+
+        _log(f"✅ restore personal: usuario {user_id} -> {rows} filas, "
+             f"{skipped} ya existentes, {written} ficheros en "
+             f"{time.monotonic() - started:.1f}s")
+        return jsonify(ok=True, rows_inserted=stats, rows_total=rows,
+                       files_written=written, failed_tables=failed,
+                       skipped=skipped, imported=_section_counts(stats),
+                       partial=bool(manifest.get("partial")),
+                       note="Existing rows and files were left untouched.")
+    except zipfile.BadZipFile:
+        return jsonify(error="Invalid or corrupt zip file"), 400
+
+    if "user_data.sql" not in zf.namelist():
+        return jsonify(has_manifest=False,
+                       manifest_error="missing user_data.sql"), 200
+    try:
+        manifest = _read_manifest(zf)
+    except Exception as e:
+        _log(f"✗ restore personal: {e}")
+        return jsonify(error=f"Restore failed: {e}"), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Inspect — what is inside the zip, before anything is written
+# ═══════════════════════════════════════════════════════════════════
+
+def _options_from_archive(zf, manifest, sections) -> dict:
+    """The payload GET /backup/mine/options serves, built from the zip alone.
+
+    The selector must show what a restore of THIS file would add before
+    the user confirms anything, and the only honest source for that is
+    the archive itself: rows from user_data.sql, file counts and bytes
+    from the manifest, sizes of unattributed members from the zip's own
+    central directory (only for members the archive actually carries --
+    a full export ships none of them). The estimator is backup_options',
+    so the numbers match the export dialog's formula to the byte.
+    """
+    def rows(table, cols):
+        return _row_dicts(sections.get(table), cols)
+
+    courses = [{"cid": r["id"], "ctitle": r["title"]}
+               for r in rows("courses", ("id", "title"))]
+    topics = [{"tid": r["id"], "ttitle": r["title"], "cid": r["course_id"]}
+              for r in rows("topics", ("id", "title", "course_id"))]
+    blocks = []
+    for r in rows("blocks",
+                  ("id", "topic_id", "course_id", "title", "content")):
+        content = r.get("content") or ""
+        title = r.get("title") or ""
+        blocks.append({
+            "bid": r["id"], "tid": r["topic_id"], "cid": r["course_id"],
+            "content_len": len(content),
+            "blabel": (title or content[:60])[:60],
+        })
+    tree = _assemble_tree(courses, topics, blocks)
+
+    weeks = [{"week_id": r["week_id"]}
+             for r in rows("weeks", ("week_id",))]
+    days = [{"date": r["date"], "week_id": r["week_id"]}
+            for r in rows("days", ("date", "week_id"))]
+    sessions = [{"id": r["id"], "day_date": r["day_date"]}
+                for r in rows("sessions", ("id", "day_date"))]
+    agenda = _assemble_agenda(weeks, days, sessions)
+
+    # Scope counts, archive-side: a section the archive does not carry is
+    # skipped, exactly as _scope_rows skips a table this schema lacks.
+    scopes = {}
+    for scope, tables in SCOPE_TABLES.items():
+        counts = {}
+        for table in tables:
+            section = _section(sections, table)
+            if section is not None:
+                counts[table] = _line_count(section[1])
+        scopes[scope] = {"rows": sum(counts.values()), "tables": counts}
+
+    files = manifest.get("files") or {}
+    counts = files.get("counts") or {}
+    sizes = files.get("bytes") or {}
+    media = {cat: {"files": int(counts.get(cat, 0) or 0),
+                   "bytes": int(sizes.get(cat, 0) or 0)}
+             for cat in CATEGORY_OF.values()}
+    unat = {"files": 0, "bytes": 0}
+    members = set(zf.namelist())
+    for rel in manifest.get("unattributed_files") or ():
+        member = f"files/{rel}"
+        if member in members:
+            unat["files"] += 1
+            try:
+                unat["bytes"] += zf.getinfo(member).file_size
+            except (KeyError, OSError):
+                pass
+
+    scope_rows = sum(s["rows"] for s in scopes.values())
+    tree_bytes = tree["totals"]["content_bytes"]
+    media_bytes = sum(m["bytes"] for m in media.values())
+    scope_bytes = scope_rows * BYTES_PER_ROW_ESTIMATE
+    return {
+        "tree": tree,
+        "agenda": agenda,
+        "scopes": scopes,
+        "media": media,
+        "unattributed": unat,
+        "estimate": {
+            "tree_bytes": tree_bytes,
+            "scope_bytes": scope_bytes,
+            "media_bytes": media_bytes,
+            "unattributed_bytes": unat["bytes"],
+            "total_bytes": tree_bytes + scope_bytes + media_bytes,
+        },
+    }
+
+
+@bp.route("/backup/mine/inspect", methods=["POST"])
+@token_required
+def inspect_mine(user_id):
+    """Read the archive's manifest and options without importing anything.
+
+    The tri-state tree, the byte estimate and the unattributed bucket all
+    come from here, so the selector can offer a partial restore of what
+    is genuinely inside the zip. Nothing is written to disk and no SQL
+    touches the database: everything is derived from the upload itself.
+    """
+    if not isinstance(user_id, int):
+        return jsonify(error="Invalid user identity"), 400
+    if "file" not in request.files:
+        return jsonify(error="No file uploaded"), 400
+
+    upload = request.files["file"]
+    if not upload.filename or not upload.filename.endswith(".zip"):
+        return jsonify(error="Expected a .zip personal backup"), 400
+    try:
+        zf = zipfile.ZipFile(BytesIO(upload.read()))
     except zipfile.BadZipFile:
         return jsonify(error="Invalid or corrupt zip file"), 400
 
