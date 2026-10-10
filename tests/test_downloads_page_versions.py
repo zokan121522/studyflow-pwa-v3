@@ -39,7 +39,7 @@ VERSION_JSON = ROOT / "deploy" / "downloads" / "public" / "version.json"
 
 # Version literals allowed in the page besides the current stable version.
 # Only the "Histórico de versiones" table may name a superseded release.
-ALLOWED_HISTORY = {"3.0.0"}
+ALLOWED_HISTORY = {"3.0.0", "3.1.0"}
 
 # X.Y.Z that is not part of a longer dotted run (skips 127.0.0.1 etc.).
 VERSION_RE = re.compile(r"(?<![\d.])\d+\.\d+\.\d+(?![\d.])")
