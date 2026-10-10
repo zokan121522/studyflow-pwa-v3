@@ -864,6 +864,7 @@ async function inspectRestore(file) {
   }
 }
 
+<<<<<<< HEAD
 // Chunked restore: one 1.3 GB multipart POST dies mid-flight in the
 // browser ("Failed to fetch", the green dot never moves), so the file is
 // sliced here, reassembled by the server job and imported by a worker.
@@ -871,6 +872,8 @@ const RESTORE_CHUNK_BYTES = 8 * 1024 * 1024;   // 8 MiB per POST
 const RESTORE_POLL_MAX_MS = 10 * 60 * 1000;    // 10 min for big restores
 const RESTORE_POLL_MS = 1500;
 
+=======
+>>>>>>> origin/main
 async function uploadRestore(file, selection) {
   // Additive, not destructive: rows that already exist are left alone and
   // the database is never dropped. The old confirmations are gone because
@@ -888,21 +891,50 @@ async function uploadRestore(file, selection) {
   btn.textContent = '⏳ Restaurando...';
   btn.disabled = true;
   try {
+<<<<<<< HEAD
     const total = Math.max(1, Math.ceil(file.size / RESTORE_CHUNK_BYTES));
     const startForm = new FormData();
     startForm.append('filename', file.name || 'backup.zip');
     startForm.append('total_chunks', String(total));
     if (selection) startForm.append('selection', JSON.stringify(selection));
     const startResp = await fetch(`${window.API_URL}/backup/mine/restore/start`, {
+=======
+    const formData = new FormData();
+    formData.append('file', file);
+    if (selection) formData.append('selection', JSON.stringify(selection));
+    const resp = await fetch(`${window.API_URL}/backup/mine/restore`, {
+>>>>>>> origin/main
       method: 'POST',
       headers: _bkAuthHeaders(false),
       credentials: 'include',
       body: startForm,
     });
+<<<<<<< HEAD
     if (startResp.status === 404 || startResp.status === 405) {
       // Server without the chunked API (stale cache): the single-POST
       // route still works exactly as it always did.
       return _uploadRestoreOnce(file, selection);
+=======
+    const result = await resp.json();
+    if (resp.ok) {
+      const rows = Object.values(result.rows_inserted || {}).reduce((a, b) => a + b, 0);
+      const skipped = Number(result.skipped) || 0;
+      const partialWarn = result.partial
+        ? '\n\n⚠️ Este backup era PARCIAL — solo contenía lo que marcaste\n' +
+          'en el selector (asignaturas, agenda, media…). No reprodujo tu cuenta\n' +
+          'completa, solo añadió lo que faltaba de esa parte.'
+        : '';
+      alert(
+        `✅ Restauración completada.\n\n` +
+        `· ${rows} registros añadidos\n` +
+        (skipped ? `· ${skipped} filas ya existían (no se tocaron)\n` : '') +
+        `· ${result.files_written} ficheros escritos${partialWarn}\n\n` +
+        `Recargando la aplicación...`
+      );
+      window.location.reload();
+    } else {
+      alert('❌ Error al restaurar: ' + (result.error || 'desconocido'));
+>>>>>>> origin/main
     }
     const startData = await startResp.json();
     if (!startResp.ok) throw new Error(startData.error || 'no se pudo iniciar la restauración');
