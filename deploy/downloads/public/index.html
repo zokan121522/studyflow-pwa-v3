@@ -613,12 +613,6 @@
       <audio controls preload="metadata" src="audio/novedades-3.1.1.mp3">Tu navegador no soporta audio.</audio>
       <figcaption>Escucha las novedades (voz de Álvaro)</figcaption>
     </figure>
-    <p class="beta-dl">Descargas de la beta:
-      <a class="btn btn-sm" href="StudyFlow-macos-3.1.1-beta.zip">⬇ macOS</a>
-      <a class="btn btn-sm" href="StudyFlow-windows-3.1.1-beta.zip">⬇ Windows</a>
-      <a class="btn btn-sm" href="StudyFlow-linux-3.1.1-beta.zip">⬇ Linux</a>
-    </p>
-    <p class="nov-cta">Versión de prueba, para los más intrépidos: descárgala desde aquí, pruébala como usuario en Mac, Windows y Linux, y con tu visto bueno pasa a oficial.</p>
     <details class="nov-prev">
       <summary>Novedades anteriores (3.1.0)</summary>
       <figure>
@@ -647,19 +641,19 @@
       <audio controls preload="metadata" src="audio/descarga.mp3">Tu navegador no soporta audio.</audio>
       <figcaption>Escucha cómo se descarga (voz de Álvaro)</figcaption>
     </figure>
-    <!-- hrefs *-latest.zip: publish.sh crea ese alias por OS en cada publish → nunca caducan ni dan 404. -->
+    <!-- hrefs versionados *-3.1.1.zip: version.json (platforms.url) los reescribe por SO al cargar. -->
     <div class="pcards" role="group" aria-label="Elige tu sistema operativo">
-      <a class="pcard" data-os="linux" href="StudyFlow-linux-latest.zip"
+      <a class="pcard" data-os="linux" href="StudyFlow-linux-3.1.1.zip"
          aria-label="Descargar StudyFlow para Linux">
         <span class="pc-os">Linux</span>
         <span class="pc-cta">⬇ Descargar</span>
       </a>
-      <a class="pcard primary on" data-os="windows" href="StudyFlow-windows-latest.zip"
+      <a class="pcard primary on" data-os="windows" href="StudyFlow-windows-3.1.1.zip"
          aria-label="Descargar StudyFlow para Windows" aria-current="true">
         <span class="pc-os">Windows</span>
         <span class="pc-cta">⬇ Descargar</span>
       </a>
-      <a class="pcard" data-os="macos" href="StudyFlow-macos-latest.zip"
+      <a class="pcard" data-os="macos" href="StudyFlow-macos-3.1.1.zip"
          aria-label="Descargar StudyFlow para macOS">
         <span class="pc-os">macOS</span>
         <span class="pc-cta">⬇ Descargar</span>
@@ -670,7 +664,7 @@
 
     <div class="panel on" id="panel-windows" role="tabpanel" aria-label="Windows">
       <div class="pl-head">
-        <a class="btn" id="dl-windows" href="StudyFlow-windows-latest.zip">⬇ Descargar StudyFlow para Windows</a>
+        <a class="btn" id="dl-windows" href="StudyFlow-windows-3.1.1.zip">⬇ Descargar StudyFlow para Windows</a>
         <span class="pl-meta" id="meta-windows">52 MB · ZIP portable</span>
       </div>
       <p class="lab">Windows · pasos</p>
@@ -688,7 +682,7 @@
 
     <div class="panel" id="panel-macos" role="tabpanel" aria-label="macOS">
       <div class="pl-head">
-        <a class="btn" id="dl-macos" href="StudyFlow-macos-latest.zip">⬇ Descargar StudyFlow para macOS</a>
+        <a class="btn" id="dl-macos" href="StudyFlow-macos-3.1.1.zip">⬇ Descargar StudyFlow para macOS</a>
         <span class="pl-meta" id="meta-macos">— · ZIP portable</span>
       </div>
       <p class="lab">macOS · pasos</p>
@@ -706,7 +700,7 @@
 
     <div class="panel" id="panel-linux" role="tabpanel" aria-label="Linux">
       <div class="pl-head">
-        <a class="btn" id="dl-linux" href="StudyFlow-linux-latest.zip">⬇ Descargar StudyFlow para Linux</a>
+        <a class="btn" id="dl-linux" href="StudyFlow-linux-3.1.1.zip">⬇ Descargar StudyFlow para Linux</a>
         <span class="pl-meta" id="meta-linux">— · ZIP portable</span>
       </div>
       <p class="lab">Linux · pasos</p>
@@ -736,7 +730,7 @@
         entre ordenadores.</strong> Pega o sube una imagen en una nota y abre una copia
         hecha en otro sistema (Windows, macOS o Linux) sin perder nada.</div>
       <div class="pill now">actual</div>
-      <a class="rowbtn go" id="rel-dl" href="StudyFlow-windows-latest.zip">Descargar</a>
+      <a class="rowbtn go" id="rel-dl" href="StudyFlow-windows-3.1.1.zip">Descargar</a>
     </div>
     <div class="rel-row old">
       <div class="rel-v">3.0.0</div>
@@ -831,7 +825,7 @@
       Comprueba que la descarga no se corrompió. En PowerShell o CMD:
     </p>
     <div class="cmdrow">
-      <pre class="cmd" id="cmd-hash">certutil -hashfile StudyFlow-windows-latest.zip SHA256</pre>
+      <pre class="cmd" id="cmd-hash">certutil -hashfile StudyFlow-windows-3.1.1.zip SHA256</pre>
       <button class="copy" id="btn-copy" type="button">Copiar</button>
     </div>
     <dl class="sha">
@@ -886,16 +880,16 @@
     var DATOS = {
       windows: {
         nombre: 'Windows',
-        file: 'StudyFlow-windows-latest.zip',
-        size: 54590290,
-        sha: '5f7cfe29f479e828e966eae748923f2ffc992a0d1e50489842e05d6ea361c96b',
+        file: 'StudyFlow-windows-3.1.1.zip',
+        size: 54644649,
+        sha: '1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66',
         hashCmd: function (f) { return 'certutil -hashfile ' + f + ' SHA256'; },
         hashIntro: 'Comprueba que la descarga no se corrompió. En PowerShell o CMD:',
         ok: true
       },
       macos: {
         nombre: 'macOS',
-        file: 'StudyFlow-macos-latest.zip',
+        file: 'StudyFlow-macos-3.1.1.zip',
         size: null,
         sha: null,
         hashCmd: function (f) { return 'shasum -a 256 ' + f; },
@@ -904,7 +898,7 @@
       },
       linux: {
         nombre: 'Linux',
-        file: 'StudyFlow-linux-latest.zip',
+        file: 'StudyFlow-linux-3.1.1.zip',
         size: null,
         sha: null,
         hashCmd: function (f) { return 'sha256sum ' + f; },
@@ -1027,8 +1021,8 @@
         }
         if (v.date) el.date.textContent = v.date;
 
-        // La sección beta 3.1.1 lleva su contenido fijo en el HTML: no la
-        // reescribimos con las "notes" de la versión estable (3.1.0).
+        // La sección de novedades 3.1.1 lleva su contenido fijo en el HTML: no la
+        // reescribimos con las "notes" de version.json.
 
         // Plataformas. Sin "platforms" pero con file top-level → sólo Windows.
         var plats = v.platforms;
