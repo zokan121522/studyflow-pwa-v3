@@ -152,10 +152,35 @@ def _restore(client, payload: bytes):
         content_type="multipart/form-data")
 
 
+def _inspect(client, payload: bytes):
+    return client.post(
+        "/api/backup/mine/inspect",
+        data={"file": (io.BytesIO(payload), "backup.zip")},
+        content_type="multipart/form-data")
+
+
 def _tree_counts() -> tuple:
     return (_one("SELECT count(*) AS n FROM courses")["n"],
             _one("SELECT count(*) AS n FROM topics")["n"],
             _one("SELECT count(*) AS n FROM blocks")["n"])
+
+
+def test_inspect_reads_the_upload_stream_and_serves_options(client):
+    """The inspect path streams the upload instead of buffering it in RAM.
+
+    A 1.3 GB backup used to be read whole into a BytesIO, which OOM-killed
+    the process. Opening ZipFile straight on Flask's spooled stream must
+    still parse a real export and return manifest + options.
+    """
+    payload = _export(client)
+
+    response = _inspect(client, payload)
+    assert response.status_code == 200, response.get_data(as_text=True)
+    body = response.get_json()
+    assert body["has_manifest"] is True
+    assert body["manifest"]["format"] == "studyflow-user-backup"
+    assert "options" in body
+    assert len(body["options"]["tree"]["courses"]) == 2
 
 
 def test_second_restore_into_empty_db_adds_nothing(client):

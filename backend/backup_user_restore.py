@@ -17,7 +17,6 @@ import threading
 import time
 import uuid
 import zipfile
-from io import BytesIO
 
 from flask import Blueprint, jsonify, request
 from routes.auth import token_required
