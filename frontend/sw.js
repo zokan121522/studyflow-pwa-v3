@@ -288,6 +288,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Availability probes must NEVER be answered from cache.
+  //
+  // /api/health and /api/status are the app's only signal that the local
+  // server is alive. While the server is down the SW would otherwise replay a
+  // cached 200 from API_CACHE, so the "API" dot stayed green with the server
+  // off and the app could not tell a dead origin from a healthy one.
+  // Returning here (no respondWith) lets the browser hit the network
+  // directly: no cache read, no cache write, no fallback.
+  if (isServerStatusProbe(url.pathname)) {
+    return;
+  }
+
   // API calls: Network-first strategy.
   //
   // Two requests must reach the origin untouched (S7b-A):
