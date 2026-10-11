@@ -1055,6 +1055,25 @@ button.server-status-wrap:hover { background: var(--surface-hover, #1f2a4a); }
 button.server-status-wrap:focus-visible { outline: 2px solid var(--primary, #4f8cff); outline-offset: 2px; }
 button.server-status-wrap[aria-busy="true"] { cursor: progress; }
 
+/* ============================== SERVER-DOWN NOTICE ==============================
+   The SW no longer intercepts /api/health, so when the local server is down the
+   health check genuinely fails and server-status.js adds body.sf-server-down.
+   The notice is a normal-flow sibling placed before .app, so it pushes the UI
+   down a few pixels instead of covering it: no content is hidden or unmounted,
+   the app is only marked stale until the next successful health check. */
+#sf-server-down { display: none; }
+body.sf-server-down #sf-server-down {
+  display: block;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--red);
+  background: var(--red-bg);
+  border-bottom: 1px solid var(--red);
+}
+
 /* ============================== STUDYFLOW PWA — FEATURE COMPONENTS ============================== */
 
 /* ============================== AGENDA COMPONENTS ============================== */
