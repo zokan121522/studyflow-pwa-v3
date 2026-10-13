@@ -361,13 +361,27 @@ def markdown_to_html(current_user_id: int):
 # ═══════════════════════════════════════════════════════════════════
 
 
+_AUDIO_MIMETYPES = {
+    ".m4a": "audio/mp4",
+    ".aac": "audio/mp4",
+    ".mp4": "audio/mp4",
+    ".mp3": "audio/mpeg",
+}
+
+
 def _serve_audio_file(filename: str):
-    """Shared body for both audio URLs. Basename-only: no path traversal."""
+    """Shared body for both audio URLs. Basename-only: no path traversal.
+
+    The TTS engine normally writes ``.mp3`` (edge-tts) but the macOS ``say``
+    fallback writes AAC/``.m4a`` — serve the right MIME type per extension.
+    """
     safe = os.path.basename(filename)
     path = os.path.join(_AUDIO_DIR, safe)
     if not os.path.isfile(path):
         return jsonify(error="File not found"), 404
-    return send_file(path, mimetype="audio/mpeg")
+    ext = os.path.splitext(safe)[1].lower()
+    mimetype = _AUDIO_MIMETYPES.get(ext, "audio/mpeg")
+    return send_file(path, mimetype=mimetype)
 
 
 @bp.route("/ai/notebooklm/audio/<filename>", methods=["GET"])

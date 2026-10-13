@@ -1,0 +1,231 @@
+"""Text-to-speech engine with an automatic macOS ``say`` fallback.
+
+Primary engine: **edge-tts** (Microsoft Edge online neural voices, e.g.
+``es-ES-AlvaroNeural``).  Since October 2026 Microsoft is migrating the
+Edge "Read Aloud" backend from the legacy ``v1`` WebSocket endpoint to a
+new ``v2`` endpoint, and legacy handshakes are rejected with HTTP ``403``
+region by region (Spain/EU first).  No released ``edge-tts`` version works
+from the affected regions yet, so a failed synthesis must not leave the
+app mute.
+
+Fallback (macOS only): the preinstalled ``say`` command renders the text
+with an installed Spanish voice (Mónica), and ``afconvert`` (also
+preinstalled, free) transcodes the AIFF to AAC/MP4 ``.m4a`` -- the same
+container ``<audio>`` already plays.  The fallback is platform-guarded so
+Windows/Linux builds keep using edge-tts only.
+
+Usage:
+    from tts_engine import synthesize
+    result = synthesize(text, "es-ES-AlvaroNeural", "/tmp/out.mp3")
+    # result.path holds the real file (may end in .m4a when the fallback ran)
+    # result.engine is "edge-tts" or "say"
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
+
+
+class TTSError(RuntimeError):
+    """Raised when no TTS engine could produce audio."""
+
+
+@dataclass
+class TtsResult:
+    """Outcome of a synthesis attempt."""
+
+    path: str
+    engine: str  # "edge-tts" or "say"
+    mimetype: str  # "audio/mpeg" or "audio/mp4"
+
+
+# ── edge-tts voice → macOS `say` voice ──────────────────────────────
+# ``say`` has a small set of built-in voices; map the app's neural voices
+# onto the closest installed one.  Mónica (es_ES) is the standard Spanish
+# (Spain) voice shipped with macOS.
+_SAY_VOICE_BY_EDGE = {
+    "es-ES-AlvaroNeural": "Mónica",
+    "es-ES-ElviraNeural": "Mónica",
+    "es-MX-DaliaNeural": "Paulina",
+    "en-US-ChristopherNeural": "Samantha",
+    "en-US-AriaNeural": "Samantha",
+    "en-GB-SoniaNeural": "Serena",
+}
+
+_SAY_DEFAULT_VOICE = "Mónica"  # app default language is Spanish
+
+
+def say_voice_for(edge_voice: str) -> str:
+    """Return the macOS ``say`` voice to use for an edge-tts voice name.
+
+    Falls back to a language heuristic (``es-*`` → Mónica, ``en-*`` →
+    Samantha) and finally to the default Spanish voice.
+    """
+    if edge_voice in _SAY_VOICE_BY_EDGE:
+        return _SAY_VOICE_BY_EDGE[edge_voice]
+    if edge_voice.startswith("es"):
+        return "Mónica"
+    if edge_voice.startswith("en"):
+        return "Samantha"
+    return _SAY_DEFAULT_VOICE
+
+
+# ── platform guard ──────────────────────────────────────────────────
+
+
+def platform_supports_say_fallback(
+    platform_name: str | None = None,
+    which=shutil.which,
+) -> bool:
+    """Whether the ``say`` fallback is available on this platform.
+
+    ``True`` only on macOS *and* when both ``say`` and ``afconvert`` are
+    installed.  ``platform_name``/``which`` are injectable for tests.
+    """
+    platform_name = platform_name if platform_name is not None else sys.platform
+    return (
+        platform_name == "darwin"
+        and which("say") is not None
+        and which("afconvert") is not None
+    )
+
+
+# ── edge-tts engine ─────────────────────────────────────────────────
+
+
+def _edge_tts_synthesize(
+    text: str,
+    voice: str,
+    output_path: str,
+    rate: str = "+0%",
+    volume: str = "+0%",
+    timeout: float = 30.0,
+) -> None:
+    """Render ``text`` to an MP3 at ``output_path`` using edge-tts."""
+    import edge_tts
+
+    async def _run() -> None:
+        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
+        data = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                data.extend(chunk["data"])
+        if not data:
+            raise TTSError("edge-tts produced no audio data")
+        with open(output_path, "wb") as fh:
+            fh.write(data)
+
+    asyncio.run(asyncio.wait_for(_run(), timeout=timeout))
+
+
+# ── macOS `say` fallback ────────────────────────────────────────────
+
+
+def _rate_to_wpm(rate: str) -> int | None:
+    """Map an edge-tts rate like ``"+10%"`` onto a ``say -r`` words/min.
+
+    Returns ``None`` when the rate is the default (``say``'s own default
+    is used then).
+    """
+    if not rate or rate in ("+0%", "0%"):
+        return None
+    try:
+        pct = int(rate.replace("%", "").replace("+", "") or "0")
+    except ValueError:
+        return None
+    if pct == 0:
+        return None
+    wpm = round(175 * (1 + pct / 100))
+    return max(90, min(400, wpm))
+
+
+def _say_synthesize(
+    text: str,
+    edge_voice: str,
+    output_path: str,
+    rate: str = "+0%",
+    timeout: float = 60.0,
+) -> TtsResult:
+    """Fallback: macOS ``say`` → AIFF → AAC/MP4 (``.m4a``) via ``afconvert``.
+
+    Returns a :class:`TtsResult` whose ``path`` ends in ``.m4a`` (the
+    requested ``.mp3`` cannot be produced by ``afconvert``).
+    """
+    say_voice = say_voice_for(edge_voice)
+    aiff_path = tempfile.mktemp(suffix=".aiff")
+    m4a_path = os.path.splitext(output_path)[0] + ".m4a"
+    try:
+        say_cmd = ["say", "-v", say_voice, "-o", aiff_path]
+        wpm = _rate_to_wpm(rate)
+        if wpm is not None:
+            say_cmd += ["-r", str(wpm)]
+        say_cmd.append(text)
+
+        proc = subprocess.run(say_cmd, capture_output=True, text=True, timeout=timeout)
+        if proc.returncode != 0:
+            # The mapped voice may not be installed on this Mac — retry with
+            # the system default voice so we never leave the app mute.
+            log.warning("say -v %r failed (%s); retrying with default voice",
+                        say_voice, proc.stderr.strip())
+            subprocess.run(["say", "-o", aiff_path, text],
+                           capture_output=True, text=True, timeout=timeout, check=True)
+
+        subprocess.run(
+            ["afconvert", "-f", "mp4f", "-d", "aac", "-b", "64000",
+             aiff_path, m4a_path],
+            capture_output=True, text=True, timeout=timeout, check=True,
+        )
+        if not os.path.isfile(m4a_path) or os.path.getsize(m4a_path) == 0:
+            raise TTSError("say/afconvert produced empty audio file")
+        return TtsResult(path=m4a_path, engine="say", mimetype="audio/mp4")
+    finally:
+        try:
+            os.unlink(aiff_path)
+        except OSError:
+            pass
+
+
+# ── public API ──────────────────────────────────────────────────────
+
+
+def synthesize(
+    text: str,
+    voice: str,
+    output_path: str,
+    rate: str = "+0%",
+    volume: str = "+0%",
+    allow_fallback: bool = True,
+) -> TtsResult:
+    """Synthesize ``text`` to ``output_path`` (MP3), with a macOS fallback.
+
+    Tries edge-tts first.  On any failure (403/exception/timeout), and only
+    when :func:`platform_supports_say_fallback` is true, falls back to
+    ``say`` + ``afconvert`` and returns an ``.m4a`` result.  On other
+    platforms the original error is re-raised so Windows/Linux keep the
+    edge-tts-only behaviour.
+
+    Raises:
+        TTSError: When neither engine can produce audio.
+    """
+    try:
+        _edge_tts_synthesize(text, voice, output_path, rate=rate, volume=volume)
+        log.info("TTS engine=edge-tts voice=%s -> %s", voice, output_path)
+        return TtsResult(path=output_path, engine="edge-tts", mimetype="audio/mpeg")
+    except Exception as exc:  # noqa: BLE001 — any edge-tts failure triggers fallback
+        if not (allow_fallback and platform_supports_say_fallback()):
+            if isinstance(exc, TTSError):
+                raise
+            raise TTSError(f"edge-tts synthesis failed: {exc}") from exc
+        log.warning("edge-tts failed (%s); falling back to macOS `say`", exc)
+        result = _say_synthesize(text, voice, output_path, rate=rate)
+        log.info("TTS engine=say voice=%s -> %s", say_voice_for(voice), result.path)
+        return result

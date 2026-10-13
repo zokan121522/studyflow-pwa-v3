@@ -60,8 +60,13 @@ class FakeCursor:
 
     def execute(self, sql, params=None):
         self.statements.append((" ".join(sql.split()), params))
+        self._last_sql = sql
 
     def fetchone(self):
+        # The existence pre-check decides insert vs update: when `inserts`
+        # is True the row is missing, so the SELECT returns nothing.
+        if self._last_sql.lstrip().upper().startswith("SELECT"):
+            return None if self.inserts else {"present": 1}
         return {"is_insert": self.inserts}
 
 
@@ -69,8 +74,14 @@ class FakeCursor:
 def stub_agenda(monkeypatch):
     """The week/day upserts need a database; capture them instead."""
     weeks, days = [], []
-    monkeypatch.setattr(I, "_upsert_week", lambda w, u: weeks.append((w, u)))
-    monkeypatch.setattr(I, "_upsert_day", lambda d, w, u: days.append((d, w, u)))
+    # The importer now passes its cursor as a third argument (one connection
+    # for the whole run); the stubs accept and ignore it.
+    monkeypatch.setattr(
+        I, "_upsert_week", lambda w, u, cur=None: weeks.append((w, u))
+    )
+    monkeypatch.setattr(
+        I, "_upsert_day", lambda d, w, u, cur=None: days.append((d, w, u))
+    )
     return weeks, days
 
 
@@ -160,7 +171,10 @@ def test_upsert_targets_the_session_primary_key(stub_agenda):
     walk(feed(CLASS_A), cur, stub_agenda)
     session_sql = [s for s in cur.statements if "INSERT INTO sessions" in s[0]][0][0]
     assert "ON CONFLICT (id)" in session_sql
-    assert "RETURNING (xmax = 0) AS is_insert" in session_sql
+    assert "xmax" not in session_sql, (
+        "xmax is a Postgres-only system column; SQLite has no such column "
+        "and the local app would 500 with 'no such column: xmax'"
+    )
 
 
 def test_session_id_is_the_sanitised_uid(stub_agenda):

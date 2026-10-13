@@ -17,7 +17,6 @@ import threading
 import time
 import uuid
 import zipfile
-from io import BytesIO
 
 from flask import Blueprint, jsonify, request
 from routes.auth import token_required
@@ -696,7 +695,14 @@ def _restore_rows_per_row(cur, real, columns, data, user_id, maps) -> tuple:
        Children keep the old never-overwrite semantics instead and are
        skipped.
 
-    Returns (inserted, skipped).
+    A block whose parent topic was not part of the restore is dropped
+    before the insert: its ``topic_id`` could not be remapped, so keeping
+    it would either violate the FK or -- the bug this guards -- store a
+    row no topic can render. The dropped count is returned separately so
+    the report can name it. A NULL ``topic_id`` is a deliberately loose
+    block and always passes.
+
+    Returns (inserted, skipped, orphan_blocks).
     """
     cur.execute(f'CREATE TEMP TABLE _stage (LIKE "{real}")')
     stage_cols = ", ".join(f'"{c}"' for c in columns)
@@ -706,6 +712,7 @@ def _restore_rows_per_row(cur, real, columns, data, user_id, maps) -> tuple:
     staged = cur.fetchall()
     inserted = 0
     skipped = 0
+    orphans = 0
     fk_cols = [c for c in columns if c in _ID_FK_COLUMNS]
     natural = real in _NATURAL_KEY_TABLES
     for raw in staged:
@@ -720,6 +727,17 @@ def _restore_rows_per_row(cur, real, columns, data, user_id, maps) -> tuple:
             parent = _FK_PARENT[col]
             if parent in maps and value in maps[parent]:
                 row[col] = maps[parent][value]
+        # Orphan guard: a block survives selection on its course alone even
+        # when its topic was not restored. After the remap its topic_id is
+        # still the stale archive id, which no topic in the target matches.
+        # Drop the row (and count it) instead of inserting invisible content.
+        # NULL topic_id is a loose course-level block: always allowed.
+        if real == "blocks" and row.get("topic_id") is not None:
+            cur.execute('SELECT 1 FROM "topics" WHERE id = %s LIMIT 1',
+                        (row["topic_id"],))
+            if cur.fetchone() is None:
+                orphans += 1
+                continue
         archive_id = row.get("id")
         existing = None
         if natural and row.get("title"):
@@ -761,7 +779,7 @@ def _restore_rows_per_row(cur, real, columns, data, user_id, maps) -> tuple:
             maps[real][archive_id] = new_id
         inserted += 1
     cur.execute("DROP TABLE IF EXISTS _stage")
-    return inserted, skipped
+    return inserted, skipped, orphans
 
 
 def _import_tables(conn, parsed, user_id: int) -> tuple:
@@ -792,14 +810,16 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
     account happens to occupy that id there. Every child table has a
     user_id, so claiming is one rewrite per row with no special cases.
 
-    Returns (stats, skipped): how many staged rows were already there,
-    per table as the inserted count, skipped as the "already here" count
-    the report asks for -- what lets a second restore of the same backup
-    say "0 new rows, N skipped" instead of pretending nothing was
-    attempted.
+    Returns (stats, skipped, orphan_blocks): how many staged rows were
+    already there, per table as the inserted count, skipped as the "already
+    here" count the report asks for -- what lets a second restore of the
+    same backup say "0 new rows, N skipped" instead of pretending nothing
+    was attempted -- and orphan_blocks as the blocks dropped because their
+    parent topic was not restored.
     """
     stats = {}
     skipped = 0
+    orphan_blocks = 0
     cur = conn.cursor()
     try:
         cur.execute("SET session_replication_role = replica")
@@ -834,9 +854,10 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
             cur.execute("SAVEPOINT one_table")
             try:
                 if real in _PER_ROW_TABLES:
-                    inserted, dupes = _restore_rows_per_row(
+                    inserted, dupes, table_orphans = _restore_rows_per_row(
                         cur, real, columns, data, user_id, maps)
                     skipped += dupes
+                    orphan_blocks += table_orphans
                 else:
                     cur.execute(f'CREATE TEMP TABLE _stage (LIKE "{real}")')
                     # The column list is mandatory, not decorative. `COPY
@@ -907,7 +928,7 @@ def _import_tables(conn, parsed, user_id: int) -> tuple:
     # Without this the whole import is rolled back when the connection
     # closes: the caller would be told "restored" and lose every row.
     conn.commit()
-    return stats, skipped
+    return stats, skipped, orphan_blocks
 
 
 def _real_table(conn, table: str) -> str | None:
@@ -1021,7 +1042,7 @@ def _run_restore(zip_path, selection=None, user_id: int = 1):
 
         conn = db.get_connection()
         try:
-            stats, skipped = _import_tables(conn, parsed, user_id)
+            stats, skipped, orphan_blocks = _import_tables(conn, parsed, user_id)
         finally:
             conn.close()
 
@@ -1030,11 +1051,13 @@ def _run_restore(zip_path, selection=None, user_id: int = 1):
         failed = [t for t, n in stats.items() if n < 0]
 
         _log(f"✅ restore personal: usuario {user_id} -> {rows} filas, "
-             f"{skipped} ya existentes, {written} ficheros en "
+             f"{skipped} ya existentes, {orphan_blocks} bloques huérfanos "
+             f"omitidos, {written} ficheros en "
              f"{time.monotonic() - started:.1f}s")
         return {"ok": True, "rows_inserted": stats, "rows_total": rows,
                 "files_written": written, "failed_tables": failed,
-                "skipped": skipped, "imported": _section_counts(stats),
+                "skipped": skipped, "skipped_orphan_blocks": orphan_blocks,
+                "imported": _section_counts(stats),
                 "partial": bool(manifest.get("partial")),
                 "note": "Existing rows and files were left untouched."}, None
     except zipfile.BadZipFile:
@@ -1057,8 +1080,9 @@ def restore_mine(user_id):
     if not upload.filename or not upload.filename.endswith(".zip"):
         return jsonify(error="Expected a .zip personal backup"), 400
 
-    report, err = _run_restore(BytesIO(upload.read()),
-                               _selection_from_request(), user_id)
+    stream = upload.stream
+    stream.seek(0)
+    report, err = _run_restore(stream, _selection_from_request(), user_id)
     if err is not None:
         return jsonify(error=str(err)), getattr(err, "status", 500)
     return jsonify(report)
@@ -1201,6 +1225,8 @@ def _restore_job_worker(job_id: str) -> None:
                 job["state"] = "done"
                 job["result"] = {"rows_inserted": report["rows_inserted"],
                                  "skipped": report["skipped"],
+                                 "skipped_orphan_blocks":
+                                     report.get("skipped_orphan_blocks", 0),
                                  "files_written": report["files_written"],
                                  "partial": report["partial"]}
     except Exception as e:          # never leave the job hanging in "restoring"
@@ -1339,7 +1365,12 @@ def inspect_mine(user_id):
     if not upload.filename or not upload.filename.endswith(".zip"):
         return jsonify(error="Expected a .zip personal backup"), 400
     try:
-        zf = zipfile.ZipFile(BytesIO(upload.read()))
+        # Read straight from Flask's spooled upload stream: on a big
+        # backup the file already lives on disk, so ZipFile can page it
+        # in on demand instead of pulling the whole 1.3 GB into RAM.
+        stream = upload.stream
+        stream.seek(0)
+        zf = zipfile.ZipFile(stream)
     except zipfile.BadZipFile:
         return jsonify(error="Invalid or corrupt zip file"), 400
 

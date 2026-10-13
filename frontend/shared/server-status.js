@@ -22,6 +22,32 @@
     dot.classList.toggle("online", ok === true);
     dot.classList.toggle("offline", ok === false);
     dot.title = ok ? "Servidor conectado" : (ok === false ? "Servidor no disponible" : "Comprobando servidor…");
+    setServerDown(ok === false);
+  }
+
+  /* ---- honest, visible server-down state -----------------------------------
+     While /api/health fails the app marks itself stale: body.sf-server-down
+     (styled as a top bar in styles.css) plus one sticky notice. The notice is
+     created once — repeated failures every 5 s do not spam — and it is removed
+     automatically the moment a health check succeeds. Nothing is hidden or
+     deleted: the cached lists keep rendering, only a flag is toggled. */
+  var downNotice = null;
+
+  function setServerDown(down) {
+    document.body.classList.toggle("sf-server-down", down);
+    if (down) {
+      if (downNotice) return;
+      downNotice = document.createElement("div");
+      downNotice.id = "sf-server-down";
+      downNotice.setAttribute("role", "status");
+      downNotice.setAttribute("aria-live", "polite");
+      downNotice.textContent = "Servidor local no disponible — arráncalo (ventana del launcher)";
+      if (document.body.firstChild) document.body.insertBefore(downNotice, document.body.firstChild);
+      else document.body.appendChild(downNotice);
+    } else if (downNotice) {
+      if (downNotice.parentNode) downNotice.parentNode.removeChild(downNotice);
+      downNotice = null;
+    }
   }
 
   function check() {

@@ -89,16 +89,42 @@ def _windows_chrome_paths() -> list[str]:
     ]
 
 
+def _macos_chrome_paths() -> list[str]:
+    """Known install locations of Chrome on macOS.
+
+    On macOS Chrome is NOT on PATH either: ``shutil.which("chrome")`` answers
+    None for a normal install under /Applications, yet Playwright's
+    ``channel="chrome"`` resolves the ``.app`` bundle fine. macOS only allows
+    Chrome in /Applications or ~/Applications, so probing both covers a real
+    install. Without this the guard would claim "Falta Google Chrome" on a Mac
+    that has it (the mirror of the Windows bug fixed in _windows_chrome_paths).
+    """
+    return [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        os.path.expanduser(
+            "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ),
+    ]
+
+
 def _vnc_available() -> bool:
     """True when the container has the virtual-display toolchain."""
     return bool(shutil.which("Xvfb") and shutil.which("x11vnc"))
 
 
 def _missing_desktop_chrome() -> bool:
-    """True when the desktop Chrome required by ``--browser chrome`` is absent."""
+    """True when the desktop Chrome required by ``--browser chrome`` is absent.
+
+    Pure predicate (only shutil.which / os.path.isfile). Probes PATH binaries
+    plus the known Windows and macOS install dirs, because on both those
+    platforms Chrome lives outside PATH.
+    """
     if any(shutil.which(name) for name in _CHROME_BINARIES):
         return False
-    return not any(os.path.isfile(path) for path in _windows_chrome_paths())
+    return not any(
+        os.path.isfile(path)
+        for path in (*_windows_chrome_paths(), *_macos_chrome_paths())
+    )
 
 
 # ── Shared state ───────────────────────────────────────────────────────

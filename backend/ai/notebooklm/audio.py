@@ -1,10 +1,15 @@
 """
-Audio generation via edge-tts — verbatim reading or AI-timed script.
+Audio generation via the TTS engine — verbatim reading or AI-timed script.
+
+The TTS engine (backend/tts_engine.py) uses edge-tts first and falls back to
+the macOS ``say`` + ``afconvert`` pipeline when edge-tts fails (e.g. the
+2026 Microsoft endpoint migration returns HTTP 403), so the app is never mute.
 
 Pipeline (duration="complete", default):
 1. Fetch block content from DB
 2. Sanitize the content for speech (strip markdown tables/callouts/code/emojis)
-3. Call edge_tts to generate MP3 from the sanitized content (verbatim, no AI rewrite)
+3. Call the TTS engine to generate MP3 (or M4A on the say fallback) from the
+   sanitized content (verbatim, no AI rewrite)
 4. Save MP3 to /data/audio/
 5. Update ai_tasks with the audio URL path + the source content as transcript
    in coverage_data (audio and transcript coincide by construction — Issue #123)
@@ -16,7 +21,7 @@ Pipeline (duration="5"|"10"|"20", Issue #130):
    target minutes (~150 words/min word budget)
 3. Persist the provider-reported token usage to ai_usage_log (source='mp3')
    for cost tracking
-4. Call edge_tts to generate MP3 from the generated script
+4. Call the TTS engine (edge-tts, with the macOS say fallback) on the script
 5. Save MP3 to /data/audio/
 6. Update ai_tasks with the audio URL path + the generated script as transcript
    (audio and transcript coincide by construction — single AI rewrite, no drift)
@@ -32,13 +37,12 @@ which the frontend uses to construct an <audio> player. The transcript
 Markdown block alongside the MP3.
 """
 
-import asyncio
 import json
 import os
 import re
 import threading
 
-import edge_tts
+from tts_engine import TtsResult, synthesize
 
 from database import execute, execute_returning
 from ai.notebooklm.prompts import (
@@ -125,20 +129,15 @@ def _sanitize_for_speech(text: str) -> str:
     return text.strip()
 
 
-def _generate_speech(text: str, voice: str, output_path: str) -> None:
-    """Synchronous wrapper around edge_tts — saves MP3 to output_path."""
-    async def _run():
-        communicate = edge_tts.Communicate(text, voice)
-        audio_data = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
-        if not audio_data:
-            raise RuntimeError("edge-tts produced no audio data")
-        with open(output_path, "wb") as f:
-            f.write(audio_data)
+def _generate_speech(text: str, voice: str, output_path: str) -> TtsResult:
+    """Render speech to ``output_path`` via the TTS engine.
 
-    asyncio.run(_run())
+    Uses edge-tts with an automatic macOS ``say`` fallback (see
+    backend/tts_engine.py).  Returns the :class:`TtsResult` — its ``path``
+    may differ from ``output_path`` (e.g. ``.m4a`` when the fallback ran),
+    so callers must use ``result.path`` for the real file.
+    """
+    return synthesize(text, voice, output_path)
 
 
 def _generate_duration_script(
@@ -331,11 +330,13 @@ def _run_audio_task(
                 "⏳ Generando audio con TTS…",
             )
 
-        # ── Generate MP3 via edge-tts ──────────────────────────────────
+        # ── Generate audio via the TTS engine (edge-tts, macOS say fallback) ──
         audio_filename = f"audio_{task_id}.mp3"
         audio_path = os.path.join(_AUDIO_DIR, audio_filename)
         tts_voice = _LANG_CONFIG.get(language, _LANG_CONFIG["es"])["voice"]
-        _generate_speech(clean_script, tts_voice, audio_path)
+        tts_result = _generate_speech(clean_script, tts_voice, audio_path)
+        audio_path = tts_result.path
+        audio_filename = os.path.basename(audio_path)
 
         if not os.path.isfile(audio_path) or os.path.getsize(audio_path) == 0:
             raise RuntimeError("TTS produced empty audio file")

@@ -116,37 +116,9 @@ window.addEventListener('offline', updateOnlineStatus);
 
 
 // ─── PWA Install Prompt ─────────────────────────────────────────────
-let deferredPrompt = null;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  showInstallButton();
-});
-
-function showInstallButton() {
-  if (window.matchMedia('(display-mode: standalone)').matches) return;
-  if (localStorage.getItem('installPromptDismissed')) return;
-  
-  const btn = document.createElement('button');
-  btn.id = 'install-btn';
-  btn.className = 'install-btn';
-  btn.innerHTML = '📥 Instalar App';
-  btn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log('[PWA] Install outcome:', outcome);
-    if (outcome === 'accepted') {
-      btn.remove();
-    } else {
-      localStorage.setItem('installPromptDismissed', 'true');
-    }
-    deferredPrompt = null;
-  });
-  
-  document.body.appendChild(btn);
-}
+// Moved to /shared/pwa-install-prompt.js (loaded at the end of index.html):
+// the install affordance is now an explained in-app banner instead of a bare
+// floating button.
 
 
 // ─── Auth Token Management ──────────────────────────────────────────
@@ -1008,6 +980,81 @@ function _reportRestoreSuccess(result) {
   window.location.reload();
 }
 
+// ─── Borrar todo (reset destructivo, doble confirmación) ─────────────
+// Wipes ALL content so a clean backup can be restored. The server takes a
+// safety snapshot first and reports its path. The modal only enables the
+// final button once the user types BORRAR — a single misclick must not be
+// able to erase everything.
+function initReset() {
+  const overlay = document.getElementById('reset-overlay');
+  const input = document.getElementById('reset-confirm-input');
+  const go = document.getElementById('reset-go');
+  const err = document.getElementById('reset-error');
+  if (!overlay || !go) return;
+
+  const close = () => {
+    overlay.classList.add('hidden');
+    if (input) input.value = '';
+    go.disabled = true;
+    go.textContent = 'Borrar todo';
+    if (err) err.classList.add('hidden');
+  };
+
+  document.getElementById('btn-reset')?.addEventListener('click', () => {
+    overlay.classList.remove('hidden');
+    input?.focus();
+  });
+  document.getElementById('reset-close')?.addEventListener('click', close);
+  document.getElementById('reset-cancel')?.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+  input?.addEventListener('input', () => {
+    go.disabled = input.value.trim() !== 'BORRAR';
+  });
+  go.addEventListener('click', () => performReset(close));
+}
+
+async function performReset(close) {
+  const go = document.getElementById('reset-go');
+  const err = document.getElementById('reset-error');
+  if (err) err.classList.add('hidden');
+  go.disabled = true;
+  go.textContent = '⏳ Borrando…';
+  try {
+    const resp = await fetch(`${window.API_URL}/backup/reset`, {
+      method: 'POST',
+      // Content-Type omitted — there is no body to declare.
+      headers: _bkAuthHeaders(false),
+      credentials: 'include',
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    const rows = Object.values(data.tables || {})
+      .reduce((a, b) => a + (Number(b) || 0), 0);
+    const files = (data.media && data.media.files_removed) || 0;
+    close();
+    alert(
+      '✅ Contenido borrado.\n\n' +
+      `· ${rows} registros eliminados en ${data.tables_count} tablas\n` +
+      `· ${files} archivos eliminados\n` +
+      `· Snapshot de seguridad: ${data.snapshot || '(no disponible)'}\n\n` +
+      'Se conservan tu cuenta y los addons.\n' +
+      'Usa Restore para importar un backup limpio.'
+    );
+    window.location.reload();
+  } catch (e) {
+    go.disabled = false;
+    go.textContent = 'Borrar todo';
+    if (err) {
+      err.textContent = '❌ ' + e.message;
+      err.classList.remove('hidden');
+    } else {
+      alert('❌ Error al borrar: ' + e.message);
+    }
+  }
+}
+
 // Click wiring for the header buttons. With the selector loaded, Backup opens
 // the selective modal; without it (older caches) it falls back to a full
 // backup — same degradation path as the hub.
@@ -1030,6 +1077,7 @@ function initBackupRestore() {
     if (e.target.files?.length) inspectRestore(e.target.files[0]);
     e.target.value = ''; // reset so the same file can be picked again
   });
+  initReset();
 }
 
 

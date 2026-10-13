@@ -323,6 +323,9 @@ body {
   white-space: nowrap;
 }
 .hdr-btn:hover { color: var(--text); border-color: var(--primary); background: var(--surface-hover); }
+/* "Borrar todo" — destructive header action, red so it never reads as safe. */
+.hdr-btn.hdr-danger { color: var(--red); border-color: var(--red); }
+.hdr-btn.hdr-danger:hover { color: #fff; background: var(--red); border-color: var(--red); }
 
 /* ============================== TAB BAR ============================== */
 .tab-bar {
@@ -666,6 +669,66 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 
 .install-btn:hover { background: var(--primary-dark); }
 
+/* PWA install banner — in-app invitation to install (supersedes .install-btn). */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10000;
+  max-width: 340px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  line-height: 1.3;
+  animation: pwaBannerFadeIn 0.35s ease;
+}
+
+.pwa-install-banner__icon { font-size: 18px; flex-shrink: 0; }
+
+.pwa-install-banner__text { flex: 1; }
+
+.pwa-install-banner__install {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  background: #fff;
+  color: var(--primary-dark);
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pwa-install-banner__install:hover { background: var(--primary-light); color: #fff; }
+
+.pwa-install-banner__dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.8;
+  padding: 4px;
+}
+
+.pwa-install-banner__dismiss:hover { opacity: 1; }
+
+@keyframes pwaBannerFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 520px) {
+  .pwa-install-banner { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+}
+
 /* ============================== UPDATE NOTIFICATION ============================== */
 .update-notification {
   position: fixed;
@@ -994,6 +1057,25 @@ a.dashboard-nav-card { text-decoration: none; color: inherit; }
 button.server-status-wrap:hover { background: var(--surface-hover, #1f2a4a); }
 button.server-status-wrap:focus-visible { outline: 2px solid var(--primary, #4f8cff); outline-offset: 2px; }
 button.server-status-wrap[aria-busy="true"] { cursor: progress; }
+
+/* ============================== SERVER-DOWN NOTICE ==============================
+   The SW no longer intercepts /api/health, so when the local server is down the
+   health check genuinely fails and server-status.js adds body.sf-server-down.
+   The notice is a normal-flow sibling placed before .app, so it pushes the UI
+   down a few pixels instead of covering it: no content is hidden or unmounted,
+   the app is only marked stale until the next successful health check. */
+#sf-server-down { display: none; }
+body.sf-server-down #sf-server-down {
+  display: block;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--red);
+  background: var(--red-bg);
+  border-bottom: 1px solid var(--red);
+}
 
 /* ============================== STUDYFLOW PWA — FEATURE COMPONENTS ============================== */
 
@@ -2026,3 +2108,26 @@ button.server-status-wrap[aria-busy="true"] { cursor: progress; }
 
 .bksel-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); padding: 10px 14px; background: var(--surface-hover); border-radius: 0 0 var(--radius) var(--radius); }
 .bk-meta { font-size: 11px; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════════
+   RESET MODAL — "Borrar todo", doble confirmación (tipo BORRAR)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Same v3 adaptation as the backup selector: toggle `.hidden`, not
+   `.overlay.open`, and neutralise the scale transform. */
+#reset-overlay { opacity: 1; visibility: visible; position: fixed; inset: 0; z-index: 9600; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 18px; }
+#reset-overlay.hidden { display: none; }
+.reset-modal { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); transform: none; }
+.reset-modal .omodal-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--surface-hover); border-radius: var(--radius) var(--radius) 0 0; }
+.reset-modal .omodal-head h3 { font-size: 14px; font-weight: 600; color: var(--red); }
+.reset-modal .omodal-body { padding: 14px 16px; font-size: 12px; color: var(--text-secondary); }
+.reset-warn { margin: 0 0 10px; color: var(--text); }
+.reset-warn b { color: var(--red); }
+.reset-note { margin: 0 0 12px; padding: 8px 10px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: var(--radius-xs); }
+.reset-step { margin: 0 0 6px; font-weight: 600; color: var(--text); }
+.reset-input { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; letter-spacing: 2px; }
+.reset-input:focus { outline: none; border-color: var(--red); }
+.reset-actions { display: flex; gap: 8px; }
+.bk-btn.danger { background: var(--red-bg); border-color: var(--red); color: var(--red); font-weight: 600; }
+.bk-btn.danger:hover:not(:disabled) { background: var(--red); border-color: var(--red); color: #fff; }
+.bk-btn.danger:disabled { opacity: .45; cursor: not-allowed; }

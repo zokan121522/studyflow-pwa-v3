@@ -43,7 +43,7 @@
       "operatingSystem": "Windows, macOS, Linux",
       "url": "https://studyflowhub.dev/",
       "image": "https://studyflowhub.dev/img/app-1-dashboard.jpg",
-      "softwareVersion": "3.1.1",
+      "softwareVersion": "3.1.2",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -461,6 +461,25 @@
     .hc-card{padding:22px 16px 16px}
     .hc-label{font-size:12.5px;padding-left:34px}
   }
+
+  .beta-badge{font-size:12px;text-transform:uppercase;letter-spacing:.9px;
+       color:#fff;background:#ff5a1f;border:1px solid #ff5a1f;
+       border-radius:99px;padding:3px 12px;box-shadow:0 4px 14px rgba(255,90,31,.35)}
+  .beta-banner{display:none;background:linear-gradient(180deg,#fff8ec,#fff4de);
+       color:#8a5a12;border:1px solid #f0dcb8;border-radius:18px;padding:18px 20px;margin:0 0 22px;box-shadow:var(--shadow)}
+  @media (prefers-color-scheme: light){.beta-banner{background:#fff8ec;color:#8a5a12}}
+  .beta-downloads{display:none;gap:14px;flex-wrap:wrap;justify-content:center;margin:18px 0 8px}
+  .beta-chip{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+       background:var(--surface-2);border:1px dashed var(--accent);border-radius:16px;
+       padding:10px 14px;text-decoration:none;color:var(--text)}
+  .beta-chip small{color:var(--muted);font-size:12px}
+  .beta-chip .beta-cta{font-weight:700;color:var(--accent)}
+  .beta-notes{margin:14px 0 4px;padding-left:22px;color:#7a4f12;
+       font-size:14.5px;line-height:1.55;text-align:left;max-width:760px}
+  .beta-notes li{margin-bottom:6px}
+  .beta-notes li::marker{color:#ff5a1f}
+  .beta-note-mac{margin:8px 0 0;font-size:13px;opacity:.85;text-align:left;max-width:760px}
+
 </style>
 </head>
 <body>
@@ -471,6 +490,7 @@
     <div class="logo" aria-hidden="true">S</div>
     <p class="name">StudyFlow</p>
     <span class="tag" id="tag-version">3.1.1</span>
+    <span class="beta-badge" id="beta-badge" style="display:none">BETA</span>
   </header>
 
   <!-- ── Índice de la página ────────────────────────────────────── -->
@@ -528,7 +548,27 @@
       <button type="button" id="captura-oscuro" class="cap-btn" data-cap="oscuro" aria-pressed="false">Oscuro</button>
     </div>
   </div>
-  <section class="card gal" id="galeria" aria-labelledby="galeria-title">
+  <section id="beta" aria-label="Canal BETA">
+  <div id="beta-banner" class="beta-banner">
+    <strong>Versión BETA 3.1.2 — prueba temprana</strong>
+    <p style="margin:8px 0 0">Estas pruebas se realizan en canal BETA: la versión estable (<strong>3.1.1</strong>) y sus <code>*-latest</code> NO se tocan. Los ZIP BETA se indican abajo como descarga secundaria.</p>
+    <ul class="beta-notes" id="beta-notes">
+      <li><strong>macOS:</strong> la app se instala como servicio y se enciende <strong>SOLA</strong> al arrancar el Mac (ya no hay que abrir el lanzador).</li>
+      <li>Si se cae, se reanima sola: se acabó el aviso "servidor no disponible".</li>
+      <li>El botón "API" del panel ya reconecta siempre (ayudante local en <code>127.0.0.1:8478</code>).</li>
+      <li>Instalador de un solo doble clic, sin Terminal: prepara el entorno, registra el servicio y abre el navegador.</li>
+      <li>Cerrar la ventana del lanzador ya no apaga la app.</li>
+      <li>Comando para quitar el arranque automático sin perder datos.</li>
+    </ul>
+    <p class="beta-note-mac">ℹ️ El arranque automático es solo de macOS: Windows y Linux mantienen el lanzador manual.</p>
+    <div id="beta-downloads" class="beta-downloads"></div>
+    <figure class="nov-audio" style="margin-top:12px">
+      <audio controls preload="metadata" src="audio/novedades-3.1.2.mp3">Tu navegador no soporta audio.</audio>
+      <figcaption>Escucha las novedades de la BETA 3.1.2</figcaption>
+    </figure>
+  </div>
+  </section>
+<section class="card gal" id="galeria" aria-labelledby="galeria-title">
     <figure class="shot">
       <button type="button" class="thumb"
               data-full="img/app-1-dashboard.jpg?v=2"
@@ -1042,6 +1082,31 @@
           ORDEN.forEach(pintaPlat);
         }
         pintaFicha(actual);
+        // Render BETA if present in version.json
+        if (v.beta) {
+          var bb = document.getElementById('beta-banner');
+          var bd = document.getElementById('beta-downloads');
+          if (bb) bb.style.display = 'block';
+          if (bd) {
+            bd.innerHTML = '';
+            var bplats = v.beta.platforms || {};
+            ['windows','macos','linux'].forEach(function(os){
+              var p = bplats[os];
+              if (!p || !p.file) return;
+              var a = document.createElement('a');
+              a.className = 'beta-chip';
+              a.href = p.url || p.file;
+              a.setAttribute('aria-label','Descargar StudyFlow BETA para ' + os);
+              a.innerHTML = '<span class="beta-cta">⬇ BETA ' + (v.beta.version||'') + ' — ' + os + '</span>' +
+                            '<small>' + (p.size? Math.round(p.size/1048576)+' MB': '') + '</small>';
+              bd.appendChild(a);
+              bd.style.display = 'flex';
+            });
+          }
+          var bb2 = document.getElementById('beta-badge');
+          if (bb2) bb2.style.display = 'inline-flex';
+        }
+
 
         // Botón "Abrir StudyFlow": activo solo si version.json trae app_url.
         var appBtn = document.getElementById('btn-app');

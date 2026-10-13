@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# tts_speak.sh - Offline-first TTS for the orchestrator (Alvaro).
+#
+# WHY THIS FALLBACK EXISTS:
+#   Microsoft migrated their "Read Aloud" cloud endpoint from v1 to v2. Since
+#   2026-10-10 edge-tts requests coming from the EU/Spain receive HTTP 403
+#   (region/endpoint change), breaking cloud TTS. Upstream issue:
+#   rany2/edge-tts#490. Therefore we must not depend on the network for voice:
+#   this script tries edge-tts only if it is importable AND works within a
+#   short timeout, otherwise it falls back IMMEDIATELY to the macOS built-in
+#   `say` command (fully offline, no network, no pip installs).
+#
+# USAGE:
+#   bash scripts/tts_speak.sh "texto a decir"
+#   bash scripts/tts_speak.sh --voice Monica "texto a decir"
+#   bash scripts/tts_speak.sh --engine kokoro "texto a decir"
+#   bash scripts/tts_speak.sh --engine piper  "texto a decir"
+#   bash scripts/tts_speak.sh --engine say    "texto a decir"
+#
+# --engine (default: auto, overridable with STUDYFLOW_VOICE_ENGINE) selects it:
+#   auto    edge-tts if alive -> piper (offline default) -> `say` fallback.
+#   kokoro  local neural Kokoro (best quality); falls back to auto on failure.
+#   piper   local neural Piper; falls back to auto on failure.
+#   say     force the offline macOS `say` voice (skips edge-tts).
+#
+# Prints ONE line saying which engine spoke and NEVER exits non-zero when the
+# text was successfully spoken by `say`.
+#
+# --- OPTIONAL NEURAL ENGINE CONFIG -----------------------------------------
+# To enable Kokoro/Piper point this script at a venv/model. It reads an
+# optional shell-sourceable config file (first existing wins):
+#   $STUDYFLOW_VOICE_CONF   (default: ~/.studyflow-voice.conf)
+# Env vars below win over the config file. Recognised keys:
+#   STUDYFLOW_VOICE_ENGINE=auto|kokoro|piper|say   # default engine
+#   STUDYFLOW_VOICE_KOKORO=/abs/path/to/kokoro-venv/bin/python
+#       venv with `kokoro soundfile torch numpy` (Spanish voice default em_alex)
+#   STUDYFLOW_VOICE_KOKORO_VOICE=em_alex|em_santa|ef_dora
+#   STUDYFLOW_VOICE_PIPER=/abs/path/to/piper-venv/bin/python (or the piper CLI)
+#       a venv python is detected by basename and run as `python -m piper`.
+#   STUDYFLOW_VOICE_PIPER_MODEL=/abs/path/to/es_ES-*.onnx
+#   STUDYFLOW_VOICE_EDGE_VOICE=es-ES-AlvaroNeural  # cloud edge-tts voice
+#       (default: es-ES-AlvaroNeural; override per-call with --voice)
+#   STUDYFLOW_VOICE_SAY_VOICE=Monica   # preferred offline `say` voice
+# Model weights are cached locally on first use; afterwards fully offline.
+# The Piper child gets DYLD_LIBRARY_PATH=/opt/homebrew/lib prepended (no-op if
+# the onnxruntime wheel already bundles its libs).
+
+set -u
+
+# --- Optional neural engine config (env vars win over the config file) ------
+VOICE_CONF="${STUDYFLOW_VOICE_CONF:-$HOME/.studyflow-voice.conf}"
+if [ -f "$VOICE_CONF" ]; then . "$VOICE_CONF"; fi
+
+EDGE_VOICE_DEFAULT="${STUDYFLOW_VOICE_EDGE_VOICE:-es-ES-AlvaroNeural}"
+EDGE_TIMEOUT=12
+
+VOICE_OVERRIDE=""
+ENGINE="${STUDYFLOW_VOICE_ENGINE:-auto}"
+
+# --- Parse args: optional --engine/--voice flags, then a text argument ------
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --engine)
+            ENGINE="${2:-auto}"
+            shift 2 || true
+            ;;
+        --voice)
+            VOICE_OVERRIDE="${2:-}"
+            shift 2 || true
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+TEXT="${1:-}"
+
+if [ -z "$TEXT" ]; then
+    printf '\xF0\x9F\x94\x87 tts_speak: no text provided\n'
+    exit 2
+fi
+
+first40() {
+    # First 40 characters of the spoken text, UTF-8 safe enough for a log line.
+    printf '%s' "$1" | cut -c1-40
+}
+
+# --- Choose a Spanish `say` voice (probe installed voices, in order) --------
+# Order required: Monica, Jorge, Diego, Paulina, Juan.
+select_say_voice() {
+    if [ -n "$VOICE_OVERRIDE" ]; then
+        printf '%s' "$VOICE_OVERRIDE"
+        return
+    fi
+    if [ -n "${STUDYFLOW_VOICE_SAY_VOICE:-}" ]; then
+        printf '%s' "$STUDYFLOW_VOICE_SAY_VOICE"
+        return
+    fi
+    local available
+    available="$(say -v '?' 2>/dev/null || true)"
+
+    local candidate
+    for candidate in "Mónica" "Monica" "Jorge" "Diego" "Paulina" "Juan"; do
+        if printf '%s\n' "$available" | grep -qE "^${candidate}[[:space:]]"; then
+            printf '%s' "$candidate"
+            return
+        fi
+    done
+    # No preferred Spanish voice installed -> system default (empty name).
+    printf ''
+}
+
+# --- Offline fallback via `say` --------------------------------------------
+speak_with_say() {
+    local voice
+    voice="$(select_say_voice)"
+
+    if [ -n "$voice" ]; then
+        say -v "$voice" -- "$TEXT"
+    else
+        say -- "$TEXT"
+    fi
+    local rc=$?
+    # `say` returns 0 on success; if audio is muted it still exits 0. We report
+    # success as long as the command itself did not hard-fail with a bad voice.
+    if [ "$rc" -ne 0 ] && [ -n "$voice" ]; then
+        # Retry once with the system default so we never fail on voice quirks.
+        say -- "$TEXT" || true
+        voice=""
+    fi
+    if [ -n "$voice" ]; then
+        printf '\xF0\x9F\x94\x8A say (%s): %s\n' "$voice" "$(first40 "$TEXT")"
+    else
+        printf '\xF0\x9F\x94\x8A say (default): %s\n' "$(first40 "$TEXT")"
+    fi
+    exit 0
+}
+
+# --- Optional cloud path: edge-tts, short timeout, never hangs --------------
+try_edge_tts() {
+    command -v python3 >/dev/null 2>&1 || return 1
+    python3 -c 'import edge_tts' >/dev/null 2>&1 || return 1
+
+    local out
+    out="$(mktemp -t tts_speak.XXXXXX.mp3)" || return 1
+
+    python3 - "$EDGE_VOICE_DEFAULT" "$TEXT" "$out" >/dev/null 2>&1 <<'PY'
+import sys, asyncio
+try:
+    import edge_tts
+except Exception:
+    sys.exit(1)
+voice, text, out = sys.argv[1], sys.argv[2], sys.argv[3]
+async def main():
+    com = edge_tts.Communicate(text, voice)
+    with open(out, "wb") as fh:
+        async for chunk in com.stream():
+            if chunk.get("type") == "audio":
+                fh.write(chunk["data"])
+asyncio.run(asyncio.wait_for(main(), timeout=12.0))
+PY
+    local rc=$?
+
+    if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+        if command -v afplay >/dev/null 2>&1; then
+            afplay "$out" >/dev/null 2>&1 || true
+        fi
+        rm -f "$out"
+        printf '\xF0\x9F\x94\x8A edge-tts (%s): %s\n' "$EDGE_VOICE_DEFAULT" "$(first40 "$TEXT")"
+        exit 0
+    fi
+    rm -f "$out"
+    return 1
+}
+
+# --- Audio playback helper (afplay / ffplay / aplay, first available) -------
+play_file() {
+    local f="$1"
+    if command -v afplay >/dev/null 2>&1; then
+        afplay "$f" >/dev/null 2>&1 || true
+    elif command -v ffplay >/dev/null 2>&1; then
+        ffplay -nodisp -autoexit -loglevel quiet "$f" >/dev/null 2>&1 || true
+    elif command -v aplay >/dev/null 2>&1; then
+        aplay -q "$f" >/dev/null 2>&1 || true
+    fi
+}
+
+# --- Optional local neural engine: Kokoro ----------------------------------
+# Requires STUDYFLOW_VOICE_KOKORO = absolute path to a venv python that has
+# `kokoro soundfile numpy torch`. Fully offline once the weights are cached.
+speak_with_kokoro() {
+    local py="${STUDYFLOW_VOICE_KOKORO:-}"
+    local voice="${STUDYFLOW_VOICE_KOKORO_VOICE:-em_alex}"
+    [ -n "$py" ] && [ -x "$py" ] || return 1
+
+    local out
+    out="$(mktemp -t tts_kokoro.XXXXXX.wav)" || return 1
+
+    local to=""
+    if command -v timeout >/dev/null 2>&1; then to="timeout 120"; fi
+
+    # shellcheck disable=SC2086
+    $to "$py" - "$voice" "$TEXT" "$out" >/dev/null 2>&1 <<'PY'
+import sys
+import numpy as np
+import soundfile as sf
+from kokoro import KPipeline
+voice, text, out = sys.argv[1], sys.argv[2], sys.argv[3]
+pipe = KPipeline(lang_code='e')  # 'e' = Spanish
+chunks = list(pipe(text, voice=voice))
+audio = np.concatenate([c[2].numpy() for c in chunks])
+sf.write(out, audio, 24000, format='WAV')
+PY
+    local rc=$?
+    if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+        play_file "$out"
+        rm -f "$out"
+        printf '\xF0\x9F\x94\x8A kokoro (%s): %s\n' "$voice" "$(first40 "$TEXT")"
+        exit 0
+    fi
+    rm -f "$out"
+    return 1
+}
+
+# --- Optional local neural engine: Piper -----------------------------------
+# STUDYFLOW_VOICE_PIPER = absolute path to the `piper` CLI binary OR to a venv
+#   python interpreter (detected by basename; then `python -m piper` is used).
+# STUDYFLOW_VOICE_PIPER_MODEL = absolute path to a *.onnx Spanish voice model.
+speak_with_piper() {
+    local bin="${STUDYFLOW_VOICE_PIPER:-}"
+    local model="${STUDYFLOW_VOICE_PIPER_MODEL:-}"
+    [ -n "$bin" ] && [ -x "$bin" ] || return 1
+    [ -n "$model" ] && [ -f "$model" ] || return 1
+
+    local out txt
+    out="$(mktemp -t tts_piper.XXXXXX.wav)" || return 1
+    txt="$(mktemp -t tts_piper_in.XXXXXX.txt)" || return 1
+    printf '%s' "$TEXT" > "$txt"
+
+    # `bin` may be the piper CLI or a venv python interpreter.
+    local -a cmd=("$bin")
+    case "$(basename "$bin")" in
+        python|python3|python3.*) cmd=("$bin" -m piper) ;;
+    esac
+
+    local dylib="/opt/homebrew/lib"
+    if [ -n "${DYLD_LIBRARY_PATH:-}" ]; then dylib="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"; fi
+
+    local rc=1
+    if command -v timeout >/dev/null 2>&1; then
+        DYLD_LIBRARY_PATH="$dylib" timeout 120 "${cmd[@]}" -m "$model" -f "$out" -i "$txt" >/dev/null 2>&1
+        rc=$?
+    else
+        DYLD_LIBRARY_PATH="$dylib" "${cmd[@]}" -m "$model" -f "$out" -i "$txt" >/dev/null 2>&1
+        rc=$?
+    fi
+    rm -f "$txt"
+    if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+        play_file "$out"
+        rm -f "$out"
+        printf '\xF0\x9F\x94\x8A piper (%s): %s\n' "$(basename "$model")" "$(first40 "$TEXT")"
+        exit 0
+    fi
+    rm -f "$out"
+    return 1
+}
+
+# --- Auto path (edge-tts -> piper -> say) ----------------------------------
+run_auto() {
+    if [ "$(uname -s)" = "Darwin" ]; then
+        if try_edge_tts; then
+            : # edge-tts spoke and exited
+        fi
+        # Local neural Piper (offline) before the plain `say` fallback.
+        if speak_with_piper; then
+            : # piper spoke and exited
+        fi
+        speak_with_say
+    else
+        # Non-macOS: no offline `say`. Try edge-tts, then piper, else fail.
+        if ! try_edge_tts && ! speak_with_piper; then
+            printf '\xF0\x9F\x94\x87 tts_speak: no TTS engine available (non-macOS, edge-tts + piper failed)\n'
+            exit 3
+        fi
+    fi
+}
+
+# --- Main ------------------------------------------------------------------
+case "$ENGINE" in
+    kokoro) speak_with_kokoro || run_auto ;;
+    piper)  speak_with_piper  || run_auto ;;
+    say)    speak_with_say ;;
+    auto|*) run_auto ;;
+esac

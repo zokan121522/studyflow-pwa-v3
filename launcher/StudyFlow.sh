@@ -211,8 +211,8 @@ case "$ARG" in
 esac
 
 # ── abrir el navegador ──────────────────────────────────────────────────────
-# launch.py recuerda el puerto, que solo es 8477 si estaba libre: por eso la
-# URL se lee de su propia salida en vez de darla por hecha.
+# launch.py siempre usa el puerto fijo 8477 (nunca se desplaza a otro); la URL
+# se lee igualmente de su salida por si el mensaje cambia.
 URL="$(grep -m1 -Eo 'http://127\.0\.0\.1:[0-9]+/' "$TMP_OUT" || true)"
 [ -n "$URL" ] || URL="$DEFAULT_URL"
 

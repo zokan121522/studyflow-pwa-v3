@@ -81,7 +81,6 @@ ON CONFLICT (id) DO UPDATE SET
     start_time = EXCLUDED.start_time,
     end_time   = EXCLUDED.end_time,
     updated_at = NOW()
-RETURNING (xmax = 0) AS is_insert
 """
 
 
@@ -454,8 +453,21 @@ def _process_one_vevent(cur, component, today, window_end,
         return
 
     week_id = iso_week_key(event_day)
-    _upsert_week(week_id, user_id)
-    _upsert_day(fields["day_date"], week_id, user_id)
+    # One cursor, one connection: the manual import (``_walk_calendar_into_
+    # sessions``) and the scheduled one must both keep every write of a run
+    # on the transaction whose cursor it was handed. See ``_upsert_week``.
+    _upsert_week(week_id, user_id, cur)
+    _upsert_day(fields["day_date"], week_id, user_id, cur)
+
+    # INSERT vs UPDATE comes from a existence pre-check instead of Postgres's
+    # ``RETURNING (xmax = 0)``, which SQLite cannot run (no xmax column).
+    # Local-first is one process, one request at a time, so the pre-check
+    # cannot race with a concurrent writer.
+    cur.execute(
+        "SELECT 1 FROM sessions WHERE id = %s",
+        (fields["session_id"],),
+    )
+    is_insert = cur.fetchone() is None
 
     cur.execute(_UPSERT_ICS_SESSION_SQL, (
         fields["session_id"], fields["day_date"], week_id, user_id,
@@ -463,10 +475,6 @@ def _process_one_vevent(cur, component, today, window_end,
         fields["start_time"], fields["end_time"],
         fields["summary"], fields["notes"],
     ))
-    row = cur.fetchone()
-    # get_connection() sets RealDictCursor, so the row is a dict keyed by the
-    # RETURNING alias — row[0] raises KeyError: 0 and 500s the import.
-    is_insert = bool(row and row.get("is_insert"))
     counters["imported" if is_insert else "updated"] += 1
 
 

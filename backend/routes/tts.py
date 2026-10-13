@@ -1,12 +1,12 @@
 # backend/routes/tts.py
 """TTS generation route for StudyFlow PWA v3."""
 
-import subprocess
 import tempfile
 import os
 from flask import Blueprint, request, jsonify, send_file
 
 from routes.auth import token_required
+from tts_engine import TTSError, synthesize
 
 
 bp = Blueprint('tts', __name__)
@@ -30,39 +30,28 @@ def generate_tts(current_user_id: int):
     with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
         output_path = tmp.name
 
+    result_path = output_path
     try:
-        # Call edge-tts
-        cmd = [
-            'edge-tts',
-            '--text', text,
-            '--voice', voice,
-            '--rate', rate,
-            '--volume', volume,
-            '--write-media', output_path
-        ]
+        # Synthesize with edge-tts, falling back to macOS `say` on failure
+        # (backend/tts_engine.py). The fallback returns an .m4a/AAC file.
+        result = synthesize(text, voice, output_path, rate=rate, volume=volume)
+        result_path = result.path
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-        if result.returncode != 0:
-            return jsonify({'error': 'TTS generation failed', 'details': result.stderr}), 500
-
-        # Return the audio file
         return send_file(
-            output_path,
-            mimetype='audio/mpeg',
+            result.path,
+            mimetype=result.mimetype,
             as_attachment=True,
-            download_name='tts_output.mp3'
+            download_name=os.path.basename(result.path),
         )
 
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'TTS generation timed out'}), 504
-    except FileNotFoundError:
-        return jsonify({'error': 'edge-tts not installed'}), 500
-    except Exception as e:
+    except TTSError as e:
+        return jsonify({'error': 'TTS generation failed', 'details': str(e)}), 500
+    except Exception as e:  # noqa: BLE001 — keep the route from 500-ing uncaught
         return jsonify({'error': 'TTS generation failed', 'details': str(e)}), 500
     finally:
-        # Clean up temp file (in production, you'd want to stream it)
-        try:
-            os.unlink(output_path)
-        except OSError:
-            pass
+        # Clean up temp file(s) (in production, you'd want to stream it)
+        for path in {output_path, result_path}:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass

@@ -116,7 +116,16 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // instaladas seguirían sirviendo el renderer viejo y `![alt](url)` se vería en crudo.
 // v104: API button fix
 // v105: restore chunked upload (async)
-const ASSET_CACHE = 'studyflow-assets-v105';
+// v107: honest server-down state. The SW no longer intercepts /api/health or
+// /api/status (never cached), so the status dot stops lying when the local
+// server is down, and server-status.js marks the app with a visible notice.
+// server-status.js is precached by runtime only, but styles.css carries the
+// notice styling and IS precached, so the bump delivers it to installed PWAs.
+// v108: botón "Borrar todo" (reset destructivo) junto a Backup/Restore, con
+// modal de doble confirmación (tipo BORRAR). Cambian index.html, app.js y
+// styles.css — todos precacheados — así que sin este bump las PWAs instaladas
+// seguirían sin el botón.
+const ASSET_CACHE = 'studyflow-assets-v108';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
@@ -184,6 +193,9 @@ const PRECACHE_ASSETS = [
   '/shared/backup-restore.js',
   '/shared/session-miniplayer.js',
   '/shared/v2-restore-modal.js',
+  // v106: in-app PWA install banner (beforeinstallprompt → explained banner
+  // with [Instalar]/✕ instead of the bare floating button app.js used to add).
+  '/shared/pwa-install-prompt.js',
   // S5: quiz ecosystem. Same reason as above: index.html loads these with
   // <script src>, so a single missing entry means no test, no failed pool
   // and no summary while offline — the feature is simply gone.
@@ -285,6 +297,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Availability probes must NEVER be answered from cache.
+  //
+  // /api/health and /api/status are the app's only signal that the local
+  // server is alive. While the server is down the SW would otherwise replay a
+  // cached 200 from API_CACHE, so the "API" dot stayed green with the server
+  // off and the app could not tell a dead origin from a healthy one.
+  // Returning here (no respondWith) lets the browser hit the network
+  // directly: no cache read, no cache write, no fallback.
+  if (isServerStatusProbe(url.pathname)) {
+    return;
+  }
+
   // API calls: Network-first strategy.
   //
   // Two requests must reach the origin untouched (S7b-A):
@@ -345,10 +369,14 @@ async function cacheFirstAsset(request, event) {
 // Network-first strategy for API calls
 async function networkFirstApi(request) {
   const cache = await caches.open(API_CACHE);
-  
+  const isProbe = isServerStatusProbe(new URL(request.url).pathname);
+
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    // Cache only 200s, and never the availability probes. A cached probe is
+    // exactly what kept the status dot green while the server was down, so
+    // this is belt and braces in case a probe reaches this path another way.
+    if (response.status === 200 && !isProbe) {
       // Cache successful responses with timestamp
       const cloned = response.clone();
       const responseWithTimestamp = new Response(await cloned.blob(), {
@@ -364,6 +392,13 @@ async function networkFirstApi(request) {
     return response;
   } catch (error) {
     console.log('[SW] Network failed, trying cache for:', request.url);
+    // Probes must report the truth even offline: never replay them from cache.
+    if (isProbe) {
+      return new Response(JSON.stringify({ error: 'Offline', message: 'No cached data available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     const cached = await cache.match(request);
     
     if (cached) {
@@ -443,6 +478,13 @@ async function updateAssetCache(request, cache) {
 // Check if path is a static asset
 function isStaticAsset(pathname) {
   return /\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|webp|avif|map)$/i.test(pathname);
+}
+
+// /api/health and /api/status report live availability. They must bypass the
+// SW entirely — both in the fetch router and in networkFirstApi — or a cached
+// 200 masks a dead server and leaves the status dot green.
+function isServerStatusProbe(pathname) {
+  return pathname.startsWith('/api/health') || pathname.startsWith('/api/status');
 }
 
 // Listen for messages from clients (e.g., skipWaiting)

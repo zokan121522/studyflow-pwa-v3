@@ -1,21 +1,15 @@
 {
   "file": "StudyFlow-windows-latest.zip",
-  "versioned": "StudyFlow-windows-3.1.1.zip",
-  "version": "3.1.1",
-  "size": 54644649,
-  "date": "10/10/2026",
-  "sha256": "1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66",
+  "versioned": "StudyFlow-windows-3.1.2.zip",
+  "version": "3.1.2",
+  "size": 54696146,
+  "date": "13/10/2026",
+  "sha256": "99ad2ae2f7a13269d0f4c49ab0bdb2fe4184bf073419bc1a04f1b9af19e4eb4a",
   "app_url": "",
   "platforms": {
-    "windows": {"file": "StudyFlow-windows-3.1.1.zip", "size": 54644649, "sha256": "1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.1.zip"},
-    "macos": {"file": "StudyFlow-macos-3.1.1.zip", "size": 54644057, "sha256": "51f1bfdc3e2b6c86563671c6989dbe2df5f163ee36106b400df71c3c70ce1b56", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.1.zip"},
-    "linux": {"file": "StudyFlow-linux-3.1.1.zip", "size": 54643235, "sha256": "a34d1088a5705813d38c50026a7282a5a901232a6973e8a4d6367e316a89cdc7", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.1.zip"}
+    "windows": {"file": "StudyFlow-windows-3.1.2.zip", "size": 54696146, "sha256": "99ad2ae2f7a13269d0f4c49ab0bdb2fe4184bf073419bc1a04f1b9af19e4eb4a", "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.2.zip"},
+    "macos": {"file": "StudyFlow-macos-3.1.2.zip", "size": 54696500, "sha256": "4a61bd4e7b09edd7003707a69ba54f267daff89829e4e136cc013da53d53fdf2", "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.2.zip"},
+    "linux": {"file": "StudyFlow-linux-3.1.2.zip", "size": 54694664, "sha256": "0dacbbfa2cb0b437937b803433ebf1a2d09ce029940137f1a2b9563a1ed284a8", "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.2.zip"}
   },
-  "notes": [
-    "Punto verde: el servidor está en marcha. Un clic te lo confirma.",
-    "Punto rojo: el servidor está apagado. Un clic lo arranca por ti, con el progreso a la vista.",
-    "Si no logra arrancarlo, te lo dice claro y te indica dónde mirar el registro.",
-    "Una sola base de datos: tu copia local es la única fuente de verdad.",
-    "Arreglado el aviso de actualización de la app instalada."
-  ]
+  "notes": ["La app se enciende sola al arrancar el Mac y se reanima si se cae.", "El botón 'API' ya reconecta siempre.", "Instalador de un solo doble clic, sin usar la Terminal.", "Nuevo comando para quitar el arranque automático sin perder tus datos."]
 }

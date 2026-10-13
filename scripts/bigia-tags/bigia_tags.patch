@@ -1,0 +1,105 @@
+--- bigia_live.py
++++ bigia_live.py
+@@ -247,14 +247,22 @@
+         # "Proyecto" = carpeta de trabajo del hijo (session.directory)
+         self.project = os.path.basename((directory or "").rstrip("/")) or "—"
+         self.color = color
++        self.started_ms = None  # arranque de la sesión (time_created); el caller lo fija
++        self.label = self.title  # [TAG] del prompt, o el título si no hay tag
+         self.seen = {}          # part id -> status
+         self.cursor = 0         # time_updated máximo ya procesado
+         self.last_activity = time.time()
+         self.announced_idle = False
+ 
+     def tag(self, ts_ms=None):
+-        ts = hhmmss(ts_ms) if ts_ms else datetime.datetime.now().strftime("%H:%M:%S")
+-        return f"{self.color}[{ts}] [{self.agent}] [{self.project}]{RESET}"
++        # HH:MM:SS = arranque de la sesión (local); si se desconoce, la hora actual.
++        if self.started_ms:
++            ts = hhmmss(self.started_ms)
++        else:
++            ts = hhmmss(ts_ms) if ts_ms else datetime.datetime.now().strftime("%H:%M:%S")
++        label = " ".join(str(self.label or self.title or "").split())
++        return (f"{self.color}[{ts}] [{self.agent}] [{self.project}] "
++                f"[{label}]{RESET}")
+ 
+     def emit_tool(self, j, tupd, full=False):
+         """Volcado 'bonito' de un tool-call: cabecera + bloque(s) de código."""
+@@ -369,7 +377,7 @@
+     """Sesiones son-* a seguir: nuevas desde arranque (+ antiguas con --all)."""
+     try:
+         rows = con.execute(
+-            "SELECT id, agent, title, time_created, tokens_input, tokens_output, cost, directory "
++            "SELECT id, agent, title, time_created, tokens_input, tokens_output, cost, directory, model "
+             "FROM session WHERE agent LIKE ? ORDER BY time_created", (agent_like,)).fetchall()
+     except sqlite3.Error:
+         return []
+@@ -379,8 +387,54 @@
+         if adopt_old or tcreated >= start_ms - 2000:
+             out.append(r)
+     return out
++
++
++def delegation_tag(con, sid):
++    """Etiqueta [TAG] del hijo: 1ª línea del prompt (part texto de role=user más antiguo).
++
++    Devuelve el tag normalizado SIN corchetes, con espacios en vez de '_'/'-'
++    (p.ej. '[VOZ-JORGE]' → 'VOZ JORGE'), o None para que el llamante use
++    session.title. Defensivo: si falta `part`/`message`/columna o el JSON no es
++    válido, devuelve None sin lanzar (fallback al comportamiento actual).
++    """
++    try:
++        row = con.execute(
++            "SELECT p.data FROM part p JOIN message m ON m.id = p.message_id "
++            "WHERE p.session_id=? AND json_extract(m.data,'$.role')='user' "
++            "AND json_extract(p.data,'$.type')='text' "
++            "ORDER BY p.time_created LIMIT 1", (sid,)).fetchone()
++    except sqlite3.Error:
++        return None
++    if not row or not row[0]:
++        return None
++    try:
++        text = json.loads(row[0]).get("text") or ""
++    except (json.JSONDecodeError, TypeError, AttributeError):
++        return None
++    stripped = text.strip()
++    if not stripped:
++        return None
++    first = stripped.splitlines()[0].strip()
++    m = re.match(r"^\[([^\]]+)\]", first)
++    if not m:
++        return None
++    inner = " ".join(m.group(1).replace("_", " ").replace("-", " ").split())
++    return inner
+ 
+ 
++def model_name(raw):
++    """Nombre del modelo desde la columna session.model (JSON) — 'big-pickle'.
++
++    Defensivo: si no es JSON válido o falta 'id', devuelve el texto tal cual o None.
++    """
++    if not raw:
++        return None
++    try:
++        return json.loads(raw).get("id") or None
++    except (json.JSONDecodeError, TypeError, AttributeError):
++        return str(raw) if raw else None
++
++
+ def main():
+     args = parse_args()
+     if args.open_window:
+@@ -397,8 +451,12 @@
+         if sid not in followers:
+             color = PALETTE[len(followers) % len(PALETTE)]
+             f = Follower((row[0], row[1], row[2], row[4], row[5], row[6], row[7]), color)
++            f.started_ms = row[3]                       # time_created (local)
++            if not f.agent:                             # fallback: nombre del modelo
++                f.agent = model_name(row[8] if len(row) > 8 else None) or "—"
++            f.label = delegation_tag(con, sid) or f.title
+             followers[sid] = f
+-            print(f"\n{BOLD}═══ NUEVO HIJO · {f.agent} · {f.project} · {f.title} · {sid}{RESET}\n", flush=True)
++            print(f"\n{BOLD}═══ NUEVO HIJO · {f.agent} · {f.project} · {f.label} · {sid}{RESET}\n", flush=True)
+         return followers[sid]
+ 
+     print(f"{BOLD}🪟 Bigia Live — hijos [{args.agent}] · db={args.db} "

@@ -64,6 +64,13 @@ for item in "${INCLUDE[@]}"; do
     echo "    + $item"
 done
 
+# La version instalada, escrita DENTRO del LEEME (que en Windows es el del
+# repo raiz, copiado tal cual): el usuario puede confirmar que ZIP ha puesto.
+# Conserva el fin de linea LF que ya tiene el original.
+if [ -f "$STAGE/LEEME-PRIMERO.txt" ]; then
+    printf '\n   Version de StudyFlow: %s\n' "$VERSION" >> "$STAGE/LEEME-PRIMERO.txt"
+fi
+
 # ── strip what must not travel ───────────────────────────────────────────────
 echo "==> Eliminando basura local"
 strip() {

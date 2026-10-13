@@ -110,23 +110,46 @@ def _reconstruct_week(week_id: str, user_id: int) -> dict | None:
     }
 
 
-def _upsert_week(week_id: str, user_id: int) -> None:
-    db.execute(
+def _upsert_week(week_id: str, user_id: int, cur=None) -> None:
+    """Insert-or-touch the week row.
+
+    ``cur`` (optional) runs the statement on a caller-owned cursor. The
+    calendar importer passes the cursor of its own open transaction so the
+    weeks row, the day row and the session UPSERT all run on ONE connection
+    and commit together. Without it the two writers disagree: the importer's
+    cursor lives on the ``database`` module the import path imported, while
+    this module's ``db.execute`` lives on ``backend.database`` — two
+    separate SQLite connections to the same file. The importer's connection
+    holds its write lock across the whole feed, so the second week upsert
+    through the other connection dies with "database is locked". On Postgres
+    the same split worked only because MVCC hides it. Route callers keep
+    calling without ``cur`` and get the old ``db.execute`` behaviour.
+    """
+    sql = (
         "INSERT INTO weeks (week_id, user_id, schema_version, updated_at) "
         "VALUES (%s, %s, 2, NOW()) "
-        "ON CONFLICT (week_id, user_id) DO UPDATE SET updated_at = NOW()",
-        (week_id, user_id),
+        "ON CONFLICT (week_id, user_id) DO UPDATE SET updated_at = NOW()"
     )
+    params = (week_id, user_id)
+    if cur is not None:
+        cur.execute(sql, params)
+        return
+    db.execute(sql, params)
 
 
-def _upsert_day(date_str: str, week_id: str, user_id: int) -> None:
-    db.execute(
+def _upsert_day(date_str: str, week_id: str, user_id: int, cur=None) -> None:
+    """Same contract as ``_upsert_week``: the importer shares its cursor."""
+    sql = (
         "INSERT INTO days (date, week_id, user_id, updated_at) "
         "VALUES (%s, %s, %s, NOW()) "
         "ON CONFLICT (date, user_id) DO UPDATE SET "
-        "  week_id = EXCLUDED.week_id, updated_at = NOW()",
-        (date_str, week_id, user_id),
+        "  week_id = EXCLUDED.week_id, updated_at = NOW()"
     )
+    params = (date_str, week_id, user_id)
+    if cur is not None:
+        cur.execute(sql, params)
+        return
+    db.execute(sql, params)
 
 
 def _replace_day_sessions(date_str: str, week_id: str, user_id: int, sessions: list) -> None:

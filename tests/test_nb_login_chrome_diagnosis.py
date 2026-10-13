@@ -186,6 +186,39 @@ def test_windows_chrome_still_reported_missing_when_absent(monkeypatch):
     assert login._missing_desktop_chrome() is True
 
 
+# ── macOS-local port (2026-10-11) ────────────────────────────────────────
+
+def test_macos_chrome_found_in_applications(monkeypatch):
+    """Chrome on macOS lives in /Applications, not on PATH.
+
+    Mirror of the Windows bug: shutil.which() answers None for a normal Mac
+    install under /Applications/Google Chrome.app, so the guard claimed "Falta
+    Google Chrome" while the browser was installed (Playwright's
+    channel='chrome' resolves the .app bundle fine).
+    """
+    login = _login_module()
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.delenv("PROGRAMFILES", raising=False)
+    monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(
+        "os.path.isfile",
+        lambda p: p == "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    )
+    assert login._missing_desktop_chrome() is False
+
+
+def test_macos_chrome_still_reported_missing_when_absent(monkeypatch):
+    """The guard must still bite when Chrome really is gone on macOS."""
+    login = _login_module()
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.delenv("PROGRAMFILES", raising=False)
+    monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr("os.path.isfile", lambda p: False)
+    assert login._missing_desktop_chrome() is True
+
+
 def test_state_file_is_not_a_hardcoded_posix_tmp():
     """Windows has no /tmp: the hardcoded path would 500 on every state write.
 

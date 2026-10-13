@@ -54,6 +54,11 @@ PyMuPDF==1.28.2
 pillow==12.3.0
 
 # Síntesis de voz
+# edge-tts es la última release publicada. Desde 2026-10 Microsoft migró el
+# endpoint "Read Aloud" de v1 a v2 y rechaza (HTTP 403) el handshake legacy
+# por regiones (España/UE primero): NINGUNA versión instalable sintetiza hoy
+# desde esas regiones. Por eso el backend conserva este pin y añade un
+# fallback macOS `say`+`afconvert` (backend/tts_engine.py) para no quedarse mudo.
 edge-tts==7.2.8
 
 # ── Zona horaria del calendario importado ────────────────────────────────

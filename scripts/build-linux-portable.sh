@@ -210,6 +210,10 @@ cat > "$STAGE/LEEME-PRIMERO.txt" <<'EOF'
   README.md.
 EOF
 
+# La version instalada, escrita DENTRO del LEEME: el usuario puede confirmar
+# que ZIP ha puesto, y el matching con el publish es directo.
+printf '\n   Version de StudyFlow: %s\n' "$VERSION" >> "$STAGE/LEEME-PRIMERO.txt"
+
 # ── instalador visible en la RAIZ ───────────────────────────────────────────
 # Ademas de INSTALAR_StudyFlow.sh (que ya viaja), se genera un alias
 # install.sh y una guia corta INSTALL.txt justo en la raiz del paquete.

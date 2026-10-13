@@ -7,6 +7,7 @@ Usage
     python3 launcher/launch.py              start (or reopen) and open the browser
     python3 launcher/launch.py --no-browser start without opening a browser
     python3 launcher/launch.py --foreground run in this terminal, Ctrl-C stops
+    python3 launcher/launch.py --headless   service mode: server + helper, blocks
     python3 launcher/launch.py --stop       stop the local instance
     python3 launcher/launch.py status       report what is running
 
@@ -16,8 +17,9 @@ A PWA cannot write to the user's disk, so SQLite needs a process next to the
 browser. That process must be invisible and require no configuration, because
 the person using it is a student opening StudyFlow to revise, not an operator
 starting a web server. Everything below exists to make that true: a fixed port
-with a scan, no DSN to fill in, no console window left on screen, and the data
-outside the repository so deleting or re-cloning the code cannot take it away.
+that never drifts, no DSN to fill in, no console window left on screen, and the
+data outside the repository so deleting or re-cloning the code cannot take it
+away.
 
 Three decisions worth knowing about
 -----------------------------------
@@ -26,11 +28,13 @@ code. ``engine.data_dir()`` already defaults to
 ``~/Library/Application Support/studyflow`` on macOS, so this launcher only has
 to not fight it.
 
-**The port is remembered, not rediscovered blindly.** If the instance is already
-up, the launcher opens the browser and exits instead of starting a second
-server on a different port. Two servers on two ports over one SQLite file is a
-story nobody wants to debug, and SQLite would serialise them while the app
-quietly showed stale data in one of the two windows.
+**The port is fixed and is never rediscovered.** The server always binds 8477.
+If the instance is already up, the launcher opens the browser and exits instead
+of starting a second server. If 8477 is taken by something else, the launcher
+aborts with a clear message rather than drifting to another port: a launcher
+that silently moves leaves the user opening a URL nobody documented, and two
+servers on two ports over one SQLite file would show stale data in one window
+with no way to tell why.
 
 **SECRET_KEY is generated once and kept with the data.** It is the key that
 encrypts stored SCORM credentials (``backend/secret_box.py``), so a fresh one on
@@ -50,15 +54,17 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-#: First port tried. 8477 is arbitrary and unprivileged; the scan below is what
-#: actually makes it reliable, since anything else on the machine may hold it.
+#: The one and only port the server binds. 8477 is arbitrary and unprivileged.
+#: There is deliberately no fallback range: a launcher that silently drifts to
+#: another port leaves the user opening a URL nobody documented. If this port
+#: is taken the launcher aborts instead.
 DEFAULT_PORT = 8477
-PORT_SCAN_RANGE = 40
 
 #: The resident control helper (launcher/control.py) listens here. It is a
 #: separate, fixed port: it must be findable by a web page without a scan, and
@@ -152,27 +158,17 @@ def _our_database() -> Path:
 
 
 def running_port() -> int | None:
-    """The port of a live instance *of this install*, or None."""
-    try:
-        recorded = json.loads(state_file().read_text()).get("port")
-    except (OSError, ValueError, json.JSONDecodeError):
-        recorded = None
+    """The port of a live instance *of this install*, or None.
 
-    # The state file is inside the data directory, so it already scopes the
-    # check to this install; try it before scanning.
-    if isinstance(recorded, int):
-        payload = _probe(recorded)
-        if payload and _owns(payload):
-            return recorded
-
-    # No usable state file. A server may still be ours -- started by hand, or
-    # the file lost while it ran -- so scan, but accept a port only if it
-    # serves our database. Anything else is a foreign instance and is left
-    # alone; pick_port() will step over it.
-    for port in range(DEFAULT_PORT, DEFAULT_PORT + PORT_SCAN_RANGE):
-        payload = _probe(port, timeout=0.3)
-        if payload and _owns(payload):
-            return port
+    There is exactly one port to look at, so a remembered port from a previous
+    run is deliberately ignored: honouring a drifted value is the bug this
+    launcher no longer has. The port is accepted only if it serves our own
+    database -- a foreign service on 8477 is not ours and is left alone, for
+    pick_port() to report as a conflict.
+    """
+    payload = _probe(DEFAULT_PORT)
+    if payload and _owns(payload):
+        return DEFAULT_PORT
     return None
 
 
@@ -187,12 +183,19 @@ def _port_is_free(port: int) -> bool:
 
 
 def pick_port() -> int:
-    for port in range(DEFAULT_PORT, DEFAULT_PORT + PORT_SCAN_RANGE):
-        if _port_is_free(port):
-            return port
-    raise SystemExit(
-        f"No free port in {DEFAULT_PORT}-{DEFAULT_PORT + PORT_SCAN_RANGE - 1}."
-    )
+    """The server always binds DEFAULT_PORT, or the launcher aborts.
+
+    No scan, no fallback: a busy port means another instance (or something
+    else) already holds it, and quietly moving to 8488 would leave the user
+    with a URL that no longer matches what they know.
+    """
+    if not _port_is_free(DEFAULT_PORT):
+        raise SystemExit(
+            f"[ERROR] El puerto {DEFAULT_PORT} ya está en uso. "
+            "Otra instancia de StudyFlow está en marcha. "
+            "Ciérrala (o cierra la ventana/terminal antigua) y vuelve a abrir."
+        )
+    return DEFAULT_PORT
 
 
 # ─── environment ───────────────────────────────────────────────────
@@ -277,7 +280,12 @@ def child_executable() -> str:
     return pythonw if os.path.exists(pythonw) else sys.executable
 
 
-def spawn(port: int, env: dict, foreground: bool = False) -> subprocess.Popen:
+def spawn(
+    port: int,
+    env: dict,
+    foreground: bool = False,
+    detached: bool = True,
+) -> subprocess.Popen:
     log = log_file()
     handle = open(log, "a", buffering=1)
     handle.write(f"\n--- start {time.strftime('%Y-%m-%d %H:%M:%S')} port={port} ---\n")
@@ -292,8 +300,10 @@ def spawn(port: int, env: dict, foreground: bool = False) -> subprocess.Popen:
         # New session: the server must outlive the terminal that launched it,
         # which is what makes a double-click work. Windows has no setsid and
         # ignores the flag, which is why the console is handled by pythonw.exe
-        # in child_executable() instead.
-        start_new_session=os.name != "nt",
+        # in child_executable() instead. ``detached=False`` is for the
+        # service/headless mode, where the opposite is required: launchd's
+        # bootout must take the ports down with the job.
+        start_new_session=detached and os.name != "nt",
         cwd=str(repo_root()),
     )
 
@@ -355,12 +365,13 @@ def control_running() -> bool:
         return False
 
 
-def spawn_control() -> subprocess.Popen | None:
+def spawn_control(detached: bool = True) -> subprocess.Popen | None:
     """Start the resident helper detached, or None if one is already alive.
 
     Detached (new session; pythonw on Windows) for the same reason as the
     server: it has to survive the terminal that launched it, or the whole point
-    -- being there later when the server is down -- is lost.
+    -- being there later when the server is down -- is lost. ``detached=False``
+    is again the service case, where bootout must stop it too.
     """
     if control_running():
         return None  # reuse the live helper; never a second one on the port
@@ -371,7 +382,7 @@ def spawn_control() -> subprocess.Popen | None:
             f"port={control_port()} ---\n"
         )
     flags = 0
-    if os.name == "nt":
+    if os.name == "nt" and detached:
         for name in ("DETACHED_PROCESS", "CREATE_NEW_PROCESS_GROUP"):
             flags |= getattr(subprocess, name, 0)
     try:
@@ -380,7 +391,7 @@ def spawn_control() -> subprocess.Popen | None:
             stdout=open(log, "a", buffering=1),
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            start_new_session=os.name != "nt",
+            start_new_session=detached and os.name != "nt",
             creationflags=flags or 0,
             cwd=str(repo_root()),
         )
@@ -560,8 +571,8 @@ def start(open_it: bool = True, windowed: bool = True) -> int:
 
     existing = running_port()
     if existing is not None:
-        # The whole point of the remembered port: a second double-click opens
-        # the app that is already running instead of starting a rival.
+        # A second double-click opens the app that is already running on the
+        # fixed port instead of starting a rival.
         print(f"StudyFlow ya está corriendo en http://127.0.0.1:{existing}/")
         if open_it:
             open_app(existing, windowed=windowed)
@@ -587,6 +598,88 @@ def start(open_it: bool = True, windowed: bool = True) -> int:
     print(f"  log   : {log_file()}")
     if open_it:
         open_app(port, windowed=windowed)
+    return 0
+
+
+def headless() -> int:
+    """Run as a service: server + control helper up, no browser, then block.
+
+    This is the mode a macOS LaunchAgent runs (``install-autostart.command``
+    writes a plist that invokes it with ``--headless``). It differs from
+    ``start()`` in three ways, each one required by launchd's model:
+
+    * **It does not return while the server is healthy.** launchd's KeepAlive
+      restarts the job when it exits, so ``start()``, which deliberately exits
+      once the server is up, would be respawned in a tight loop. Here the
+      server is a supervised child and this process blocks for its lifetime.
+    * **The children share this process's session (not detached).** ``--stop``
+      and manual launches detach so the server outlives the terminal; a service
+      is the opposite: when launchd boots the job out, SIGTERM here must take
+      the ports with it, so both children are stopped before returning.
+    * **It never opens a browser.** Nobody is watching a service start.
+    """
+    directory = data_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+
+    server_proc: subprocess.Popen | None = None
+    port = running_port()
+    if port is None:
+        port = pick_port()
+        server_proc = spawn(port, child_env(port), detached=False)
+        if not wait_until_healthy(port, server_proc):
+            code = server_proc.poll()
+            print(
+                f"El servidor no arrancó (código {code}). Log: {log_file()}",
+                file=sys.stderr,
+            )
+            return 1
+        record_state(port, server_proc.pid)
+
+    control = spawn_control(detached=False)
+    if control is not None:
+        record_control_pid(control.pid)
+
+    print(f"StudyFlow (servicio) en http://127.0.0.1:{port}/")
+    return _supervise(server_proc, port)
+
+
+def _supervise(server_proc: subprocess.Popen | None, port: int) -> int:
+    """Block until asked to stop, or until the server we own dies.
+
+    A signal (launchd bootout, Ctrl-C) stops server and helper and returns 0: a
+    clean shutdown. A server that exits on its own returns 1 so launchd's
+    KeepAlive restarts the whole job -- which is how a crashed server comes
+    back without anyone touching a terminal.
+    """
+    stopping = threading.Event()
+
+    def _request_stop(signum, frame) -> None:  # noqa: ANN001
+        stopping.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _request_stop)
+        except (ValueError, OSError):
+            pass  # not the main thread (e.g. imported by tests): leave it
+
+    while not stopping.is_set():
+        if server_proc is not None and server_proc.poll() is not None:
+            stop_control()
+            return 1  # launchd's KeepAlive will bring us back
+        if server_proc is None and running_port() is None:
+            return 1  # we were only supervising an adopted instance
+        stopping.wait(2.0)
+
+    if server_proc is not None and server_proc.poll() is None:
+        try:
+            server_proc.terminate()
+            server_proc.wait(timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                server_proc.kill()
+            except OSError:
+                pass
+    stop_control()
     return 0
 
 
@@ -626,6 +719,11 @@ def main(argv: list[str] | None = None) -> int:
         help="abrir en el navegador normal en vez de una ventana de aplicación",
     )
     parser.add_argument("--foreground", action="store_true", help="servir en esta terminal")
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="modo servicio: servidor + helper, sin navegador, y no termina",
+    )
     parser.add_argument("--stop", action="store_true", help="detener la instancia local")
     parser.add_argument("command", nargs="?", choices=["start", "stop", "status"])
     args = parser.parse_args(argv)
@@ -634,6 +732,8 @@ def main(argv: list[str] | None = None) -> int:
         return stop()
     if args.command == "status":
         return status()
+    if args.headless:
+        return headless()
     if args.foreground:
         return foreground()
     # Windowed is the default on Windows because that is what the launcher is

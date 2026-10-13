@@ -5,5 +5,11 @@
   "3.1.0": [
     "Imágenes dentro de tus apuntes: pega o sube una imagen y aparece dentro de la nota.",
     "Copias portables de verdad: una copia hecha en un ordenador se abre bien en otro (Windows, macOS o Linux)."
+  ],
+  "3.1.2": [
+    "La app se enciende sola al arrancar el Mac y se reanima si se cae.",
+    "El botón 'API' ya reconecta siempre.",
+    "Instalador de un solo doble clic, sin usar la Terminal.",
+    "Nuevo comando para quitar el arranque automático sin perder tus datos."
   ]
 }

@@ -249,6 +249,11 @@ PASO 4) PARA DETENER LA APP
   README.md.
 EOF
 
+# La version instalada, escrita DENTRO del LEEME: el usuario puede confirmar
+# que ZIP ha puesto, y el matching con el publish es directo.  Se anota aqui
+# (tras el heredoc) para no tener que escapar el texto del propio LEEME.
+printf '\n   Version de StudyFlow: %s\n' "$VERSION" >> "$STAGE/LEEME-PRIMERO.txt"
+
 # ── instalador visible en la RAIZ ───────────────────────────────────────────
 # Ademas de INSTALAR_StudyFlow.command (que ya viaja), se genera un alias
 # install.command y una guia corta INSTALL.txt justo en la raiz del paquete.

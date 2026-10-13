@@ -165,6 +165,7 @@
         <!-- Backup / Restore — local (ZIP on disk, issue #7) -->
         <button id="btn-backup" class="hdr-btn" title="Backup — guardar datos locales (ZIP)">📦 Backup</button>
         <button id="btn-restore" class="hdr-btn" title="Restore — restaurar desde un ZIP local">⬆️ Restore</button>
+        <button id="btn-reset" class="hdr-btn hdr-danger" title="Borrar todo — elimina TODO el contenido (con snapshot de seguridad) para restaurar un backup limpio">🗑️ Borrar todo</button>
         <!-- Restore picker. accept=".zip" (not the hub's stale ".tar.gz"):
              POST /api/backup/mine/restore takes a ZIP. -->
         <input type="file" id="restore-input" accept=".zip" style="display:none">
@@ -524,6 +525,41 @@
   </div>
 </div>
 
+<!-- "Borrar todo" — doble confirmación. Primero se avisa de que borra TODO
+     el contenido y de que se toma un snapshot de seguridad automático;
+     después hay que escribir BORRAR para habilitar el botón final. -->
+<div class="overlay hidden" id="reset-overlay" role="dialog" aria-modal="true" aria-label="Borrar todo el contenido">
+  <div class="omodal reset-modal">
+    <div class="omodal-head">
+      <h3>🗑️ Borrar todo el contenido</h3>
+      <button id="reset-close" class="bk-log-x" title="Cerrar">×</button>
+    </div>
+    <div class="omodal-body">
+      <p class="reset-warn">
+        Esto elimina <b>TODO</b> tu contenido: asignaturas, temas, bloques,
+        agenda, hábitos, tests, flashcards, notas y los archivos subidos
+        (PDFs, audio, imágenes). Se conservan tu cuenta y los addons.
+      </p>
+      <p class="reset-note">
+        🛡️ Antes de borrar se guarda automáticamente un
+        <b>snapshot de seguridad</b> de la base de datos junto a ella. Si algo
+        va mal, el servidor te devolverá la ruta del archivo.
+      </p>
+      <p class="reset-step">Escribe <b>BORRAR</b> para confirmar:</p>
+      <input id="reset-confirm-input" class="reset-input" type="text"
+             autocomplete="off" spellcheck="false" placeholder="BORRAR">
+      <div id="reset-error" class="bk-banner err hidden"></div>
+    </div>
+    <div class="bksel-foot">
+      <div class="bk-meta">Se recomienda tener un backup antes de continuar.</div>
+      <div class="reset-actions">
+        <button id="reset-cancel" class="bk-btn" type="button">Cancelar</button>
+        <button id="reset-go" class="bk-btn danger" type="button" disabled>Borrar todo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============================== BACKUP LOG ============================== -->
 <!-- Visible proof that a long backup is alive. The server sends no bytes for
      the first ~80s while it builds the archive, so without this the button
@@ -679,5 +715,6 @@
   <script src="/shared/server-status.js"></script>
   <script src="/shared/status-panel.js"></script>
   <script src="/shared/session-miniplayer.js"></script>
+  <script src="/shared/pwa-install-prompt.js"></script>
 </body>
 </html>

@@ -679,11 +679,29 @@ def _register_functions(conn: sqlite3.Connection) -> None:
     def _pg_repeat(value, times):
         return None if value is None else str(value) * int(times)
 
+    def _pg_btrim(value, characters=None):
+        """Postgres ``btrim(string[, chars])`` — strip characters off both ends.
+
+        The session-upsert notes guard
+        (``WHEN sessions.notes IS NULL OR btrim(sessions.notes) = ''``) calls
+        it with one argument, which is ``str.strip()`` in SQLite terms. The
+        two-argument form (strip a custom character set) is registered too,
+        because Postgres has it and the next query that uses it must not 500.
+        """
+        if value is None:
+            return None
+        text = str(value)
+        if characters is None:
+            return text.strip()
+        return text.strip(str(characters))
+
     conn.create_function("left", 2, _pg_left)
     conn.create_function("left", 1, _pg_left)
     conn.create_function("right", 2, _pg_right)
     conn.create_function("right", 1, _pg_right)
     conn.create_function("repeat", 2, _pg_repeat)
+    conn.create_function("btrim", 1, _pg_btrim)
+    conn.create_function("btrim", 2, _pg_btrim)
 
     def _regexp_extract(subject, pattern):
         """Postgres ``substring(x from 'pat')`` via _rewrite_substring_from.

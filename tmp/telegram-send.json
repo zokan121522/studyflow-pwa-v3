@@ -1,0 +1,7 @@
+{
+  "command": "python3 /Users/jaimevilaplanarejon/.config/opencode/scripts/tg_notify.py --chat 5874504220 --text \"✅ studyflowhub.dev está ARRIBA (HTTP/2 200 desde el servidor). El fallo es de tu red: el ISP intercepta el TLS. Pruébalo con datos móviles o VPN. La desinstalación no borró nada: tu DB está en ~/.Trash/studyflow-uninstall-20261011-171159/\"",
+  "exit_code": 0,
+  "stdout": "✅ texto enviado (message_id 636)\n",
+  "stderr": "",
+  "api_response": null
+}

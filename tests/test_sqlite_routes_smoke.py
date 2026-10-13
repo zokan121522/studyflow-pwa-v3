@@ -137,15 +137,41 @@ def _rules(app):
             yield method, _fill(rule.rule)
 
 
+#: Media categories whose env var must point at a temp dir here. This suite
+#: calls EVERY route, and one of them (POST /api/backup/reset) erases the
+#: configured media directories. Without these overrides the smoke test would
+#: delete the developer's real uploads (~/.studyflow-app/audio, the repo's
+#: uploads/pdfs, ...) on a plain `pytest` run. Every path this file can reach
+#: must be throwaway.
+_MEDIA_DIRS = {
+    "PDF_UPLOAD_FOLDER": "pdfs",
+    "AUDIO_UPLOAD_FOLDER": "audio",
+    "INFOGRAPHIC_UPLOAD_FOLDER": "infographics",
+    "IMAGE_UPLOAD_FOLDER": "images",
+    "SCRAPED_DIR": "scraped_pdfs",
+}
+
+
 @pytest.fixture(scope="module")
 def smoke_app(tmp_path_factory):
-    """The real app, wired against a throwaway SQLite file."""
+    """The real app, wired against a throwaway SQLite file and temp media."""
     data_dir = tmp_path_factory.mktemp("smoke")
     import os
 
     os.environ["STUDYFLOW_DB_ENGINE"] = "sqlite"
     os.environ["STUDYFLOW_DATA_DIR"] = str(data_dir)
     os.environ.pop("DATABASE_URL", None)
+
+    media_root = tmp_path_factory.mktemp("smoke-media")
+    # Save the previous values: this fixture is module-scoped, so anything it
+    # sets stays set for every later test file. Restoring on teardown keeps
+    # test_storage_paths' "env unset → owning module's fallback" assertions
+    # meaningful (they would otherwise see these temp paths).
+    saved_media = {var: os.environ.get(var) for var in _MEDIA_DIRS}
+    for var, folder in _MEDIA_DIRS.items():
+        target = media_root / folder
+        target.mkdir(parents=True)
+        os.environ[var] = str(target)
 
     import database
 
@@ -157,6 +183,11 @@ def smoke_app(tmp_path_factory):
     app.config.update(TESTING=True)
     yield app
 
+    for var, previous in saved_media.items():
+        if previous is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = previous
     database.close_pool()
 
 

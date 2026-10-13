@@ -8,8 +8,9 @@ for that, and notifying on every daily run would train them to ignore it.
 
 Deduplication is unchanged and unchanged in spirit: the sanitised UID becomes
 the primary key and ON CONFLICT updates, so re-running is idempotent. The
-`is_insert` flag from RETURNING is what separates "new" from "updated" —
-that is why a row alias bug here was so expensive.
+`is_insert` flag is what separates "new" from "updated" — it comes from an
+existence pre-check, because the Postgres spelling ``RETURNING (xmax = 0)``
+cannot run on the local SQLite engine (no xmax column).
 """
 
 import logging
@@ -45,7 +46,6 @@ ON CONFLICT (id) DO UPDATE SET
         WHEN sessions.notes IS NULL OR btrim(sessions.notes) = '' THEN EXCLUDED.notes
         ELSE sessions.notes
     END
-RETURNING (xmax = 0) AS is_insert
 """
 
 
@@ -66,8 +66,21 @@ def process_one_vevent(cur, component, window_start, window_end,
         return False
 
     week_id = iso_week_key(event_day)
-    _upsert_week(week_id, user_id)
-    _upsert_day(fields["day_date"], week_id, user_id)
+    # Both upserts run on THIS cursor, so the whole feed shares one
+    # connection/transaction. ``_upsert_week`` without it would write
+    # through ``backend.database`` — a second SQLite connection — and
+    # collide with the session write lock this cursor already holds.
+    _upsert_week(week_id, user_id, cur)
+    _upsert_day(fields["day_date"], week_id, user_id, cur)
+
+    # INSERT vs UPDATE via a pre-check instead of Postgres's ``xmax = 0``:
+    # SQLite has no xmax column, and local-first is a single writer, so the
+    # check cannot race with a concurrent insert of the same id.
+    cur.execute(
+        "SELECT 1 FROM sessions WHERE id = %s",
+        (fields["session_id"],),
+    )
+    is_insert = cur.fetchone() is None
 
     cur.execute(_UPSERT_ICS_SESSION_SQL, (
         fields["session_id"], fields["day_date"], week_id, user_id,
@@ -75,9 +88,6 @@ def process_one_vevent(cur, component, window_start, window_end,
         fields["start_time"], fields["end_time"],
         fields["summary"], fields["notes"],
     ))
-    row = cur.fetchone()
-    # RealDictCursor: the row is a dict keyed by the RETURNING alias.
-    is_insert = bool(row and row.get("is_insert"))
     counters["imported" if is_insert else "updated"] += 1
     if is_insert:
         new_sessions.append(dict(fields, title=fields["summary"]))
