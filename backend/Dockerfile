@@ -71,6 +71,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpangocairo-1.0-0 \
         libpango-1.0-0 \
         libcairo2 \
+        # Librerias extra del Chrome de escritorio que exige el login de
+        # NotebookLM por VNC (routes/notebooklm_login.py). Playwright las
+        # instala solo en x86_64 al hacer `install-deps chrome`; en arm64
+        # ese canal se omite, asi que las dejamos explicitas para que el
+        # sandbox VNC arranque en cualquier arquitectura.
+        libxss1 \
+        libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependencias Python primero: cambia menos que el código, así que la
