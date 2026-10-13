@@ -26,6 +26,15 @@ PUBLISH_HOST="${PUBLISH_HOST:-server}"
 REMOTE_DIR="${PUBLISH_REMOTE_DIR:-~/studyflow-downloads/public}"
 
 mkdir -p "$STATE_DIR"
+
+# ── ssh de despliegue: sin el Include de colima (ilegible en contexto launchd) ─
+#     Bajo LaunchAgent, ssh no puede leer ~/.colima/ssh_config ("Operation not
+#     permitted"); usamos una copia filtrada del config para el rsync.
+if [ -f "$HOME/.ssh/config" ]; then
+  sed '/^[[:space:]]*Include[[:space:]]/d' "$HOME/.ssh/config" > "$STATE_DIR/ssh_config" 2>/dev/null || true
+  export RSYNC_RSH="ssh -F $STATE_DIR/ssh_config"
+fi
+
 log(){ echo "[$(date '+%F %T')] $*" >>"$LOG"; }
 
 # ── una sola instancia (pidfile portable en macOS) ──────────────────────────
