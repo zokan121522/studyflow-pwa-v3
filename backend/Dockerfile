@@ -3,6 +3,10 @@ FROM python:3.12-slim
 # ─────────────────────────────────────────────────────────────────────
 # studyflow-pwa-v3 · imagen del backend
 #
+# Variante BACKEND-ONLY (contexto ./backend, sirve vía gunicorn en /srv con
+# el repo bind-mounteado). Para la imagen autocontenida que incluye también
+# frontend/ y el stack VNC, usar el Dockerfile.server de la raíz del repo.
+#
 # No tocar solo el requirements: hay tres dependencias que NO son de pip
 # y que sin ellas fallan en runtime (no en build, que es lo que confunde):
 #

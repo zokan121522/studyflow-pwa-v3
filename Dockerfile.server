@@ -1,0 +1,144 @@
+FROM python:3.12-slim
+
+# ═════════════════════════════════════════════════════════════════════════
+#  StudyFlow · Dockerfile.server  —  FULL server image (backend + frontend)
+# ═════════════════════════════════════════════════════════════════════════
+#
+#  BUILT FROM REPO ROOT. The context MUST be the repository root:
+#
+#      docker build -f Dockerfile.server -t studyflow-beta:full .
+#
+#  Do NOT build with `-f backend/Dockerfile` + `context: ./backend`: that is
+#  the backend-ONLY variant and cannot see frontend/, so the app builds but
+#  the root route 404s (static_serve.py finds no FRONTEND_DIR and mounts
+#  nothing — a silent no-op, which is why the failure looks like a network
+#  error instead of a build error).
+#
+#  LAYOUT DECISION — mirror the OLD WORKING container (/app), not /srv.
+#  Verified in launcher/launch.py and launcher/serve.py: neither hardcodes
+#  /app. Both derive the repo root from `__file__`
+#  (Path(__file__).resolve().parent.parent → the directory holding
+#  backend/, frontend/ and launcher/). So the ONLY contract is that those
+#  three directories are SIBLINGS. The old image put them at /app and ran
+#  `python3 launcher/launch.py --headless`; we reproduce exactly that.
+#
+#  FRONTEND_DIR resolves with zero configuration: static_serve.py defaults to
+#  <dirname(backend/static_serve.py)>/../frontend → /app/frontend.
+#
+#  RUNTIME: the launcher's serve.py binds 127.0.0.1:8477 (fixed port, no
+#  fallback), plus the resident control helper on 8477+1 = 8478. To reach it
+#  from the host the old container ran with `--network host`. Same here:
+#      docker run --rm --network host studyflow-beta:full
+#
+#  backend/Dockerfile is untouched: it stays as the backend-only / gunicorn
+#  variant used by docker-compose (repo bind-mounted at /srv). This file is
+#  the self-contained "whole product in one image" recipe.
+# ═════════════════════════════════════════════════════════════════════════
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PATH=/usr/local/bin:$PATH \
+    PYTHONPATH=/app/backend:/app \
+    # HOME is where engine.data_dir() falls back to (XDG default →
+    # $HOME/.local/share/studyflow). A slim image as root already has
+    # /root, but we pin it explicitly so the launcher's pid/log/DB state
+    # has a guaranteed writable home inside the container.
+    HOME=/root
+
+WORKDIR /app
+
+# ── System layer (mirrors backend/Dockerfile exactly) ────────────────────
+# The WHY of every block is the same as c161a6f; keep them in sync.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        curl \
+        # nodejs para la CLI de edge-tts (no está en slim)
+        nodejs \
+        npm \
+        # Display virtual + servidor VNC + WM para el login embebido de
+        # NotebookLM (backend/routes/notebooklm_login.py, modo VNC). x11vnc
+        # expone el display por RFB; fluxbox da un gestor de ventanas para
+        # que el Chromium headed tenga dónde dibujar; xauth lo pide Xvfb.
+        xvfb \
+        x11vnc \
+        fluxbox \
+        xauth \
+        # Chromium necesita estas librerías en Debian
+        libnss3 \
+        libnspr4 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libasound2 \
+        libpangocairo-1.0-0 \
+        libpango-1.0-0 \
+        libcairo2 \
+        # Librerias extra del Chrome de escritorio que exige el login de
+        # NotebookLM por VNC. Playwright las instala en x86_64 al hacer
+        # `install-deps chrome`; en arm64 ese canal se omite, así que las
+        # dejamos explícitas para que el sandbox VNC arranque en cualquier
+        # arquitectura.
+        libxss1 \
+        libgtk-3-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python deps ──────────────────────────────────────────────────────────
+# requirements live under backend/ in the repo-root context, but install to
+# a stable path so the layer caches while only the code below changes.
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Playwright: Chromium bundled (lo usa Selenium y las infografías).
+RUN playwright install --with-deps chromium
+
+# noVNC: estáticos que sirve routes/novnc_proxy.py. Solo los ficheros; el
+# bridge WebSocket ↔ RFB lo hace el propio Flask con gevent.
+ARG NOVNC_VERSION=1.5.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+        | tar xz -C /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && ln -sf /opt/novnc/vnc.html /opt/novnc/index.html
+
+# Playwright: Chrome de escritorio para el login de NotebookLM
+# (`notebooklm login --browser chrome`, canal system-installed). El canal
+# `chrome` de Google NO existe para Linux arm64: el build abortaría, así que
+# se salta en arm64 igual que en backend/Dockerfile.
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        playwright install --with-deps chrome \
+        && playwright install-deps chrome; \
+    else \
+        echo "arm64: se omite el canal chrome (no existe para esta arquitectura)"; \
+    fi \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Product code: SIBLINGS at /app, so the launcher's repo_root() works ──
+# Only the three runtime trees — NOT `COPY . .` (that would drag .git, dist,
+# etc. into the image). frontend/ is copied as-is; we do NOT run the
+# build-frontend.sh minifier, matching the old working container.
+COPY backend  /app/backend
+COPY frontend /app/frontend
+COPY launcher /app/launcher
+
+# Carpetas de almacenamiento: la imagen debe arrancar sola sin volúmenes.
+RUN mkdir -p /app/backend/uploads/pdfs /app/backend/uploads/audio \
+             /app/backend/uploads/infographics /app/backend/uploads/notebooklm \
+             /app/backend/uploads/scraped_pdfs
+
+# 8477 = app (serve.py), 8478 = control helper (launcher/control.py).
+EXPOSE 8477 8478
+
+# Mirror the OLD WORKING container: repo at /app, launcher in --headless mode
+# (server + control helper up, no browser, blocks for the process lifetime).
+# launch.py derives repo_root from __file__ → /app, so serve.py finds
+# backend/ and static_serve.py finds /app/frontend. Fixed port 8477.
+CMD ["python3", "/app/launcher/launch.py", "--headless"]
