@@ -120,6 +120,10 @@ if (!window.App.UI.displayTitle) {
       var ln = lines[i];
       // Horizontal rule
       if (/^\s*-{3,}\s*$/.test(ln)) { out.push("<hr>"); i++; continue; }
+      // Page break marker <!-- pagebreak --> → forces a new page in the PDF
+      if (/^\s*<!--\s*pagebreak\s*-->\s*$/i.test(ln)) {
+        out.push('<hr class="md-pagebreak" data-pagebreak>'); i++; continue;
+      }
       // Headings
       var h = /^\s*(#{1,3})\s+(.+)$/.exec(ln);
       if (h) { out.push("<h" + h[1].length + ">" + _inline(h[2]) + "</h" + h[1].length + ">"); i++; continue; }
@@ -165,8 +169,7 @@ if (!window.App.UI.displayTitle) {
              !/^\s*\d+\.\s+/.test(lines[i]) &&
              !/^\s*-{3,}\s*$/.test(lines[i])) {
         p.push(lines[i]); i++;
-      }
-      out.push("<p>" + _inline(p.join(" ")) + "</p>");
+      }      out.push("<p>" + _inline(p.join(" ")) + "</p>");
     }
     return out.join("");
   }
@@ -206,6 +209,7 @@ if (!window.App.UI.displayTitle) {
       case "codeblock":  before = nl + "```\n"; after = "\n```"; placeholder = "código"; break;
       case "table":      before = nl + "| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |"; break;
       case "hr":         before = nl + "---"; break;
+      case "pagebreak":  before = nl + "<!-- pagebreak -->\n"; break;
       default: return;
     }
     if (sel) {

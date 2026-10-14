@@ -69,6 +69,7 @@ window.App.MarkdownEditor = (function () {
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'blockquote')" title="Cita">❝</button>
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'codeblock')" title="Bloque de código">&lt;/&gt;⁺</button>
       <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'hr')" title="Línea horizontal">—</button>
+      <button type="button" class="md-tb-btn" onclick="${M}.applyMarkdown(this,'pagebreak')" title="Salto de página">⤓</button>
       <span class="md-tb-sep"></span>
       <span class="md-color-wrap">
         <button type="button" class="md-tb-btn md-color-btn" onclick="${M}.toggleColorPicker(this)" title="Color de texto">🎨</button>
@@ -96,7 +97,7 @@ window.App.MarkdownEditor = (function () {
   // applyMarkdown(btn, type) — wrap/insert md syntax at selection.
   // Ported verbatim from v2 courses.js L482-531. type ∈
   // bold | italic | code | link | h1 | h2 | h3 | ul | ol |
-  // blockquote | codeblock | table | hr.
+  // blockquote | codeblock | table | hr | pagebreak.
   // ───────────────────────────────────────────────────────────────
   function applyMarkdown(btn, type) {
     const ta = btn.closest(".md-toolbar")
@@ -124,6 +125,7 @@ window.App.MarkdownEditor = (function () {
       case "codeblock":  before = nl + "```\n"; after = "\n```"; placeholder = "código"; break;
       case "table":      before = nl + "| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |"; break;
       case "hr":         before = nl + "---"; break;
+      case "pagebreak":  before = nl + "<!-- pagebreak -->\n"; break;
       default: return;
     }
 
