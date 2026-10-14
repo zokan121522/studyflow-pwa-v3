@@ -54,15 +54,13 @@ _IFRAME_SELECTORS = (
     ("css selector", "iframe[name*='scorm']"),
     ("css selector", "iframe[id*='scorm']"),
     ("css selector", "iframe[src*='scorm']"),
-      ("css selector", "#scorm_iframe"),
-      ("css selector", ".scorm-player iframe"),
-      ("css selector", "iframe[src*='player']"),
-      ("css selector", "iframe[title*='SCORM']"),
-      ("css selector", "iframe[title*='scorm']"),
-  )
+    ("css selector", "#scorm_iframe"),
+    ("css selector", ".scorm-player iframe"),
+)
+
 _EMBED_SELECTORS = (
-      ("css selector", "object[data$='.pdf']"),
-      ("css selector", "embed[src$='.pdf']"),
+    ("css selector", "object[data$='.pdf']"),
+    ("css selector", "embed[src$='.pdf']"),
     ("css selector", "iframe[src$='.pdf']"),
     ("xpath", "//object[contains(@data, '.pdf')]"),
     ("xpath", "//embed[contains(@src, '.pdf')]"),

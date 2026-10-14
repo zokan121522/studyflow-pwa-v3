@@ -29,12 +29,8 @@ from routes.courses import bp as courses_bp
 from routes.courses_aliases import bp as courses_aliases_bp
 from routes.blocks import bp as blocks_bp
 from routes.pdf import bp as pdf_bp
-<<<<<<< Updated upstream
 from routes.pdf_md2pdf import bp as pdf_md2pdf_bp
 from routes.image import bp as image_bp
-=======
-# from routes.pdf_md2pdf import bp as pdf_md2pdf_bp
->>>>>>> Stashed changes
 from routes.quiz import bp as quiz_bp
 from routes.addons import bp as addons_bp
 from routes.todos import bp as todos_bp
