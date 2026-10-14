@@ -81,4 +81,8 @@ tools/walkthrough/storyboards/
 # portable build scripts and published by deploy/downloads/publish.sh; never
 # committed to git (the server holds the real copies).
 deploy/downloads/public/*.zip
-deploy/downloads/_privado/
+deploy/downloads/_privado/*.key
+*.pem
+*.crt
+*.p12
+delegation_probe.tmp
