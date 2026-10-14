@@ -154,6 +154,39 @@ def test_table_rows_keep_their_own_cells():
     assert "ADBD" in html and "DIW" in html
 
 
+def test_pagebreak_marker_renders_as_a_break_element():
+    """`<!-- pagebreak -->` must become the element the CSS page-breaks on."""
+    html = render("antes\n\n<!-- pagebreak -->\n\ndespues")
+    assert 'class="md-pagebreak"' in html, (
+        "the marker must render as a page-break element: %r" % html
+    )
+    # The marker itself must be gone, not left as literal text.
+    assert "<!--" not in html, "the raw marker survived: %r" % html
+    # Case and inner spaces are tolerated, so `PAGEBREAK` and gaps still fire.
+    loose = render("<!--   PAGEBREAK   -->")
+    assert 'class="md-pagebreak"' in loose, (
+        "the marker must tolerate case and inner spaces: %r" % loose
+    )
+
+
+def test_pagebreak_marker_inside_a_fence_stays_literal():
+    """A fenced code block is code: the marker must not break the page."""
+    html = render("```\n<!-- pagebreak -->\n```")
+    assert 'class="md-pagebreak"' not in html, (
+        "a marker inside a fenced block must stay literal: %r" % html
+    )
+    assert "&lt;!-- pagebreak --&gt;" in html, (
+        "the fenced marker must be escaped as text: %r" % html
+    )
+
+
+def test_pagebreak_has_an_on_screen_indicator(css):
+    """The author must be able to see where the break lands in the preview."""
+    assert ".md-pagebreak" in css, (
+        "content-blocks.css needs a .md-pagebreak indicator for the read view"
+    )
+
+
 def test_session_preview_is_in_the_table_rules(css):
     """The actual cause of the invisible table: a missing CSS selector."""
     for rule in (

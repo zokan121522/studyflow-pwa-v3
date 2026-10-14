@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from services.md_to_pdf import (  # noqa: E402
     MdRenderError,
+    _CSS,
     _sanitize_filename,
     markdown_to_pdf,
     render_markdown_to_html,
@@ -132,3 +133,18 @@ def test_markdown_to_pdf_rejects_an_empty_note(tmp_path):
     """A blank note must be a clean error, not a 500 and a broken file."""
     with pytest.raises(MdRenderError):
         markdown_to_pdf("   \n\n  ", title="Vacio", output_path=tmp_path / "x.pdf")
+
+
+# ── page break ───────────────────────────────────────────────────
+
+def test_css_forces_a_page_break_after_the_marker():
+    """The preview shows a dashed line; the PDF must really page-break.
+
+    The renderer emits ``<hr class="md-pagebreak">`` for the
+    ``<!-- pagebreak -->`` marker, so the stylesheet has to turn that element
+    into a real page break in WeasyPrint. A source assertion is enough here:
+    the rule is a plain constant, and running WeasyPrint to observe a page
+    count would make this test depend on the optional native libraries.
+    """
+    assert "page-break-after: always" in _CSS
+    assert ".md-pagebreak" in _CSS
