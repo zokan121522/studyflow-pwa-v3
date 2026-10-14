@@ -200,6 +200,52 @@ def pick_port() -> int:
 
 # ─── environment ───────────────────────────────────────────────────
 
+#: Homebrew on Apple Silicon. The two directories the md->PDF path needs:
+#: cffi dlopen()s pango from lib/ (DYLD_LIBRARY_PATH is the only place it
+#: looks), and the md->html step shells out to ``node`` in bin/.
+HOMEBREW_LIB = "/opt/homebrew/lib"
+HOMEBREW_BIN = "/opt/homebrew/bin"
+
+
+def apply_homebrew_env(
+    env: dict,
+    *,
+    platform: str = sys.platform,
+    lib_dir: str = HOMEBREW_LIB,
+    bin_dir: str = HOMEBREW_BIN,
+) -> dict:
+    """Make *env* able to load Homebrew's native libs. Returns *env*.
+
+    Started with a bare environment, ``import weasyprint`` raises OSError
+    (not ImportError) because cffi cannot dlopen pango, the import guard does
+    not catch it, and launchd crash-loops the whole backend over one button.
+    Injecting the paths here -- rather than only in the LaunchAgent plist --
+    means every entry point (double-click, terminal, service) hands the child
+    that imports weasyprint a working environment even if the plist was
+    written by an older installer or no plist is involved at all.
+
+    Prepend, never clobber: an existing DYLD_LIBRARY_PATH/PATH (e.g. from a
+    hand-patched plist) keeps its entries after ours. No-op off macOS and
+    wherever Homebrew is absent (Intel layout, Linux, Windows, CI).
+    """
+    if platform != "darwin":
+        return env
+    if os.path.isdir(lib_dir):
+        current = env.get("DYLD_LIBRARY_PATH", "")
+        entries = [e for e in current.split(":") if e]
+        if lib_dir not in entries:
+            entries.insert(0, lib_dir)
+            env["DYLD_LIBRARY_PATH"] = ":".join(entries)
+    if os.path.isdir(bin_dir):
+        # or os.defpath: launchd normally provides a minimal PATH, but if the
+        # key were missing entirely, Homebrew alone would hide /usr/bin.
+        current = env.get("PATH") or os.defpath
+        entries = [e for e in current.split(os.pathsep) if e]
+        if bin_dir not in entries:
+            entries.insert(0, bin_dir)
+            env["PATH"] = os.pathsep.join(entries)
+    return env
+
 
 def secret_key(directory: Path) -> str:
     """A per-install SECRET_KEY, generated once and reused forever after."""
@@ -234,6 +280,10 @@ def child_env(port: int) -> dict:
     pdfs.mkdir(parents=True, exist_ok=True)
 
     env = dict(os.environ)
+    # Self-healing macOS paths (see apply_homebrew_env): the child is the
+    # process that imports weasyprint and shells out to node, so whatever
+    # environment this launcher inherited, it must leave able to find pango.
+    apply_homebrew_env(env)
     env.update(
         {
             "STUDYFLOW_DB_ENGINE": "sqlite",

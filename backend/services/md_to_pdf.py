@@ -21,10 +21,21 @@ only ever sees markdown the caller already sent over the API.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 import unicodedata
 from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+#: Explains the failure to the API layer and the log, in one place. Set by the
+#: import guard below; the message reflects WHICH failure happened, because
+#: "not installed" and "native libs unreachable" have different fixes.
+WEASYPRINT_UNAVAILABLE = (
+    "WeasyPrint is not installed, so markdown-to-PDF is unavailable. "
+    "Install the optional dependency: pip install weasyprint"
+)
 
 try:
     from weasyprint import HTML
@@ -38,12 +49,25 @@ except ImportError:  # pragma: no cover - depends on the local install
     # Degrade instead: the app boots, and only this one feature reports itself
     # unavailable. markdown_to_pdf() turns this into a clear error at call time.
     HTML = None
-
-#: Explains the failure to the API layer and the log, in one place.
-WEASYPRINT_UNAVAILABLE = (
-    "WeasyPrint is not installed, so markdown-to-PDF is unavailable. "
-    "Install the optional dependency: pip install weasyprint"
-)
+except OSError as exc:  # pragma: no cover - depends on the local install
+    # cffi raises OSError, not ImportError, when the package IS installed but
+    # its native libraries cannot be dlopen()ed -- Homebrew pango without
+    # DYLD_LIBRARY_PATH on macOS, most often. The old bare ``except
+    # ImportError`` let this escape, took down ``import server``, and launchd
+    # crash-looped the whole backend over one button. Degrade like above, but
+    # log the real error: "not installed" would send the user to pip when the
+    # fix is the environment (launcher/launch.py::apply_homebrew_env).
+    HTML = None
+    WEASYPRINT_UNAVAILABLE = (
+        "WeasyPrint's native libraries failed to load "
+        f"({type(exc).__name__}: {exc}). markdown-to-PDF is unavailable."
+    )
+    log.error(
+        "WeasyPrint import failed (native library load): %s: %s",
+        type(exc).__name__,
+        exc,
+        exc_info=True,
+    )
 
 # ── Paths ────────────────────────────────────────────────────────
 _REPO_ROOT = Path(__file__).resolve().parents[2]          # repo root
