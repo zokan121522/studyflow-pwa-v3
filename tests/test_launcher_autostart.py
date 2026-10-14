@@ -77,6 +77,23 @@ def test_plist_runs_headless_without_a_browser(dry):
     assert argv[0].endswith("/.venv/bin/python")
 
 
+def test_plist_exports_the_homebrew_env_md2pdf_needs(dry):
+    """launchd hands jobs a bare environment; without these two the backend
+    crash-loops: cffi cannot dlopen pango (OSError, not ImportError) and the
+    md->html step cannot find ``node`` outside /opt/homebrew/bin.
+    """
+    _, stdout = dry
+    data = plistlib.loads(stdout.encode("utf-8"))
+    envvars = data["EnvironmentVariables"]
+
+    assert envvars["DYLD_LIBRARY_PATH"] == "/opt/homebrew/lib"
+    path = envvars["PATH"].split(":")
+    assert "/opt/homebrew/bin" in path, "node lives here on Apple Silicon"
+    # Replacing launchd's PATH wholesale would hide the system tools the
+    # venv and launch.py itself need.
+    assert "/usr/bin" in path and "/bin" in path
+
+
 def test_plist_points_at_the_stable_install_path(dry):
     home, stdout = dry
     data = plistlib.loads(stdout.encode("utf-8"))

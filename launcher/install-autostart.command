@@ -43,6 +43,13 @@ DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
 # El plist completo, en una variable: --dry-run solo lo imprime.
+#
+# EnvironmentVariables: launchd gives jobs a bare environment (no
+# DYLD_LIBRARY_PATH, a minimal PATH), and without these two the md->PDF path
+# takes the backend down: cffi cannot dlopen Homebrew pango (OSError at
+# `import weasyprint`) and `node` (md->html) is not on PATH. launch.py
+# re-applies the same fix for any run started outside this plist, but the
+# template carries it too so a fresh install or a re-run cannot regress.
 read -r -d '' PLIST_XML <<EOF || true
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -57,6 +64,13 @@ read -r -d '' PLIST_XML <<EOF || true
 		<string>--headless</string>
 		<string>--no-browser</string>
 	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>DYLD_LIBRARY_PATH</key>
+		<string>/opt/homebrew/lib</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/sbin:/sbin:/usr/bin:/bin</string>
+	</dict>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>

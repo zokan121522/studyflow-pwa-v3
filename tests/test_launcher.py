@@ -98,6 +98,98 @@ def test_uploads_path_is_inside_the_data_dir(launch, tmp_path, monkeypatch):
     assert "/app/" not in env["PDF_UPLOAD_FOLDER"]
 
 
+# ─── macOS native env: pango + node ────────────────────────────────
+#
+# The md->PDF path needs Homebrew's lib (cffi dlopen()s pango from there) and
+# bin (`node` for the md->html step). A bare launchd environment has neither,
+# `import weasyprint` raised OSError rather than ImportError, and the backend
+# crash-looped. These assert the self-healing helper: inject when the paths
+# exist, prepend rather than clobber, no-op everywhere else.
+
+
+def test_apply_homebrew_env_injects_when_paths_exist(launch, tmp_path):
+    lib = tmp_path / "lib"
+    bindir = tmp_path / "bin"
+    lib.mkdir()
+    bindir.mkdir()
+    env = {"PATH": "/usr/bin" + os.pathsep + "/bin"}
+
+    launch.apply_homebrew_env(
+        env, platform="darwin", lib_dir=str(lib), bin_dir=str(bindir)
+    )
+
+    assert env["DYLD_LIBRARY_PATH"] == str(lib)
+    assert env["PATH"].split(os.pathsep) == [str(bindir), "/usr/bin", "/bin"]
+
+
+def test_apply_homebrew_env_prepends_without_clobbering(launch, tmp_path):
+    """A hand-patched plist may already set both; every entry must survive."""
+    lib = tmp_path / "lib"
+    bindir = tmp_path / "bin"
+    lib.mkdir()
+    bindir.mkdir()
+    env = {
+        "DYLD_LIBRARY_PATH": "/other/lib",
+        "PATH": "/usr/bin" + os.pathsep + str(bindir),
+    }
+
+    launch.apply_homebrew_env(
+        env, platform="darwin", lib_dir=str(lib), bin_dir=str(bindir)
+    )
+
+    # Our lib first, the existing entry still there.
+    assert env["DYLD_LIBRARY_PATH"].split(":") == [str(lib), "/other/lib"]
+    # bin_dir already present: PATH untouched, never duplicated.
+    assert env["PATH"].split(os.pathsep) == ["/usr/bin", str(bindir)]
+
+
+def test_apply_homebrew_env_is_a_no_op_without_homebrew(launch, tmp_path):
+    """Intel layout, Linux, CI: nothing injected, nothing removed."""
+    env = {"PATH": "/usr/bin"}
+    original = dict(env)
+
+    launch.apply_homebrew_env(
+        env,
+        platform="darwin",
+        lib_dir=str(tmp_path / "missing-lib"),
+        bin_dir=str(tmp_path / "missing-bin"),
+    )
+
+    assert env == original
+    assert "DYLD_LIBRARY_PATH" not in env
+
+
+def test_apply_homebrew_env_is_a_no_op_off_macos(launch, tmp_path):
+    """Even with the directories present, non-darwin gets nothing."""
+    lib = tmp_path / "lib"
+    bindir = tmp_path / "bin"
+    lib.mkdir()
+    bindir.mkdir()
+    env = {"PATH": "/usr/bin"}
+
+    launch.apply_homebrew_env(
+        env, platform="linux", lib_dir=str(lib), bin_dir=str(bindir)
+    )
+
+    assert env == {"PATH": "/usr/bin"}
+
+
+def test_child_env_applies_the_homebrew_fix(launch, monkeypatch, tmp_path):
+    """Wiring: the child that imports weasyprint is spawned with this env."""
+    monkeypatch.setenv("STUDYFLOW_DATA_DIR", str(tmp_path))
+
+    def spy(env, **kwargs):
+        env["HOMEBREW_FIX_APPLIED"] = "1"
+        return env
+
+    monkeypatch.setattr(launch, "apply_homebrew_env", spy)
+    env = launch.child_env(launch.DEFAULT_PORT)
+
+    assert env.get("HOMEBREW_FIX_APPLIED") == "1", (
+        "child_env must self-heal DYLD_LIBRARY_PATH/PATH before spawning"
+    )
+
+
 # ─── fixed port, no drift ───────────────────────────────────────────
 #
 # The launcher used to scan 8477-8516 and remember whichever port it found. The
