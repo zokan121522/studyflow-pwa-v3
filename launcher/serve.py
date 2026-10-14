@@ -27,6 +27,25 @@ def _repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# NOTE: do NOT strip the RFC 6455 upgrade headers (HTTP_CONNECTION /
+# HTTP_UPGRADE) before handing the environ to the WSGI app.
+#
+# gevent-websocket performs the ``101 Switching Protocols`` upgrade and then
+# calls the WSGI application with the ORIGINAL environ. A previous revision
+# popped ``HTTP_CONNECTION``/``HTTP_UPGRADE`` here on the theory that Werkzeug
+# >= 2.3 answered such a request with ``400 Bad Request`` before routing. That
+# theory is wrong *now that the noVNC routes are declared* ``websocket=True``
+# (routes/novnc_proxy.py): Werkzeug derives the URL scheme from those very
+# headers (``werkzeug/routing/map.py::bind_to_environ`` → scheme ``ws`` when
+# ``HTTP_CONNECTION`` contains ``upgrade`` and ``HTTP_UPGRADE == websocket``,
+# then ``MapAdapter.websocket = scheme in {"ws", "wss"}``). Stripping them made
+# Werkzeug compute scheme ``http`` → ``websocket=False`` → the ``websocket=True``
+# rules no longer matched → ``WebsocketMismatch`` (400) and the views never ran
+# (the browser saw the socket close with code 1005 and noVNC stayed black).
+# Keeping the headers lets Werkzeug route to the live socket in
+# ``environ["wsgi.websocket"]``.
+
+
 def _force_utf8_stdio() -> None:
     """stdout/stderr as UTF-8 whatever the launcher handed us.
 
@@ -57,9 +76,25 @@ def main(argv: list[str] | None = None) -> int:
     sys.path.insert(0, os.path.join(root, "backend"))
     sys.path.insert(0, root)
 
+    # WebSocket support for the noVNC login bridge (/novnc/ws, see
+    # routes/novnc_proxy.py). Werkzeug's dev server (app.run) cannot perform
+    # the RFC 6455 upgrade — it answers 400 — so serve through gevent's
+    # WSGIServer with gevent-websocket's handler. gevent's monkey-patch MUST
+    # run before the app (and its DB/socket libs) is imported so sockets and
+    # threads become greenlets. If gevent is missing we fall back to the
+    # plain dev server: the app still boots, only the WS bridge degrades.
+    gevent_server = _build_gevent_server(port)
+
     import server  # noqa: E402  (import after sys.path is set up)
 
     app = server.create_app()
+
+    if gevent_server is not None:
+        WSGIServer, WebSocketHandler = gevent_server
+        WSGIServer(("127.0.0.1", port), app,
+                   handler_class=WebSocketHandler).serve_forever()
+        return 0
+
     # threaded=True is safe now: database.get_connection() hands out one
     # connection per thread. It was not before, and the shared handle
     # deadlocked under load. See the commit on backend/database.py.
@@ -71,6 +106,38 @@ def main(argv: list[str] | None = None) -> int:
         use_reloader=False,
     )
     return 0
+
+
+def _build_gevent_server(port: int):
+    """Monkey-patch gevent and return (WSGIServer, WebSocketHandler).
+
+    Returns ``None`` when gevent / gevent-websocket are unavailable, so the
+    launcher can fall back to Flask's dev server. Must be called before
+    importing the application on the gevent path.
+    """
+    try:
+        from gevent import monkey
+
+        monkey.patch_all()
+        # Prefer GeventWebSocketServer for proper WebSocket upgrade handling
+        try:
+            from geventwebsocket.server import GeventWebSocketServer
+            from geventwebsocket.handler import WebSocketHandler
+
+            return GeventWebSocketServer, WebSocketHandler
+        except (ImportError, AttributeError):
+            try:
+                from geventwebsocket.server import WebSocketServer as GeventWebSocketServer
+                from geventwebsocket.handler import WebSocketHandler
+
+                return GeventWebSocketServer, WebSocketHandler
+            except (ImportError, AttributeError):
+                from gevent.pywsgi import WSGIServer
+                from geventwebsocket.handler import WebSocketHandler
+
+                return WSGIServer, WebSocketHandler
+    except Exception:
+        return None
 
 
 if __name__ == "__main__":

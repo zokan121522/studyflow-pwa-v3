@@ -87,6 +87,12 @@ def main() -> int:
     ap.add_argument("--profile-dir", required=True)
     ap.add_argument("--storage", required=True)
     ap.add_argument("--timeout", type=int, default=600)
+    # ``chrome`` = system desktop Chrome (macOS/Windows local, x86_64 Linux).
+    # ``chromium`` = Playwright's bundled Chromium, driven headed on the VNC
+    # display (:99) inside Docker. The bundled build is the only one guaranteed
+    # on Linux arm64, where Playwright ships no ``chrome`` channel at all.
+    ap.add_argument("--channel", default="chrome",
+                    choices=("chrome", "chromium"))
     args = ap.parse_args()
 
     try:
@@ -98,9 +104,8 @@ def main() -> int:
     deadline = time.monotonic() + args.timeout
     try:
         with windows_playwright_event_loop(), sync_playwright() as pw:
-            ctx = pw.chromium.launch_persistent_context(
+            launch_kwargs = dict(
                 user_data_dir=args.profile_dir,
-                channel="chrome",
                 headless=False,
                 # Same anti-automation flags as the SDK (browser_capture.py):
                 # without them Google signs you out with "This browser or app
@@ -112,6 +117,18 @@ def main() -> int:
                 ],
                 ignore_default_args=["--enable-automation"],
             )
+            # ``chrome`` = system desktop Chrome (macOS/Windows local, x86_64
+            # Linux), the default. ``chromium`` = Playwright's bundled Chromium,
+            # driven headed on the VNC display (:99) inside Docker, and the only
+            # option on Linux arm64 where Playwright ships no ``chrome`` channel.
+            if args.channel == "chromium":
+                ctx = pw.chromium.launch_persistent_context(
+                    channel=None, **launch_kwargs
+                )
+            else:
+                ctx = pw.chromium.launch_persistent_context(
+                    channel="chrome", **launch_kwargs
+                )
             try:
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
                 page.goto(ACCOUNTS_URL, wait_until="domcontentloaded", timeout=30000)

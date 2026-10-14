@@ -43,13 +43,12 @@ for key in ("file", "versioned", "version", "size", "date", "sha256",
         stable[key] = v[key]
 
 notes = [
-    "macOS: la app se instala como servicio y se enciende SOLA al arrancar el Mac (ya no hay que abrir el lanzador).",
-    "Si se cae, se reanima sola: se acabó el aviso \"servidor no disponible\".",
-    "El botón \"API\" del panel ya reconecta siempre (ayudante local en 127.0.0.1:8478).",
-    "Instalador de un solo doble clic, sin Terminal: prepara el entorno, registra el servicio y abre el navegador.",
-    "Cerrar la ventana del lanzador ya no apaga la app.",
-    "Comando para quitar el arranque automático sin perder datos.",
-    "El arranque automático es solo de macOS: Windows y Linux mantienen el lanzador manual.",
+    "Corrección visual en móviles muy estrechos (<360 px): pestañas que se envuelven, widgets en una sola columna y safe-area para pantallas con muesca.",
+    "Login de NotebookLM más fiable: valida cookies reales de Google (SID + __Secure-1PSIDTS), limpia procesos zombis, espera a que x11vnc escuche en el puerto 5900 y usa Chromium empaquetado en Docker.",
+    "Puente noVNC/WebSocket reparado: reintentos de conexión RFB, cierre limpio del WS (sin código 1005) y rutas declaradas websocket=True.",
+    "Lanzador local (launcher/serve.py) ahora arranca servidor gevent con soporte WebSocket para que el login remoto funcione sin Docker.",
+    "Infografías con tres niveles de detalle reales (conciso / estándar / detallado) — antes el prompt no cambiaba.",
+    "Parche edge-tts v2: corrige el endpoint WSS de Microsoft para que la síntesis de voz vuelva a funcionar.",
 ]
 
 beta_plats = {}

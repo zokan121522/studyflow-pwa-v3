@@ -1,43 +1,43 @@
 """
-Custom gunicorn GeventWorker with WebSocket support.
+Gunicorn worker entrypoint with WebSocket support.
 
-Built on gunicorn's ``GeventPyWSGIWorker`` (pure-Python ``WSGIServer``) and
-``gevent-websocket``'s ``WebSocketHandler`` so that WebSocket upgrade requests
-populate ``request.environ["wsgi.websocket"]`` inside Flask.
+The container command uses ``--worker-class gevent_ws_worker.GeventWebSocketWorker``
+(see backend/Dockerfile). It subclasses the official gevent-websocket gunicorn
+worker so the class name keeps resolving:
+
+    geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+        -> gunicorn.workers.ggevent.GeventPyWSGIWorker
+        -> geventwebsocket.handler.WebSocketHandler
+
+Why we do NOT strip the RFC 6455 upgrade headers:
+    gevent-websocket performs the ``101 Switching Protocols`` upgrade and then
+    calls the WSGI application with the ORIGINAL environ, which still carries
+    ``HTTP_CONNECTION: Upgrade`` and ``HTTP_UPGRADE: websocket``.
+
+    An earlier revision popped those ``HTTP_*`` keys here (and in
+    launcher/serve.py) on the theory that Werkzeug >= 2.3 answered such a
+    request with ``400 Bad Request`` before routing. That is wrong once the
+    noVNC routes are declared ``websocket=True`` (routes/novnc_proxy.py):
+    Werkzeug derives the URL scheme from those very headers
+    (``werkzeug/routing/map.py::bind_to_environ`` sets scheme ``ws`` when
+    ``HTTP_CONNECTION`` contains ``upgrade`` and ``HTTP_UPGRADE == websocket``;
+    then ``MapAdapter.websocket = scheme in {"ws", "wss"}``). Stripping them
+    forced scheme ``http`` → ``websocket=False`` → the ``websocket=True`` rules
+    stopped matching → ``WebsocketMismatch`` (400) and the views never ran, so
+    ``/novnc/ws`` and ``/novnc/echo`` upgraded (101) and closed immediately
+    (browser close code 1005, "no close frame") without relaying a single RFB
+    frame. Keeping the headers lets Werkzeug route to the live socket in
+    ``environ["wsgi.websocket"]``.
 
 Usage:
-    --worker-class backend.gevent_ws_worker:GeventWebSocketWorker
-
-Why a custom worker instead of the built-in
-``geventwebsocket.gunicorn.workers.GeventWebSocketWorker``?
-    Same inheritance chain — we keep our own class so we can apply fixes
-    (such as stripping ``Upgrade`` / ``Connection`` headers before the
-    second WSGI call that ``run_websocket`` makes).
+    --worker-class gevent_ws_worker.GeventWebSocketWorker
 """
 
-from geventwebsocket.handler import WebSocketHandler
-from gunicorn.workers.ggevent import GeventPyWSGIWorker
+from geventwebsocket.gunicorn.workers import GeventWebSocketWorker as _Base
 
 
-class CleanWebSocketHandler(WebSocketHandler):
-    """Extends WebSocketHandler to fix Werkzeug 400 on the second WSGI call.
-
-    ``WebSocketHandler.run_websocket`` calls ``self.application(environ, …)``
-    *a second time* after the upgrade is complete so that the Flask route
-    handler can read ``request.environ["wsgi.websocket"]``.  If we leave
-    the ``Upgrade`` / ``Connection`` headers in the environ, Werkzeug tries
-    to process another WebSocket upgrade → 400 Bad Request.
-
-    This override strips both headers before delegating to the base class.
-    """
-
-    def run_websocket(self):
-        self.environ.pop("HTTP_UPGRADE", None)
-        self.environ.pop("HTTP_CONNECTION", None)
-        super().run_websocket()
+class GeventWebSocketWorker(_Base):
+    """Gunicorn worker with gevent-websocket's WebSocket handler (no stripping)."""
 
 
-class GeventWebSocketWorker(GeventPyWSGIWorker):
-    """Gevent worker using PyWSGIServer + CleanWebSocketHandler."""
-
-    wsgi_handler = CleanWebSocketHandler
+__all__ = ["GeventWebSocketWorker"]

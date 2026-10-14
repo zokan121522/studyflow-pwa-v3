@@ -27,14 +27,17 @@ Ported from studyflow-hub v2 (``routes/notebooklm_login_vnc.py``).
 """
 
 import json
+import logging
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
 
 from flask import Blueprint, jsonify, request
 
@@ -46,6 +49,8 @@ from ai.notebooklm.utils import COOKIE_DIR
 from routes.auth import token_required
 
 bp = Blueprint("notebooklm_login", __name__)
+
+log = logging.getLogger("notebooklm_login")
 
 # ── Configuration ──────────────────────────────────────────────────────
 LOGIN_TIMEOUT = 600  # 10 minutes
@@ -66,6 +71,12 @@ PYTHON = sys.executable  # the python running the Flask app
 _CHROME_BINARIES = (
     "google-chrome", "google-chrome-stable", "chrome", "chromium-browser",
 )
+
+# The cookie pair the NotebookLM SDK requires for an authenticated session.
+# A storage_state.json with only __Host-GAPS / NID is NOT a session: reporting
+# it as "conectado" made the SDK fail later with
+# "Missing required cookies: SID, __Secure-1PSIDTS".
+REQUIRED_COOKIES = {"SID", "__Secure-1PSIDTS"}
 
 
 def _windows_chrome_paths() -> list[str]:
@@ -221,8 +232,85 @@ def _kill_proc_tree(pid: int | None) -> None:
         _kill_pid(pid, signal.SIGKILL)
 
 
+def _kill_leftovers() -> None:
+    """Kill login-related processes left over from previous sessions.
+
+    ``_cleanup`` only knows the PIDs recorded in the state file. A previous
+    session that lost its state (container restart, timer race) leaves its
+    Xvfb / x11vnc / Chromium running; those zombies pinned the server at
+    load 256 until a manual restart. pkill patterns are scoped to THIS user
+    and to the login helpers only — never a broad ``pkill Xvfb``. No-op on
+    Windows (no pkill) where the Chrome-window path leaves nothing behind.
+    """
+    if os.name == "nt" or not shutil.which("pkill"):
+        return
+    for pattern in (
+        "nb_login_browser.py",
+        f"Xvfb {DISPLAY}",
+        f"x11vnc -display {DISPLAY}",
+        "notebooklm login",
+    ):
+        try:
+            subprocess.run(
+                ["pkill", "-f", pattern],
+                capture_output=True, timeout=5,
+            )
+        except Exception:
+            # Best-effort reaping: a leftover-cleanup hiccup must never abort
+            # the login itself (or make the endpoint 500 before it launches).
+            pass
+
+
 def _storage_created(storage_path: str | None) -> bool:
     return bool(storage_path and os.path.isfile(storage_path))
+
+
+def _storage_has_required_cookies(path: str) -> bool:
+    """True only when ``path`` holds BOTH required Google cookies.
+
+    A partial login (only __Host-GAPS/NID) is what the user hit on the
+    server: the file existed, so the old check said "conectado", but the
+    SDK then errored with "Missing required cookies: SID, __Secure-1PSIDTS".
+    """
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    names = {
+        c.get("name")
+        for c in data.get("cookies", [])
+        if (c.get("domain") or "").endswith(".google.com")
+    }
+    return REQUIRED_COOKIES.issubset(names)
+
+
+def _iter_storage_candidates() -> Iterator[tuple[str | None, str]]:
+    """Yield ``(email_or_None, storage_path)`` in the v2 search order.
+
+    global file → profiles/<email>/ → <COOKIE_DIR>/<email>/. Skips the
+    SDK-generated non-email dirs (000-default, etc.).
+    """
+    nb_home = COOKIE_DIR
+    global_path = os.path.join(nb_home, "storage_state.json")
+    if os.path.isfile(global_path):
+        yield None, global_path
+
+    profiles_dir = os.path.join(nb_home, "profiles")
+    if os.path.isdir(profiles_dir):
+        for entry in sorted(os.listdir(profiles_dir)):
+            if "@" not in entry and entry != "default":
+                continue
+            sub_path = os.path.join(profiles_dir, entry, "storage_state.json")
+            if os.path.isfile(sub_path):
+                yield entry, sub_path
+
+    if os.path.isdir(nb_home):
+        for entry in sorted(os.listdir(nb_home)):
+            sub_path = os.path.join(nb_home, entry, "storage_state.json")
+            if os.path.isfile(sub_path) and entry != "profiles" and \
+                    ("@" in entry or entry == "default"):
+                yield entry, sub_path
 
 
 def _cleanup() -> None:
@@ -252,37 +340,40 @@ def _schedule_timeout() -> None:
 
 
 def _check_connected() -> tuple[bool, str | None]:
-    """Check if any storage_state.json exists after login (v2 order)."""
-    nb_home = COOKIE_DIR
-    connected = False
-    found_email: str | None = None
+    """True ONLY when a saved storage file holds BOTH required cookies.
 
-    global_path = os.path.join(nb_home, "storage_state.json")
-    if os.path.isfile(global_path):
-        connected = True
+    Existence is not connection: a storage_state.json with only
+    __Host-GAPS/NID is a partial login. The old check returned True for any
+    file and the UI showed "conectado"; the SDK then died with
+    "Missing required cookies: SID, __Secure-1PSIDTS".
+    """
+    for email, path in _iter_storage_candidates():
+        if _storage_has_required_cookies(path):
+            return True, email
+    return False, None
 
-    profiles_dir = os.path.join(nb_home, "profiles")
-    if not connected and os.path.isdir(profiles_dir):
-        for entry in sorted(os.listdir(profiles_dir)):
-            sub_path = os.path.join(profiles_dir, entry, "storage_state.json")
-            if os.path.isfile(sub_path):
-                # Skip non-email dirs produced by the SDK (000-default, etc.)
-                if "@" not in entry and entry != "default":
-                    continue
-                connected = True
-                found_email = entry
-                break
 
-    if not connected and os.path.isdir(nb_home):
-        for entry in sorted(os.listdir(nb_home)):
-            sub_path = os.path.join(nb_home, entry, "storage_state.json")
-            if os.path.isfile(sub_path) and entry not in ("profiles",) and \
-                    ("@" in entry or entry == "default"):
-                connected = True
-                found_email = entry
-                break
+def _remove_partial_storage() -> None:
+    """Delete storage files that lack the required cookies.
 
-    return connected, found_email
+    Mirrors the disconnect route's cleanup (routes/notebooklm_settings.py:
+    it removes the profile cookies). A partial file left behind makes the
+    next login-start skip the real sign-in and keeps the SDK broken.
+    """
+    profiles_root = os.path.realpath(os.path.join(COOKIE_DIR, "profiles"))
+    for _email, path in _iter_storage_candidates():
+        if _storage_has_required_cookies(path):
+            continue
+        parent = os.path.realpath(os.path.dirname(path))
+        # A profile under profiles/<email>/ is wiped whole (same as the
+        # disconnect route); the global file and its dir are left alone.
+        if parent != profiles_root and parent.startswith(profiles_root + os.sep):
+            shutil.rmtree(parent, ignore_errors=True)
+        else:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────
@@ -292,6 +383,8 @@ def _check_connected() -> tuple[bool, str | None]:
 def login_start(current_user_id: int):
     """Start a login session (VNC in Docker, Chrome window on macOS)."""
     _cleanup()
+    # Also reap zombies from sessions that lost their state file.
+    _kill_leftovers()
 
     body = request.get_json(silent=True) or {}
     account_email: str | None = body.get("account", "").strip() or None
@@ -318,6 +411,24 @@ def login_start(current_user_id: int):
     )
 
 
+def _wait_for_tcp(host: str, port: int, timeout: float = 2.0,
+                  interval: float = 0.1) -> bool:
+    """Poll until ``host:port`` accepts a TCP connection or ``timeout`` elapses.
+
+    Used after spawning x11vnc so noVNC's WS bridge finds a live RFB server
+    instead of racing it (which surfaces as an immediate WS close 1005).
+    """
+    deadline = time.time() + timeout
+    while True:
+        try:
+            with socket.create_connection((host, port), timeout=interval):
+                return True
+        except OSError:
+            if time.time() >= deadline:
+                return False
+            time.sleep(interval)
+
+
 def _start_vnc(account_email: str | None, storage_path: str,
                current_user_id: int):
     """Linux/Docker path: Xvfb + x11vnc + headed bundled Chromium."""
@@ -339,6 +450,12 @@ def _start_vnc(account_email: str | None, storage_path: str,
         x11vnc = subprocess.Popen(
             [
                 "x11vnc", "-display", DISPLAY,
+                # -localhost/-nolookup: only the in-container noVNC bridge
+                # (127.0.0.1:5900) reaches RFB, and reverse DNS on the peer IP
+                # is skipped. Without -localhost x11vnc would bind all
+                # interfaces; the beta runs with host networking, so :5900
+                # would then be exposed on the LAN/Tailnet.
+                "-localhost", "-nolookup",
                 "-forever", "-nopw", "-quiet", "-shared",
                 "-rfbport", str(VNC_PORT),
             ],
@@ -352,11 +469,39 @@ def _start_vnc(account_email: str | None, storage_path: str,
         _cleanup()
         return jsonify({"success": False, "message": "x11vnc no instalado"}), 500
 
-    # 3. notebooklm login — headed bundled Chromium on the virtual display.
-    #    NOTE: no ``--browser chrome`` here; the SDK drives the bundled Chromium.
+    # 2b. Wait until x11vnc is actually accepting RFB connections on :5900.
+    #     Otherwise noVNC connects before the socket is live and the WS bridge
+    #     closes immediately (browser code 1005).
+    if not _wait_for_tcp("127.0.0.1", VNC_PORT, timeout=2.0):
+        if x11vnc.poll() is not None:
+            _cleanup()
+            return jsonify({"success": False,
+                            "message": "x11vnc no escucha en el puerto 5900"}), 500
+        log.warning("x11vnc no confirmó :%d en 2s; continúo de todas formas", VNC_PORT)
+
+    # 3. Interactive login — headed BUNDLED Chromium on the virtual display.
+    #    We do NOT use ``notebooklm login`` here: its landing check treats
+    #    notebook.google.com's SPA (HTTP 200 even unauthenticated) as "Already
+    #    logged in", captures only __Host-GAPS/NID, and closes the browser in
+    #    ~1s — so the VNC screen never showed a sign-in form and the SDK stayed
+    #    broken with "Missing required cookies: SID, __Secure-1PSIDTS".
+    #    scripts/nb_login_browser.py opens accounts.google.com (server-rendered)
+    #    and waits for the REAL OAuth cookies, keeping the window open for the
+    #    user to type credentials over VNC. ``--channel chromium`` = bundled
+    #    Chromium (no desktop Chrome needed; the beta is x86_64 but this also
+    #    works on arm64 where Playwright ships no chrome channel).
+    browser_profile = os.path.join(os.path.dirname(storage_path), "browser_profile")
+    helper = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "scripts", "nb_login_browser.py",
+    )
     env = os.environ.copy()
     env["DISPLAY"] = DISPLAY
-    cmd = [PYTHON, "-m", "notebooklm", "login", "--fresh", "--storage", storage_path]
+    cmd = [PYTHON, helper,
+           "--profile-dir", browser_profile,
+           "--storage", storage_path,
+           "--channel", "chromium",
+           "--timeout", str(LOGIN_TIMEOUT)]
 
     log_path = os.path.join(COOKIE_DIR, "login.log")
     log_fh = open(log_path, "ab", buffering=0)
@@ -388,9 +533,19 @@ def _start_vnc(account_email: str | None, storage_path: str,
                  storage_path=storage_path)
     _schedule_timeout()
 
+    # encrypt must follow the request scheme (respect proxy headers behind tunnels)
+    proto = (
+        request.headers.get("X-Forwarded-Proto")
+        or request.headers.get("X-Forwarded-Protocol")
+        or request.headers.get("Forwarded", "")
+    )
+    if "https" in proto:
+        proto_scheme = "https"
+    else:
+        proto_scheme = request.scheme
     # encrypt must follow the request scheme: noVNC derives the WS URL from the
     # page protocol, so forcing encrypt=1 breaks plain-HTTP (localhost, tunnels).
-    encrypt = "1" if request.scheme == "https" else "0"
+    encrypt = "1" if proto_scheme == "https" else "0"
     return jsonify({
         "success": True,
         "mode": "vnc",
@@ -499,16 +654,28 @@ def login_stop(current_user_id: int):
         _cleanup()
         connected, found_email = _check_connected()
 
-        if found_email:
-            set_active_profile(current_user_id, found_email)
-            register_profile_owner(current_user_id, found_email)
+        if connected:
+            if found_email:
+                set_active_profile(current_user_id, found_email)
+                register_profile_owner(current_user_id, found_email)
+            return jsonify({
+                "success": True,
+                "message": "Cookies guardadas correctamente",
+                "connected": True,
+            })
 
-        msg = "Cookies guardadas correctamente" if connected else (
-            "Sesión cerrada. No se detectaron cookies — prueba de nuevo "
-            "o usa el método de subida manual."
-        )
-
-        return jsonify({"success": True, "message": msg, "connected": connected})
+        # Honest failure: the file may exist but lacks the Google session
+        # cookies. Wipe the partial login so the next attempt starts clean.
+        _remove_partial_storage()
+        return jsonify({
+            "success": True,
+            "connected": False,
+            "message": (
+                "Login incompleto: no se guardaron las cookies de Google "
+                "(SID, __Secure-1PSIDTS). Rehaz el login y completa el "
+                "acceso a Google."
+            ),
+        })
     except Exception as exc:  # pragma: no cover - defensive
         return jsonify({
             "success": False,

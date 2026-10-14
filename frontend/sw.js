@@ -125,7 +125,10 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // modal de doble confirmación (tipo BORRAR). Cambian index.html, app.js y
 // styles.css — todos precacheados — así que sin este bump las PWAs instaladas
 // seguirían sin el botón.
-const ASSET_CACHE = 'studyflow-assets-v108';
+// v109: mobile CSS fix (styles.css, overflow/stacking + safe-area, 3.1.3).
+// styles.css está precacheado; sin este bump las PWAs instaladas seguirían
+// sirviendo el CSS viejo cache-first y el fix no se vería sin limpiar datos.
+const ASSET_CACHE = 'studyflow-assets-v109';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).

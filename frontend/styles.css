@@ -1706,6 +1706,28 @@ body.sf-server-down #sf-server-down {
   .quiz-actions .btn { width: 100%; }
 }
 
+/* ============================== EXTRA SMALL: <360px ============================== */
+@media (max-width: 360px) {
+  /* Let tabs wrap instead of overflowing off-screen */
+  .tab-bar { flex-wrap: wrap; }
+  .tab-btn { padding: 10px 8px; font-size: 11px; }
+}
+
+/* Dashboard widgets: force a single column on narrow phones */
+@media (max-width: 600px) {
+  .dashboard-widgets-row { grid-template-columns: 1fr !important; }
+}
+
+/* Safe-area for notched devices on the fixed header. Placed after the
+   768px `.header { padding: 0 12px }` shorthand so it is not reset.
+   max(8px, env(...)) keeps a baseline; box-sizing:border-box + fixed
+   header height means desktop layout dimensions are unchanged. */
+@supports (padding: max(0px)) {
+  .header {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+}
+
 /* ============================== TABLET: 768px - 1024px ============================== */
 @media (min-width: 769px) and (max-width: 1024px) {
   .main { grid-template-columns: 280px 1fr; }

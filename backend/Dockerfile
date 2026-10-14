@@ -78,6 +78,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# ── edge-tts v2 WSS endpoint patch (2026-10) ─────────────────────────
+# La versión stock de edge-tts apunta WSS_URL a
+#   wss://{BASE_URL}/edge/v1?TrustedClientToken={TOKEN}
+# (BASE_URL = speech.platform.bing.com/consumer/speech/synthesize/readaloud).
+# En 2026-10 Microsoft migró el backend de «Read Aloud» de v1 a v2 y el
+# handshake legacy responde 403 desde IPs afectadas (ES/EU primero), ver
+# rany2/edge-tts#490. Reescribimos esa constante al host v2 que sí
+# responde. El último grep hace FALLAR el build si el parche no arraiga:
+# de lo contrario la imagen volvería a quedarse muda en silencio.
+# Resolvemos la ruta de site-packages en build time (sin hardcodearla):
+# find_spec evita ejecutar el __init__ del paquete.
+RUN CONSTS=$(python3 -c "import importlib.util, os; spec=importlib.util.find_spec('edge_tts'); print(os.path.join(os.path.dirname(spec.origin), 'constants.py'))") \
+    && sed -i \
+        -e 's|wss://{BASE_URL}/edge/v1?TrustedClientToken=|wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?Ocp-Apim-Subscription-Key=|' \
+        -e 's|wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=|wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?Ocp-Apim-Subscription-Key=|' \
+        "$CONSTS" \
+    && ! grep -q 'edge/v1?TrustedClientToken=' "$CONSTS" \
+    && grep -q 'api.msedgeservices.com/tts/cognitiveservices/websocket/v1' "$CONSTS"
+
 # Playwright: descarga el Chromium en la ruta que fijamos arriba.
 RUN playwright install --with-deps chromium
 

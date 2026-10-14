@@ -11,5 +11,13 @@
     "El botón 'API' ya reconecta siempre.",
     "Instalador de un solo doble clic, sin usar la Terminal.",
     "Nuevo comando para quitar el arranque automático sin perder tus datos."
+  ],
+  "3.1.3": [
+    "Corrección visual en móviles muy estrechos (<360 px): pestañas que se envuelven, widgets en una sola columna y safe-area para pantallas con muesca.",
+    "Login de NotebookLM más fiable: valida cookies reales de Google (SID + __Secure-1PSIDTS), limpia procesos zombis, espera a que x11vnc escuche en el puerto 5900 y usa Chromium empaquetado en Docker.",
+    "Puente noVNC/WebSocket reparado: reintentos de conexión RFB, cierre limpio del WS (sin código 1005) y rutas declaradas websocket=True.",
+    "Lanzador local (launcher/serve.py) ahora arranca servidor gevent con soporte WebSocket para que el login remoto funcione sin Docker.",
+    "Infografías con tres niveles de detalle reales (conciso / estándar / detallado) — antes el prompt no cambiaba.",
+    "Parche edge-tts v2: corrige el endpoint WSS de Microsoft para que la síntesis de voz vuelva a funcionar."
   ]
 }

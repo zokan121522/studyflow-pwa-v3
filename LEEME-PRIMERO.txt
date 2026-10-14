@@ -59,8 +59,7 @@
   LEEME-PRIMERO.txt       ->  Este fichero.
   launcher\               ->  El motor de arranque. No lo toques.
   backend\  frontend\     ->  Parte técnica de la app. No toques.
-  scripts\  tests\        ->  Herramientas de desarrollo. No toques.
-  docker\                 ->  Configuración de servidores. No toques.
+  scripts\                ->  Script de exportación (NotebookLM). No lo toques.
   README.md (si viene)    ->  Documentación técnica (para
                               programadores). Tú no lo necesitas.
 

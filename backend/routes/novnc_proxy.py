@@ -19,6 +19,7 @@ Architecture:
 """
 
 import logging
+import time
 from flask import Blueprint, abort, send_from_directory
 
 import gevent
@@ -26,12 +27,22 @@ import gevent.socket as gsocket
 
 log = logging.getLogger("novnc_proxy")
 log.setLevel(logging.DEBUG)
+# Ensure bridge diagnostics reach the container/stdout even when the app has
+# no root logging configured (the launcher only prints its own banner).
+if not log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter(
+        "%(asctime)s %(name)s %(levelname)s %(message)s"))
+    log.addHandler(_h)
+    log.propagate = False
 
 bp = Blueprint("novnc_proxy", __name__)
 
 NOVNC_DIR = "/opt/novnc"
-RFB_HOST = "localhost"
+RFB_HOST = "127.0.0.1"
 RFB_PORT = 5900
+RFB_CONNECT_ATTEMPTS = 3
+RFB_CONNECT_RETRY_SLEEP = 0.1
 
 
 # ── Static file serving ────────────────────────────────────────────────
@@ -56,25 +67,54 @@ def novnc_ping():
 
 # ── WebSocket bridge (two-greenlet relay) ──────────────────────────────
 
-@bp.route("/novnc/ws")
+# ``websocket=True`` is MANDATORY on every WS route. Werkzeug 2.3+ (Flask 3.x)
+# added WebSocket support to URL routing: when a request is detected as a WS
+# upgrade, MapAdapter.match() raises ``WebsocketMismatch`` (HTTP 400) unless the
+# matched Rule was declared with ``websocket=True``. Without it the handshake
+# still returns 101 (gevent-websocket upgrades first) but the view never runs —
+# the browser then sees the socket close with no close frame (code 1005). This
+# was the real root cause of the persistent noVNC 1005, not the RFB retries.
+@bp.route("/novnc/ws", websocket=True)
 def vnc_websocket():
     from geventwebsocket import WebSocketError
     from flask import request as flask_req
 
     ws = _get_websocket()
     if ws is None:
+        # Upgrade did NOT happen — safe to return a plain HTTP error.
         log.warning("WS upgrade failed — no wsgi.websocket in environ")
         abort(400, "This endpoint requires a WebSocket upgrade connection")
 
     log.info("Browser WS connected from %s", flask_req.remote_addr)
 
-    # Connect to x11vnc
-    try:
-        rfb = gsocket.create_connection((RFB_HOST, RFB_PORT), timeout=5)
-        log.info("Connected to x11vnc:%d", RFB_PORT)
-    except Exception as exc:
-        log.error("Cannot reach x11vnc:%d: %s", RFB_PORT, exc)
-        abort(502, f"Cannot reach x11vnc: {exc}")
+    # Connect to x11vnc with a couple of quick retries. The client may arrive
+    # a few ms before x11vnc has started accepting on :5900.
+    rfb = None
+    last_exc = None
+    for attempt in range(1, RFB_CONNECT_ATTEMPTS + 1):
+        try:
+            rfb = gsocket.create_connection((RFB_HOST, RFB_PORT), timeout=5)
+            log.info("Connected to x11vnc:%d (attempt %d)", RFB_PORT, attempt)
+            break
+        except Exception as exc:
+            last_exc = exc
+            log.warning("Cannot reach x11vnc:%d (attempt %d/%d): %s",
+                        RFB_PORT, attempt, RFB_CONNECT_ATTEMPTS, exc)
+            if attempt < RFB_CONNECT_ATTEMPTS:
+                time.sleep(RFB_CONNECT_RETRY_SLEEP)
+
+    if rfb is None:
+        # CRITICAL: the WebSocket handshake already succeeded (HTTP 101), so we
+        # must NOT call abort() here — that confuses the WS layer and the
+        # browser reports close code 1005 (no close frame). Close the WS
+        # gracefully with a proper close frame instead.
+        log.error("Cannot reach x11vnc:%d after %d attempts: %s",
+                  RFB_PORT, RFB_CONNECT_ATTEMPTS, last_exc)
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
 
     def _browser_to_rfb():
         """Relay: browser WebSocket → x11vnc TCP."""
@@ -106,7 +146,7 @@ def vnc_websocket():
         glets = [gevent.spawn(_browser_to_rfb), gevent.spawn(_rfb_to_browser)]
         gevent.joinall(glets)
     except Exception as exc:
-        log.error("Bridge error: %s", exc)
+        log.exception("Bridge error: %s", exc)
     finally:
         _close_sock(rfb)
         log.info("WS bridge disconnected")
@@ -115,7 +155,7 @@ def vnc_websocket():
 
 # ── Echo diagnostic WebSocket ──────────────────────────────────────────
 
-@bp.route("/novnc/echo")
+@bp.route("/novnc/echo", websocket=True)
 def vnc_echo():
     """Echo WebSocket — used to verify gevent-websocket works."""
     from geventwebsocket import WebSocketError

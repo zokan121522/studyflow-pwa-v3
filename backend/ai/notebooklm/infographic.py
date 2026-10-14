@@ -135,6 +135,15 @@ _DETAIL_MAP = {
     "detailed": InfographicDetail.DETAILED,
 }
 
+# The SDK detail_level enum only changes generation settings; the PROMPT must
+# also vary or Gemini produces the same result at every level. These directives
+# are appended to the (default or user) instructions per level.
+_DETAIL_INSTRUCTIONS = {
+    "concise": "Máxima síntesis: solo los 3-4 conceptos esenciales, sin ejemplos extensos ni datos de apoyo.",
+    "standard": "Nivel equilibrado: conceptos principales, breves explicaciones y algún dato de apoyo.",
+    "detailed": "Nivel MUY detallado: desglosa todos los conceptos con profundidad, incluye ejemplos concretos, datos, cifras y contexto; desarrolla cada sección al máximo.",
+}
+
 _STYLE_MAP = {
     "auto": InfographicStyle.AUTO_SELECT,
     "auto_select": InfographicStyle.AUTO_SELECT,  # legacy alias
@@ -335,6 +344,13 @@ async def _generate_infographic(
             effective_instructions = instructions.strip() if instructions else ""
             if not effective_instructions:
                 effective_instructions = default_instructions
+
+            # Append the per-level directive so the PROMPT actually changes with
+            # the detail_level. Unknown level falls back to the "standard" one.
+            detail_directive = _DETAIL_INSTRUCTIONS.get(
+                detail_level, _DETAIL_INSTRUCTIONS["standard"]
+            )
+            effective_instructions = f"{effective_instructions}\n\n{detail_directive}"
 
             # Determine the language the USER wants the infographic written in
             # (what Gemini must produce). This is independent of the internal

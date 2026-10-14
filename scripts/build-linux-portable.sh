@@ -37,26 +37,27 @@ mkdir -p "$STAGE"
 # launcher/ (el guard de abajo lo comprueba).  StudyFlow.command se incluye
 # tambien porque launcher/ viaja entero: es inofensivo y deja el paquete
 # mac y el linux con el mismo contenido de launcher/.
+# Allow-list de runtime. NO viajan: AGENTS.md (doc interna), tests/ y docker/
+# (solo desarrollo), ni el resto de scripts/ (build/autodeploy/tts...). De
+# scripts/ el unico que usa el backend en runtime es export_storage_state.py.
 INCLUDE=(
   "INSTALAR_StudyFlow.sh"
   "launcher"
   "backend"
   "frontend"
-  "tests"
-  "docker"
-  "scripts"
   "requirements-local.txt"
   "requirements.txt"
   "README.md"
   "LICENSE"
   ".env.example"
-  "AGENTS.md"
+  "scripts/export_storage_state.py"
 )
 
 echo "==> Copiando ficheros de runtime"
 for item in "${INCLUDE[@]}"; do
     [ -e "$item" ] || { echo "    - $item (no existe, se omite)"; continue; }
-    cp -R "$item" "$STAGE/"
+    mkdir -p "$STAGE/$(dirname "$item")"
+    cp -R "$item" "$STAGE/$(dirname "$item")/"
     echo "    + $item"
 done
 
@@ -94,6 +95,20 @@ find "$STAGE" -name '*.db' -delete 2>/dev/null || true
 find "$STAGE" -name '*.sqlite*' -delete 2>/dev/null || true
 find "$STAGE" -name 'launcher.json' -delete 2>/dev/null || true
 find "$STAGE" -name 'secret.key' -delete 2>/dev/null || true
+
+# ── guard: nunca empaquetar datos personales ni rutas absolutas ─────────────
+# Falla el build si se colo el nombre del owner, una ruta absoluta /Users/ o
+# la IP de tailscale. Los ficheros personales NUNCA deben viajar en el ZIP.
+echo "==> Comprobando fugas de datos personales"
+LEAK_PATTERN='jaimevilaplanarejon|/Users/|100\.86\.71\.82'
+LEAK_HITS="$(grep -rIlE "$LEAK_PATTERN" "$STAGE" 2>/dev/null || true)"
+if [ -n "$LEAK_HITS" ]; then
+    echo "    [X] El paquete contiene datos personales o rutas absolutas:"
+    printf '%s\n' "$LEAK_HITS" | sed 's/^/        /'
+    echo "        Abortando. Revisa la lista INCLUDE de este script."
+    exit 1
+fi
+echo "    OK: sin owner string, /Users/ ni tailscale IP"
 
 # ── LEEME-PRIMERO.txt de ESTA plataforma ─────────────────────────────────────
 # El del repo raíz describe el .bat de Windows, así que no sirve aquí.
@@ -162,8 +177,7 @@ cat > "$STAGE/LEEME-PRIMERO.txt" <<'EOF'
   LEEME-PRIMERO.txt       ->  Este fichero.
   launcher/               ->  El motor de arranque. No lo toques.
   backend/  frontend/     ->  Parte técnica de la app. No toques.
-  scripts/  tests/        ->  Herramientas de desarrollo. No toques.
-  docker/                 ->  Configuración de servidores. No toques.
+  scripts/                ->  Script de exportación (NotebookLM). No lo toques.
   README.md (si viene)    ->  Documentación técnica (para
                               programadores). Tú no lo necesitas.
 

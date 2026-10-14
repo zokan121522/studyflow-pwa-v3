@@ -37,26 +37,28 @@ mkdir -p "$STAGE"
 # launcher/StudyFlow.command + launcher/StudyFlow.sh viajan SIEMPRE dentro
 # de launcher/ (el guard de abajo lo comprueba), y el LEEME de esta
 # plataforma lo genera este script.
+# Allow-list de runtime. NO viajan: AGENTS.md (doc interna), tests/ y docker/
+# (solo desarrollo), ni el resto de scripts/ (build/autodeploy/tts...). De
+# scripts/ el unico que usa el backend en runtime es export_storage_state.py
+# (endpoint /settings/notebooklm/export-script, con fallback embebido).
 INCLUDE=(
   "INSTALAR_StudyFlow.command"
   "launcher"
   "backend"
   "frontend"
-  "tests"
-  "docker"
-  "scripts"
   "requirements-local.txt"
   "requirements.txt"
   "README.md"
   "LICENSE"
   ".env.example"
-  "AGENTS.md"
+  "scripts/export_storage_state.py"
 )
 
 echo "==> Copiando ficheros de runtime"
 for item in "${INCLUDE[@]}"; do
     [ -e "$item" ] || { echo "    - $item (no existe, se omite)"; continue; }
-    cp -R "$item" "$STAGE/"
+    mkdir -p "$STAGE/$(dirname "$item")"
+    cp -R "$item" "$STAGE/$(dirname "$item")/"
     echo "    + $item"
 done
 
@@ -94,6 +96,20 @@ find "$STAGE" -name '*.db' -delete 2>/dev/null || true
 find "$STAGE" -name '*.sqlite*' -delete 2>/dev/null || true
 find "$STAGE" -name 'launcher.json' -delete 2>/dev/null || true
 find "$STAGE" -name 'secret.key' -delete 2>/dev/null || true
+
+# ── guard: nunca empaquetar datos personales ni rutas absolutas ─────────────
+# Falla el build si se colo el nombre del owner, una ruta absoluta /Users/ o
+# la IP de tailscale. Los ficheros personales NUNCA deben viajar en el ZIP.
+echo "==> Comprobando fugas de datos personales"
+LEAK_PATTERN='jaimevilaplanarejon|/Users/|100\.86\.71\.82'
+LEAK_HITS="$(grep -rIlE "$LEAK_PATTERN" "$STAGE" 2>/dev/null || true)"
+if [ -n "$LEAK_HITS" ]; then
+    echo "    [X] El paquete contiene datos personales o rutas absolutas:"
+    printf '%s\n' "$LEAK_HITS" | sed 's/^/        /'
+    echo "        Abortando. Revisa la lista INCLUDE de este script."
+    exit 1
+fi
+echo "    OK: sin owner string, /Users/ ni tailscale IP"
 
 # ── LEEME-PRIMERO.txt de ESTA plataforma ─────────────────────────────────────
 # El del repo raíz describe el .bat de Windows, así que no sirve aquí.
@@ -203,8 +219,7 @@ PASO 4) PARA DETENER LA APP
   launcher/StudyFlow.sh      ->  El lanzador de verdad.
   launcher/                  ->  El motor de arranque. No lo toques.
   backend/  frontend/        ->  Parte tecnica de la app. No toques.
-  scripts/  tests/           ->  Herramientas de desarrollo. No toques.
-  docker/                    ->  Configuracion de servidores. No toques.
+  scripts/                   ->  Script de exportacion (NotebookLM). No lo toques.
   README.md (si viene)       ->  Documentacion tecnica (para
                                  programadores). Tu no la necesitas.
 
