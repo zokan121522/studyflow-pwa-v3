@@ -146,6 +146,14 @@ window.App.ContentBlocks = (function () {
         out.push("<hr>"); i++; continue;
       }
 
+      // Page break marker <!-- pagebreak --> → forces a new page in the PDF.
+      // Matched as a whole line, so a marker inside a fenced code block (the
+      // branch above consumes those lines) or an inline code span stays
+      // literal. Case and inner spaces are tolerated.
+      if (/^\s*<!--\s*pagebreak\s*-->\s*$/i.test(ln)) {
+        out.push('<hr class="md-pagebreak" data-pagebreak>'); i++; continue;
+      }
+
       // Headings (# … ######)
       const h = /^\s*(#{1,6})\s+(.+?)\s*#*\s*$/.exec(ln);
       if (h) {
@@ -263,6 +271,7 @@ window.App.ContentBlocks = (function () {
              && !/^\s*[-*]\s+/.test(lines[i])
              && !/^\s*\d+\.\s+/.test(lines[i])
              && !/^\s*-{3,}\s*$/.test(lines[i])
+             && !/^\s*<!--\s*pagebreak\s*-->\s*$/i.test(lines[i])
              && !/^\s*```/.test(lines[i])
              && !/\|/.test(lines[i])) {
         p.push(lines[i]); i++;

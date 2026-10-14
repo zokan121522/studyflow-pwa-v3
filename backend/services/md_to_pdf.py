@@ -180,6 +180,8 @@ th { background: #f0f2f4; font-weight: 600; }
 tr:nth-child(even) td { background: #fafbfc; }
 img { max-width: 100%; height: auto; }
 hr { border: none; border-top: 1px solid #ddd; margin: 1.2em 0; }
+.md-pagebreak { border: 0; height: 0; margin: 0; padding: 0;
+                break-after: page; page-break-after: always; }
 a { color: #1155cc; text-decoration: none; }
 """
 

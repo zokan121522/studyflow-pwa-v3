@@ -95,6 +95,20 @@
   border: none; border-top: 2px dashed var(--border); margin: 18px 0;
 }
 
+/* ─── Page break (author-facing indicator; forces a page in PDF) ── */
+.md-view .md-pagebreak,
+.so-notes-rendered .md-pagebreak,
+.sf-td-block-content .md-pagebreak {
+  border: none; border-top: 1px dashed var(--text-muted);
+  margin: 16px 0; height: 0; position: relative;
+}
+.md-view .md-pagebreak::after,
+.so-notes-rendered .md-pagebreak::after,
+.sf-td-block-content .md-pagebreak::after {
+  content: "salto de página"; position: absolute; right: 0; top: -1em;
+  font-size: 10px; line-height: 1; color: var(--text-muted); letter-spacing: .3px;
+}
+
 /* ─── Links ─────────────────────────────────────────────── */
 .md-view a, .sf-td-block-content a {
   color: var(--primary); text-decoration: underline; text-underline-offset: 2px;

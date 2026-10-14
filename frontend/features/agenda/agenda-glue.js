@@ -167,9 +167,11 @@ if (!window.App.UI.displayTitle) {
              !/^\s*>\s?/.test(lines[i]) &&
              !/^\s*[-*]\s+/.test(lines[i]) &&
              !/^\s*\d+\.\s+/.test(lines[i]) &&
-             !/^\s*-{3,}\s*$/.test(lines[i])) {
+             !/^\s*-{3,}\s*$/.test(lines[i]) &&
+             !/^\s*<!--\s*pagebreak\s*-->\s*$/i.test(lines[i])) {
         p.push(lines[i]); i++;
-      }      out.push("<p>" + _inline(p.join(" ")) + "</p>");
+      }
+      out.push("<p>" + _inline(p.join(" ")) + "</p>");
     }
     return out.join("");
   }
