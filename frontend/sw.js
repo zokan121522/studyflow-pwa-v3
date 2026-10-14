@@ -128,7 +128,8 @@ const CACHE_NAME = 'studyflow-pwa-v2';
 // v109: mobile CSS fix (styles.css, overflow/stacking + safe-area, 3.1.3).
 // styles.css está precacheado; sin este bump las PWAs instaladas seguirían
 // sirviendo el CSS viejo cache-first y el fix no se vería sin limpiar datos.
-const ASSET_CACHE = 'studyflow-assets-v109';
+// v110: markdown page break (<!-- pagebreak -->) forces a new page in the PDF export (index.html, content-blocks.js, content-blocks.css, markdown-editor.js)
+const ASSET_CACHE = 'studyflow-assets-v110';
 const API_CACHE = 'studyflow-api-v1';
 
 // Assets to cache on install (cache-first strategy).
