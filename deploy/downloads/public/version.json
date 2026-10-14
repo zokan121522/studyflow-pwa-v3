@@ -1,37 +1,34 @@
 {
   "file": "StudyFlow-windows-latest.zip",
-  "versioned": "StudyFlow-windows-3.1.3.zip",
-  "version": "3.1.3",
+  "versioned": "StudyFlow-windows-3.1.4.zip",
+  "version": "3.1.4",
   "size": 54380225,
   "date": "14/10/2026",
   "sha256": "4c0ef9780d47af26bbe34377a1f5739b187a6d33eaddf07572396df0fbc286a2",
   "app_url": "",
   "platforms": {
     "windows": {
-      "file": "StudyFlow-windows-3.1.3.zip",
+      "file": "StudyFlow-windows-3.1.4.zip",
       "size": 54380225,
       "sha256": "4c0ef9780d47af26bbe34377a1f5739b187a6d33eaddf07572396df0fbc286a2",
-      "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.3.zip"
+      "url": "https://studyflowhub.dev/StudyFlow-windows-3.1.4.zip"
     },
     "macos": {
-      "file": "StudyFlow-macos-3.1.3.zip",
+      "file": "StudyFlow-macos-3.1.4.zip",
       "size": 54381042,
       "sha256": "5e13c999a52136022998597439fa5e021ad719b44a28a321eacb24cad0ed11c1",
-      "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.3.zip"
+      "url": "https://studyflowhub.dev/StudyFlow-macos-3.1.4.zip"
     },
     "linux": {
-      "file": "StudyFlow-linux-3.1.3.zip",
+      "file": "StudyFlow-linux-3.1.4.zip",
       "size": 54379204,
       "sha256": "0439bb37c0aa5d818473f7bab4fc99a88566d7c654d15d1639ebade0c9e9a9ea",
-      "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.3.zip"
+      "url": "https://studyflowhub.dev/StudyFlow-linux-3.1.4.zip"
     }
   },
   "notes": [
-    "Corrección visual en móviles muy estrechos (<360 px): pestañas que se envuelven, widgets en una sola columna y safe-area para pantallas con muesca.",
-    "Login de NotebookLM más fiable: valida cookies reales de Google (SID + __Secure-1PSIDTS), limpia procesos zombis, espera a que x11vnc escuche en el puerto 5900 y usa Chromium empaquetado en Docker.",
-    "Puente noVNC/WebSocket reparado: reintentos de conexión RFB, cierre limpio del WS (sin código 1005) y rutas declaradas websocket=True.",
-    "Lanzador local (launcher/serve.py) ahora arranca servidor gevent con soporte WebSocket para que el login remoto funcione sin Docker.",
-    "Infografías con tres niveles de detalle reales (conciso / estándar / detallado) — antes el prompt no cambiaba.",
-    "Parche edge-tts v2: corrige el endpoint WSS de Microsoft para que la síntesis de voz vuelva a funcionar."
+    "Botón de salto de página en el editor markdown: inserta el marcador y el PDF empieza página nueva ahí.",
+    "Arreglo del motor de PDF en macOS: la app ya no reinicia en bucle cuando faltan las librerías de Homebrew.",
+    "La interfaz se refresca correctamente tras actualizar (caché de assets a la v110)."
   ]
 }

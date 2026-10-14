@@ -599,20 +599,17 @@
     </figure>
   </section>
 
-  <!-- ── Novedades 3.1.3 (oficial) ────────────────────────────── -->
+  <!-- ── Novedades 3.1.4 (oficial) ────────────────────────────── -->
   <section class="card novedades" id="novedades" aria-labelledby="novedades-title">
-    <h2 class="sec" id="novedades-title" style="margin-top:0">🆕 3.1.3 — NotebookLM más fiable y arreglos en móvil</h2>
-    <p class="sub">StudyFlow 3.1.3 mejora el login de NotebookLM, repara el puente noVNC/WebSocket y pule la interfaz en móviles estrechos.</p>
+    <h2 class="sec" id="novedades-title" style="margin-top:0">🆕 3.1.4 — Salto de página, PDF portable y refresco de la interfaz</h2>
+    <p class="sub">StudyFlow 3.1.4 añade un botón de salto de página en el editor, arregla el motor de PDF en macOS y refresca la interfaz tras actualizar.</p>
     <ul id="nov-list">
-      <li><strong>Corrección visual en móviles muy estrechos (&lt;360 px):</strong> pestañas que se envuelven, widgets en una sola columna y safe-area para pantallas con muesca.</li>
-      <li><strong>Login de NotebookLM más fiable:</strong> valida cookies reales de Google (SID + __Secure-1PSIDTS), limpia procesos zombis, espera a que x11vnc escuche en el puerto 5900 y usa Chromium empaquetado en Docker.</li>
-      <li><strong>Puente noVNC/WebSocket reparado:</strong> reintentos de conexión RFB, cierre limpio del WS (sin código 1005) y rutas declaradas websocket=True.</li>
-      <li><strong>Lanzador local (launcher/serve.py):</strong> ahora arranca servidor gevent con soporte WebSocket para que el login remoto funcione sin Docker.</li>
-      <li><strong>Infografías con tres niveles de detalle reales</strong> (conciso / estándar / detallado) — antes el prompt no cambiaba.</li>
-      <li><strong>Parche edge-tts v2:</strong> corrige el endpoint WSS de Microsoft para que la síntesis de voz vuelva a funcionar.</li>
+      <li><strong>Botón de salto de página en el editor markdown:</strong> inserta el marcador y el PDF empieza página nueva ahí.</li>
+      <li><strong>Arreglo del motor de PDF en macOS:</strong> la app ya no reinicia en bucle cuando faltan las librerías de Homebrew.</li>
+      <li><strong>La interfaz se refresca correctamente tras actualizar</strong> (caché de assets a la v110).</li>
     </ul>
     <figure class="nov-audio">
-      <audio controls preload="metadata" src="audio/novedades-3.1.3.mp3">Tu navegador no soporta audio.</audio>
+      <audio controls preload="metadata" src="audio/novedades-3.1.4.mp3">Tu navegador no soporta audio.</audio>
       <figcaption>Escucha las novedades (voz de Álvaro)</figcaption>
     </figure>
     <details class="nov-prev">
@@ -643,19 +640,19 @@
       <audio controls preload="metadata" src="audio/descarga.mp3">Tu navegador no soporta audio.</audio>
       <figcaption>Escucha cómo se descarga (voz de Álvaro)</figcaption>
     </figure>
-    <!-- hrefs versionados *-3.1.2.zip: version.json (platforms.url) los reescribe por SO al cargar. -->
+    <!-- hrefs versionados *-3.1.4.zip: version.json (platforms.url) los reescribe por SO al cargar. -->
     <div class="pcards" role="group" aria-label="Elige tu sistema operativo">
-      <a class="pcard" data-os="linux" href="StudyFlow-linux-3.1.2.zip"
+      <a class="pcard" data-os="linux" href="StudyFlow-linux-3.1.4.zip"
          aria-label="Descargar StudyFlow para Linux">
         <span class="pc-os">Linux</span>
         <span class="pc-cta">⬇ Descargar</span>
       </a>
-      <a class="pcard primary on" data-os="windows" href="StudyFlow-windows-3.1.2.zip"
+      <a class="pcard primary on" data-os="windows" href="StudyFlow-windows-3.1.4.zip"
          aria-label="Descargar StudyFlow para Windows" aria-current="true">
         <span class="pc-os">Windows</span>
         <span class="pc-cta">⬇ Descargar</span>
       </a>
-      <a class="pcard" data-os="macos" href="StudyFlow-macos-3.1.2.zip"
+      <a class="pcard" data-os="macos" href="StudyFlow-macos-3.1.4.zip"
          aria-label="Descargar StudyFlow para macOS">
         <span class="pc-os">macOS</span>
         <span class="pc-cta">⬇ Descargar</span>
@@ -666,7 +663,7 @@
 
     <div class="panel on" id="panel-windows" role="tabpanel" aria-label="Windows">
       <div class="pl-head">
-        <a class="btn" id="dl-windows" href="StudyFlow-windows-3.1.2.zip">⬇ Descargar StudyFlow para Windows</a>
+        <a class="btn" id="dl-windows" href="StudyFlow-windows-3.1.4.zip">⬇ Descargar StudyFlow para Windows</a>
         <span class="pl-meta" id="meta-windows">52 MB · ZIP portable</span>
       </div>
       <p class="lab">Windows · pasos</p>
@@ -684,7 +681,7 @@
 
     <div class="panel" id="panel-macos" role="tabpanel" aria-label="macOS">
       <div class="pl-head">
-        <a class="btn" id="dl-macos" href="StudyFlow-macos-3.1.2.zip">⬇ Descargar StudyFlow para macOS</a>
+        <a class="btn" id="dl-macos" href="StudyFlow-macos-3.1.4.zip">⬇ Descargar StudyFlow para macOS</a>
         <span class="pl-meta" id="meta-macos">— · ZIP portable</span>
       </div>
       <p class="lab">macOS · pasos</p>
@@ -702,7 +699,7 @@
 
     <div class="panel" id="panel-linux" role="tabpanel" aria-label="Linux">
       <div class="pl-head">
-        <a class="btn" id="dl-linux" href="StudyFlow-linux-3.1.2.zip">⬇ Descargar StudyFlow para Linux</a>
+        <a class="btn" id="dl-linux" href="StudyFlow-linux-3.1.4.zip">⬇ Descargar StudyFlow para Linux</a>
         <span class="pl-meta" id="meta-linux">— · ZIP portable</span>
       </div>
       <p class="lab">Linux · pasos</p>
@@ -727,12 +724,12 @@
       <div>Versión</div><div>Cambios</div><div>Estado</div><div>Descarga</div>
     </div>
     <div class="rel-row current">
-      <div class="rel-v" id="rel-version">3.1.2</div>
-      <div class="rel-txt"><strong>Imágenes dentro de los apuntes y copias portables
-        entre ordenadores.</strong> Pega o sube una imagen en una nota y abre una copia
-        hecha en otro sistema (Windows, macOS o Linux) sin perder nada.</div>
+      <div class="rel-v" id="rel-version">3.1.4</div>
+      <div class="rel-txt"><strong>Salto de página en el editor y motor de PDF
+        portable.</strong> Botón para empezar página nueva en el PDF, arreglo del motor
+        en macOS y refresco de la interfaz tras actualizar.</div>
       <div class="pill now">actual</div>
-      <a class="rowbtn go" id="rel-dl" href="StudyFlow-windows-3.1.2.zip">Descargar</a>
+      <a class="rowbtn go" id="rel-dl" href="StudyFlow-windows-3.1.4.zip">Descargar</a>
     </div>
     <div class="rel-row old">
       <div class="rel-v">3.0.0</div>
@@ -752,7 +749,7 @@
     <p class="lab">Cabecera técnica · versión y hash a la vista</p>
     <div class="tech">
       <dl class="tech-meta">
-        <dt>Última versión</dt><dd id="m-version">3.1.2</dd>
+        <dt>Última versión</dt><dd id="m-version">3.1.4</dd>
         <dt>Tamaño</dt><dd id="m-size">52 MB</dd>
         <dt>Publicado</dt><dd id="m-date">08/10/2026</dd>
         <dt>SHA256</dt><dd id="m-sha-short">5f7cfe29f479e828e966eae748923f2ffc992a0d1e50489842e05d6ea361c96b</dd>
@@ -827,7 +824,7 @@
       Comprueba que la descarga no se corrompió. En PowerShell o CMD:
     </p>
     <div class="cmdrow">
-      <pre class="cmd" id="cmd-hash">certutil -hashfile StudyFlow-windows-3.1.2.zip SHA256</pre>
+      <pre class="cmd" id="cmd-hash">certutil -hashfile StudyFlow-windows-3.1.4.zip SHA256</pre>
       <button class="copy" id="btn-copy" type="button">Copiar</button>
     </div>
     <dl class="sha">
@@ -882,7 +879,7 @@
     var DATOS = {
       windows: {
         nombre: 'Windows',
-        file: 'StudyFlow-windows-3.1.2.zip',
+        file: 'StudyFlow-windows-3.1.4.zip',
         size: 54644649,
         sha: '1624adf70034a1f32e3da50556e9f939c84dbf9817856313ea110bb0b4c9fa66',
         hashCmd: function (f) { return 'certutil -hashfile ' + f + ' SHA256'; },
@@ -891,7 +888,7 @@
       },
       macos: {
         nombre: 'macOS',
-        file: 'StudyFlow-macos-3.1.2.zip',
+        file: 'StudyFlow-macos-3.1.4.zip',
         size: null,
         sha: null,
         hashCmd: function (f) { return 'shasum -a 256 ' + f; },
@@ -900,7 +897,7 @@
       },
       linux: {
         nombre: 'Linux',
-        file: 'StudyFlow-linux-3.1.2.zip',
+        file: 'StudyFlow-linux-3.1.4.zip',
         size: null,
         sha: null,
         hashCmd: function (f) { return 'sha256sum ' + f; },
@@ -1023,7 +1020,7 @@
         }
         if (v.date) el.date.textContent = v.date;
 
-        // La sección de novedades 3.1.3 lleva su contenido fijo en el HTML: no la
+        // La sección de novedades 3.1.4 lleva su contenido fijo en el HTML: no la
         // reescribimos con las "notes" de version.json.
 
         // Plataformas. Sin "platforms" pero con file top-level → sólo Windows.

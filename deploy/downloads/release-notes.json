@@ -19,5 +19,10 @@
     "Lanzador local (launcher/serve.py) ahora arranca servidor gevent con soporte WebSocket para que el login remoto funcione sin Docker.",
     "Infografías con tres niveles de detalle reales (conciso / estándar / detallado) — antes el prompt no cambiaba.",
     "Parche edge-tts v2: corrige el endpoint WSS de Microsoft para que la síntesis de voz vuelva a funcionar."
+  ],
+  "3.1.4": [
+    "Botón de salto de página en el editor markdown: inserta el marcador y el PDF empieza página nueva ahí.",
+    "Arreglo del motor de PDF en macOS: la app ya no reinicia en bucle cuando faltan las librerías de Homebrew.",
+    "La interfaz se refresca correctamente tras actualizar (caché de assets a la v110)."
   ]
 }
